@@ -7207,7 +7207,7 @@ function Admin({ C, setC, setPage, auth, onLogout, onShowLogin }) {
           )}
           {tab==="content"   && hasAccess.includes("content") && <ContentEditor C={C} setC={setC} setPage={setPage} auth={auth} hasAccess={hasAccess} master={master}/>}
           {tab==="seo"       && hasAccess.includes("seo")     && <AdminSeoTab C={C} setC={setC} auth={auth} mob={mob}/>}
-          {tab==="overview"  && hasAccess.includes("overview") && <Overview mob={mob} C={C} auth={auth}/>}
+          {tab==="overview"  && hasAccess.includes("overview") && <Overview mob={mob} C={C} setC={setC} auth={auth}/>}
           {tab==="donations" && hasAccess.includes("donations") && <Donations mob={mob} auth={auth} C={C}/>}
           {tab==="events"    && hasAccess.includes("events") && <AdminEvents mob={mob} C={C} setC={setC} auth={auth}/>}
           {tab==="registrations" && hasAccess.includes("registrations") && <AdminRegistrations mob={mob} C={C} setC={setC} auth={auth}/>}
@@ -7229,8 +7229,29 @@ function Admin({ C, setC, setPage, auth, onLogout, onShowLogin }) {
   );
 }
 
-function Overview({ mob, C, auth }) {
-  const [data, setData] = useState({
+function Overview({ mob, C, setC, auth }) {
+  const [activeSubTab, setActiveSubTab] = useState("registrations"); // "registrations" | "analytics"
+  
+  // Registration overview states
+  const [regs, setRegs] = useState([]);
+  const [loadingRegs, setLoadingRegs] = useState(true);
+  const [defaultOverviewForm, setDefaultOverviewForm] = useState(() => {
+    return C.defaultOverviewForm || localStorage.getItem("defaultOverviewForm") || "Education felicitation 2026";
+  });
+  const [overviewFormFilter, setOverviewFormFilter] = useState(() => {
+    return C.defaultOverviewForm || localStorage.getItem("defaultOverviewForm") || "Education felicitation 2026";
+  });
+  const [overviewDateFrom, setOverviewDateFrom] = useState("");
+  const [overviewDateTo, setOverviewDateTo] = useState("");
+  const [overviewSearch, setOverviewSearch] = useState("");
+  const [overviewStatusFilter, setOverviewStatusFilter] = useState("All");
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const [selectedColumns, setSelectedColumns] = useState([
+    "Transaction ID", "Date", "Full Name", "Mobile Number", "Vibhag", "Stream", "Obtained Marks", "% Obtained", "Status"
+  ]);
+
+  // Analytics states
+  const [analyticsData, setAnalyticsData] = useState({
     totalDonations: 0,
     activeVolunteers: 0,
     upcomingEvents: C.events?.length || 0,
@@ -7239,11 +7260,22 @@ function Overview({ mob, C, auth }) {
     programs: [],
     recentDonations: []
   });
-  const [loading, setLoading] = useState(true);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(true);
 
   useEffect(() => {
     if (!auth?.idToken) return;
-    const fetchAll = async () => {
+
+    // Fetch Registrations for Overview
+    fbFetchRegistrations(auth.idToken).then(d => {
+      setRegs(d || []);
+      setLoadingRegs(false);
+    }).catch(e => {
+      console.error("Overview regs error:", e);
+      setLoadingRegs(false);
+    });
+
+    // Fetch Analytics (Donations & Volunteers)
+    const fetchAnalytics = async () => {
       try {
         const [dons, vols] = await Promise.all([
           fbFetchDonations(auth.idToken),
@@ -7254,7 +7286,6 @@ function Overview({ mob, C, auth }) {
         let pendingReceipts = 0;
         const progSums = {};
         
-        // Process donations
         dons.forEach(d => {
           if (d.status === "Verified") {
             const amt = Number(d.amount) || 0;
@@ -7266,10 +7297,7 @@ function Overview({ mob, C, auth }) {
           }
         });
 
-        // Recent Donations
         const recentDonations = dons.sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 4);
-
-        // Monthly
         const months = {};
         const today = new Date();
         for (let i=5; i>=0; i--) {
@@ -7286,8 +7314,6 @@ function Overview({ mob, C, auth }) {
           if (months[key]) months[key].total += (Number(d.amount) || 0);
         });
         const monthly = Object.values(months);
-
-        // Programs
         const programs = Object.entries(progSums)
           .map(([p, v]) => ({ p, v: totalDonations ? Math.round((v/totalDonations)*100) : 0, amt: v }))
           .sort((a,b) => b.v - a.v);
@@ -7295,7 +7321,7 @@ function Overview({ mob, C, auth }) {
         const colors = ["var(--sf)", "var(--dt)", "#7B2D8B", "#1A7A3E", "var(--gd)"];
         programs.forEach((p,i) => p.c = colors[i%colors.length]);
 
-        setData({ 
+        setAnalyticsData({ 
           totalDonations, 
           activeVolunteers: vols.filter(v => v.status !== "Inactive").length, 
           upcomingEvents: C.events?.length || 0, 
@@ -7305,80 +7331,648 @@ function Overview({ mob, C, auth }) {
           recentDonations 
         });
       } catch (e) {
-        console.error("Failed to fetch overview data", e);
+        console.error("Failed to fetch analytics", e);
       } finally {
-        setLoading(false);
+        setLoadingAnalytics(false);
       }
     };
-    fetchAll();
+
+    fetchAnalytics();
   }, [auth?.idToken, C.events]);
 
+  const handleSetDefaultOverviewForm = async (formName) => {
+    setDefaultOverviewForm(formName);
+    localStorage.setItem("defaultOverviewForm", formName);
+    if (setC) {
+      const newC = { ...C, defaultOverviewForm: formName };
+      try {
+        await fbSave(newC, auth?.idToken);
+        setC(newC);
+      } catch (e) { console.error(e); }
+    }
+    alert(`"${formName}" has been saved as your Default Form View!`);
+  };
+
+  // Active Registrations
+  const activeRegsList = regs.filter(r => !r.deleted);
+
+  // Overview Filtered Registrations
+  const overviewFilteredRegs = activeRegsList.filter(r => {
+    if (!r) return false;
+    if (r.isGlobalGuest || r.isSpecialGuest || r.globalGuestId || r.formId === "global_guest_directory") return false;
+
+    // Form Filter
+    if (overviewFormFilter !== "All") {
+      const rEvent = String(r.eventName || r.eventTitle || r.eventId || r.formId || "").toLowerCase();
+      const targetFilter = String(overviewFormFilter).toLowerCase();
+      if (!rEvent.includes(targetFilter) && !targetFilter.includes(rEvent)) return false;
+    }
+
+    // Status Filter
+    if (overviewStatusFilter !== "All") {
+      const rStatus = r.Status || r.status || "Pending";
+      if (rStatus !== overviewStatusFilter) return false;
+    }
+
+    // Date Range Filter
+    if (overviewDateFrom || overviewDateTo) {
+      if (r._submittedAt) {
+        const subDate = new Date(r._submittedAt);
+        if (overviewDateFrom) {
+          const fromDate = new Date(overviewDateFrom);
+          fromDate.setHours(0, 0, 0, 0);
+          if (subDate < fromDate) return false;
+        }
+        if (overviewDateTo) {
+          const toDate = new Date(overviewDateTo);
+          toDate.setHours(23, 59, 59, 999);
+          if (subDate > toDate) return false;
+        }
+      }
+    }
+
+    // Search Query
+    if (overviewSearch) {
+      const q = overviewSearch.toLowerCase();
+      if (!Object.values(r).some(val => String(val).toLowerCase().includes(q))) return false;
+    }
+
+    return true;
+  });
+
+  const overviewApprovedCount = overviewFilteredRegs.filter(r => (r.Status || r.status) === "Approved").length;
+  const overviewPendingCount = overviewFilteredRegs.filter(r => (r.Status || r.status) === "Pending" || !(r.Status || r.status)).length;
+  const overviewDisapprovedCount = overviewFilteredRegs.filter(r => (r.Status || r.status) === "Disapproved").length;
+
+  // Gather Dynamic Field Keys
+  const ignoreKeys = ['id', 'eventId', 'eventTitle', 'eventName', '_submittedAt', 'Transaction ID', 'Status', 'Remarks', 'Updated By', 'logHistory', 'status', 'remarks'];
+  const allKeysSet = new Set();
+  overviewFilteredRegs.forEach(r => {
+    if (!r) return;
+    Object.keys(r).forEach(k => {
+      if (!ignoreKeys.includes(k) && !k.startsWith('_')) {
+        allKeysSet.add(k);
+      }
+    });
+  });
+  let allKeys = Array.from(allKeysSet);
+  const priority = ["Full Name", "Name", "Mobile Number", "Mobile", "Phone", "Email Address", "Email"];
+  allKeys.sort((a, b) => {
+    const ia = priority.indexOf(a);
+    const ib = priority.indexOf(b);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return a.localeCompare(b);
+  });
+
+  // PDF Export
+  const handleExportPDF = () => {
+    if (overviewFilteredRegs.length === 0) {
+      alert("No registration records match your filter criteria to export.");
+      return;
+    }
+
+    try {
+      const colsToExport = selectedColumns.length > 0 ? selectedColumns : ["Transaction ID", "Date", "Full Name", "Mobile Number", "Status"];
+      const useLandscape = colsToExport.length > 5;
+      const doc = new jsPDF({
+        orientation: useLandscape ? 'landscape' : 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      const margin = 12;
+      const contentWidth = pageWidth - (margin * 2);
+
+      // Header Banner
+      doc.setFillColor(30, 41, 59);
+      doc.rect(0, 0, pageWidth, 22, 'F');
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(255, 255, 255);
+      doc.text("MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST", pageWidth / 2, 9, { align: "center" });
+
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text(`REGISTRATION OVERVIEW REPORT - ${overviewFormFilter.toUpperCase()}`, pageWidth / 2, 16, { align: "center" });
+
+      let yPos = 28;
+      doc.setFontSize(8.5);
+      doc.setTextColor(51, 65, 85);
+      doc.setFont("helvetica", "bold");
+
+      const todayStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      const dateRangeStr = (overviewDateFrom || overviewDateTo) ? `${overviewDateFrom || 'Start'} to ${overviewDateTo || 'Today'}` : 'All Dates';
+
+      doc.text(`Report Date: ${todayStr}  |  Date Filter: ${dateRangeStr}  |  Total Entries: ${overviewFilteredRegs.length}`, margin, yPos);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Status Summary: Approved (${overviewApprovedCount}), Pending (${overviewPendingCount}), Disapproved (${overviewDisapprovedCount})`, pageWidth - margin, yPos, { align: "right" });
+
+      yPos += 5;
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.4);
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+
+      yPos += 5;
+
+      const numCols = colsToExport.length;
+      const colWidth = contentWidth / numCols;
+      const rowHeight = 7.5;
+      const headerHeight = 8.5;
+
+      const drawTableHeader = (currentY) => {
+        doc.setFillColor(51, 65, 85);
+        doc.rect(margin, currentY, contentWidth, headerHeight, 'F');
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(255, 255, 255);
+
+        colsToExport.forEach((colName, cIdx) => {
+          const x = margin + (cIdx * colWidth) + 2;
+          const text = doc.splitTextToSize(colName, colWidth - 3)[0] || colName;
+          doc.text(text, x, currentY + 5.5);
+        });
+        return currentY + headerHeight;
+      };
+
+      yPos = drawTableHeader(yPos);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+
+      overviewFilteredRegs.forEach((r, rIdx) => {
+        if (yPos + rowHeight > pageHeight - 12) {
+          doc.addPage();
+          yPos = 12;
+          yPos = drawTableHeader(yPos);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7.5);
+        }
+
+        if (rIdx % 2 === 1) {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(margin, yPos, contentWidth, rowHeight, 'F');
+        }
+
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.15);
+        doc.rect(margin, yPos, contentWidth, rowHeight, 'S');
+
+        doc.setTextColor(30, 41, 59);
+
+        colsToExport.forEach((colName, cIdx) => {
+          let val = "";
+          if (colName === "Date") {
+            try { if (r._submittedAt) val = new Date(r._submittedAt).toLocaleDateString(); } catch (e) { val = "-"; }
+          } else if (colName === "Event") {
+            val = r.eventName || r.eventTitle || r.eventId || "-";
+          } else if (colName === "Status") {
+            val = r.Status || r.status || "Pending";
+          } else if (colName === "Transaction ID") {
+            val = r['Transaction ID'] || r.transactionId || "-";
+          } else if (colName === "Full Name" || colName === "Name") {
+            val = r['Full Name'] || r['Name'] || r['Submitted By'] || "-";
+            if (val.includes("|")) val = val.split("|").filter(Boolean).join(" ");
+          } else if (colName === "Mobile Number" || colName === "Mobile") {
+            val = r['Mobile Number'] || r['Mobile'] || r['Phone'] || "-";
+          } else {
+            val = r[colName] !== undefined ? String(r[colName]) : "-";
+          }
+
+          const x = margin + (cIdx * colWidth) + 2;
+          const displayVal = doc.splitTextToSize(String(val), colWidth - 3)[0] || String(val);
+          doc.text(displayVal, x, yPos + 5);
+        });
+
+        yPos += rowHeight;
+      });
+
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`Page ${i} of ${totalPages}  |  Mumbai Meghwal Panchayat & Vidya Gohil Trust Portal`, pageWidth / 2, pageHeight - 5, { align: "center" });
+      }
+
+      const cleanFormTitle = overviewFormFilter.replace(/[^a-zA-Z0-9]/g, '_');
+      doc.save(`Registration_Overview_${cleanFormTitle}_${todayStr.replace(/\s+/g, '_')}.pdf`);
+    } catch (err) {
+      console.error("PDF Export Error:", err);
+      alert("Failed to export PDF: " + err.message);
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (overviewFilteredRegs.length === 0) return;
+    const headers = ["Date", "Event", "Transaction ID", "Status", "Remarks", "Updated By", ...allKeys];
+    const rows = overviewFilteredRegs.map(r => {
+      let date = "-";
+      try { if (r._submittedAt) date = new Date(r._submittedAt).toLocaleString(); } catch (e) {}
+      const evName = r.eventName || r.eventTitle || r.eventId || "Unknown Event";
+      
+      const rowData = [
+        `"${date}"`,
+        `"${evName}"`,
+        `"${r['Transaction ID'] || '-'}"`,
+        `"${r['Status'] || 'Pending'}"`,
+        `"${r['Remarks'] || ''}"`,
+        `"${r['Updated By'] || '-'}"`,
+        ...allKeys.map(k => {
+          let val = r[k] || "";
+          if (typeof val === 'string') val = val.replace(/"/g, '""');
+          else val = String(val);
+          return `"${val}"`;
+        })
+      ];
+      return rowData.join(",");
+    });
+    
+    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    const ts = new Date().toLocaleString('sv-SE').replace(' ', '_').replace(/:/g, '-');
+    link.setAttribute("download", `Registration_Overview_${ts}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const cards=[
-    {l:"Total Donations (Verified)",v:`Rs.${data.totalDonations.toLocaleString()}`,ch:"",up:true,ic:"💰",bg:"#FFF4EC",br:"#FDDBB8"},
-    {l:"Active Volunteers",v:data.activeVolunteers.toString(),ch:"",up:true,ic:"🤝",bg:"#E8F4F8",br:"#B8D8E8"},
-    {l:"Upcoming Events",v:data.upcomingEvents.toString(),ch:"",up:true,ic:"📅",bg:"#EDFAF1",br:"#B8E8CC"},
-    {l:"Pending Receipts/Payments",v:data.pendingReceipts.toString(),ch:data.pendingReceipts>0?"⚠️":"",up:false,ic:"📄",bg:"#FEF9EC",br:"#F5E8B8"}
+    {l:"Total Donations (Verified)",v:`Rs.${analyticsData.totalDonations.toLocaleString()}`,ch:"",up:true,ic:"💰",bg:"#FFF4EC",br:"#FDDBB8"},
+    {l:"Active Volunteers",v:analyticsData.activeVolunteers.toString(),ch:"",up:true,ic:"🤝",bg:"#E8F4F8",br:"#B8D8E8"},
+    {l:"Upcoming Events",v:analyticsData.upcomingEvents.toString(),ch:"",up:true,ic:"📅",bg:"#EDFAF1",br:"#B8E8CC"},
+    {l:"Pending Receipts/Payments",v:analyticsData.pendingReceipts.toString(),ch:analyticsData.pendingReceipts>0?"⚠️":"",up:false,ic:"📄",bg:"#FEF9EC",br:"#F5E8B8"}
   ];
   
-  const mx = Math.max(...data.monthly.map(m=>m.total), 1);
-
-  if (loading && auth?.idToken) return <div style={{padding:40,textAlign:"center",color:"var(--mu)"}}>Loading live data...</div>;
+  const mx = Math.max(...analyticsData.monthly.map(m=>m.total), 1);
 
   return (
-    <div>
-      <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(4,1fr)",gap:14,marginBottom:20}}>
-        {cards.map((s,i)=>(
-          <div key={i} className="ac" style={{padding:mob?"16px":"20px",background:s.bg,border:`1px solid ${s.br}`}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
-              <span style={{fontSize:"1.4rem"}}>{s.ic}</span>
-              {s.ch&&<span style={{fontSize:".72rem",fontWeight:700,color:s.up?"#1A7A3E":"#C0392B",background:s.up?"#EDFAF1":"#FEF0EF",padding:"2px 7px",borderRadius:12}}>{s.ch}</span>}
-            </div>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:mob?"1.3rem":"1.5rem",fontWeight:700,color:"var(--dt)",marginBottom:3}}>{s.v}</div>
-            <div style={{fontSize:".72rem",color:"var(--mu)",fontWeight:600}}>{s.l}</div>
-          </div>
-        ))}
+    <div style={{padding:mob?"12px":"24px",width:"100%",boxSizing:"border-box"}}>
+      
+      {/* Overview Top Sub-Tab Navigation */}
+      <div style={{display:"flex",alignItems:"center",justify:"space-between",marginBottom:20,borderBottom:"2px solid #E2E8F0",paddingBottom:12,flexWrap:"wrap",gap:12}}>
+        <div>
+          <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",margin:0,fontSize:"1.4rem",fontWeight:800}}>Committee Overview & Reports</h2>
+          <div style={{fontSize:".82rem",color:"var(--mu)",marginTop:2}}>Read-only summaries, form view selector, and custom PDF report export</div>
+        </div>
+
+        <div style={{display:"flex",gap:8,background:"#F1F5F9",padding:4,borderRadius:12,border:"1px solid #CBD5E1"}}>
+          <button 
+            onClick={() => setActiveSubTab("registrations")}
+            style={{
+              padding:"8px 18px",borderRadius:8,border:"none",
+              background: activeSubTab === "registrations" ? "#1E293B" : "transparent",
+              color: activeSubTab === "registrations" ? "white" : "#475569",
+              fontSize:".85rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"all 0.2s"
+            }}
+          >
+            <span>📋</span> Registration Overview & PDF Reports
+          </button>
+
+          <button 
+            onClick={() => setActiveSubTab("analytics")}
+            style={{
+              padding:"8px 18px",borderRadius:8,border:"none",
+              background: activeSubTab === "analytics" ? "#1E293B" : "transparent",
+              color: activeSubTab === "analytics" ? "white" : "#475569",
+              fontSize:".85rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,transition:"all 0.2s"
+            }}
+          >
+            <span>📊</span> Financial & Donor Analytics
+          </button>
+        </div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"2fr 1fr",gap:16,marginBottom:16}}>
-        <div className="ac" style={{padding:mob?"16px":"22px"}}>
-          <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"var(--dt)",marginBottom:18,fontWeight:700}}>Monthly Donations (Verified)</h3>
-          <div style={{display:"flex",alignItems:"flex-end",gap:mob?8:12,height:150}}>
-            {data.monthly.length > 0 ? data.monthly.map((m,i)=>(
-              <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
-                <div style={{fontSize:".6rem",color:"var(--mu)"}}>{m.total > 0 ? `Rs.${(m.total/1000).toFixed(1)}k` : ''}</div>
-                <div style={{width:"100%",background:i===data.monthly.length-1?"linear-gradient(to top,var(--sf),var(--gd))":"linear-gradient(to top,var(--dt),var(--tm))",borderRadius:"5px 5px 0 0",height:`${Math.max((m.total/mx)*120, 4)}px`}}/>
-                <div style={{fontSize:".65rem",color:"var(--mu)"}}>{m.label}</div>
+
+      {/* ── SUB-TAB 1: REGISTRATIONS OVERVIEW & CUSTOM PDF EXPORT ──────────────── */}
+      {activeSubTab === "registrations" && (
+        <div style={{background:"white",borderRadius:16,border:"1px solid #CBD5E1",overflow:"hidden",boxShadow:"0 4px 20px rgba(0,0,0,0.06)"}}>
+          
+          {/* Controls Bar */}
+          <div style={{padding:"18px 24px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",flexDirection:"column",gap:14}}>
+            
+            <div style={{display:"flex",alignItems:"center",justify:"space-between",gap:12,flexWrap:"wrap"}}>
+              
+              {/* Form Selector & Set Default */}
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <label style={{fontSize:".85rem",fontWeight:700,color:"#334155"}}>Form View:</label>
+                <select 
+                  value={overviewFormFilter} 
+                  onChange={e=>setOverviewFormFilter(e.target.value)}
+                  style={{padding:"8px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".88rem",fontWeight:700,background:"white",color:"#1E293B",outline:"none",cursor:"pointer",minWidth:220}}
+                >
+                  <option value="All">📋 All Registrations</option>
+                  <option value="Education felicitation 2026">🎓 Education felicitation 2026</option>
+                  {(C.forms || []).map(f => (
+                    <option key={f.id} value={f.name || f.id}>{f.name || f.id}</option>
+                  ))}
+                  {(C.events || []).map(ev => (
+                    <option key={ev.id} value={ev.title}>{ev.title}</option>
+                  ))}
+                </select>
+
+                <button 
+                  type="button"
+                  onClick={() => handleSetDefaultOverviewForm(overviewFormFilter)}
+                  style={{
+                    padding:"8px 14px",borderRadius:8,
+                    border: defaultOverviewForm === overviewFormFilter ? "1px solid #16A34A" : "1px solid #CBD5E1",
+                    background: defaultOverviewForm === overviewFormFilter ? "#DCFCE7" : "white",
+                    color: defaultOverviewForm === overviewFormFilter ? "#15803D" : "#475569",
+                    fontSize:".8rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6
+                  }}
+                  title="Save current form as default view"
+                >
+                  <span>⭐</span> {defaultOverviewForm === overviewFormFilter ? "Default Active" : "Set as Default View"}
+                </button>
+
+                {defaultOverviewForm && (
+                  <span style={{fontSize:".75rem",background:"#E2E8F0",color:"#334155",padding:"4px 10px",borderRadius:12,fontWeight:600}}>
+                    Default: <strong>{defaultOverviewForm}</strong>
+                  </span>
+                )}
               </div>
-            )) : <div style={{flex:1,textAlign:"center",color:"var(--mu)",fontSize:".8rem"}}>No data</div>}
-          </div>
-        </div>
-        <div className="ac" style={{padding:mob?"16px":"22px"}}>
-          <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"var(--dt)",marginBottom:18,fontWeight:700}}>By Program</h3>
-          {data.programs.length > 0 ? data.programs.map(r=>(
-            <div key={r.p} style={{marginBottom:11}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:".78rem"}}>{r.p}</span><span style={{fontSize:".78rem",fontWeight:700}}>{r.v}%</span></div>
-              <div style={{height:7,borderRadius:4,background:"#EEE"}}><div style={{height:"100%",width:`${r.v}%`,background:r.c,borderRadius:4}}/></div>
+
+              {/* Date Filters & Status */}
+              <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:".8rem",fontWeight:600,color:"#64748B"}}>From:</span>
+                  <input 
+                    type="date" 
+                    value={overviewDateFrom} 
+                    onChange={e=>setOverviewDateFrom(e.target.value)}
+                    style={{padding:"6px 10px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".82rem",outline:"none"}}
+                  />
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:".8rem",fontWeight:600,color:"#64748B"}}>To:</span>
+                  <input 
+                    type="date" 
+                    value={overviewDateTo} 
+                    onChange={e=>setOverviewDateTo(e.target.value)}
+                    style={{padding:"6px 10px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".82rem",outline:"none"}}
+                  />
+                </div>
+                {(overviewDateFrom || overviewDateTo) && (
+                  <button onClick={() => { setOverviewDateFrom(""); setOverviewDateTo(""); }} style={{background:"none",border:"none",color:"#DC2626",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}>
+                    Clear Dates
+                  </button>
+                )}
+
+                <select 
+                  value={overviewStatusFilter}
+                  onChange={e=>setOverviewStatusFilter(e.target.value)}
+                  style={{padding:"7px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".82rem",outline:"none",cursor:"pointer",background:"white"}}
+                >
+                  <option value="All">All Statuses</option>
+                  <option value="Approved">Approved Only</option>
+                  <option value="Pending">Pending Only</option>
+                  <option value="Disapproved">Disapproved Only</option>
+                </select>
+              </div>
+
             </div>
-          )) : <div style={{textAlign:"center",color:"var(--mu)",fontSize:".8rem"}}>No data</div>}
+
+            {/* Action Bar & Search */}
+            <div style={{display:"flex",alignItems:"center",justify:"space-between",gap:12,flexWrap:"wrap",paddingTop:4}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <input 
+                  type="text" 
+                  placeholder="🔍 Search name, mobile, txn..." 
+                  value={overviewSearch}
+                  onChange={e=>setOverviewSearch(e.target.value)}
+                  style={{padding:"8px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",width:240,outline:"none"}}
+                />
+                <button 
+                  onClick={() => setShowColumnPicker(!showColumnPicker)}
+                  style={{padding:"8px 16px",borderRadius:8,border:"1px solid #3B82F6",background:showColumnPicker?"#EFF6FF":"white",color:"#2563EB",fontSize:".82rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
+                >
+                  <span>⚙️</span> Select Columns ({selectedColumns.length}) {showColumnPicker ? "▲" : "▼"}
+                </button>
+              </div>
+
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <button 
+                  onClick={handleExportPDF}
+                  style={{padding:"9px 20px",borderRadius:8,background:"linear-gradient(135deg, #DC2626, #991B1B)",color:"white",border:"none",fontSize:".85rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,boxShadow:"0 3px 10px rgba(220,38,38,0.3)"}}
+                >
+                  <span>📄</span> Export PDF Report
+                </button>
+                <button 
+                  onClick={handleExportCSV}
+                  style={{padding:"9px 16px",borderRadius:8,background:"white",color:"#334155",border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
+                >
+                  <span>📥</span> Export CSV
+                </button>
+              </div>
+            </div>
+
+            {/* Column Picker Drawer */}
+            {showColumnPicker && (
+              <div style={{background:"white",padding:"16px 20px",borderRadius:10,border:"1px solid #93C5FD",boxShadow:"0 4px 14px rgba(59,130,246,0.12)",marginTop:8,animation:"fadeIn 0.2s ease-out"}}>
+                <div style={{display:"flex",alignItems:"center",justify:"space-between",marginBottom:10}}>
+                  <span style={{fontSize:".82rem",fontWeight:800,color:"#1E3A8A"}}>Check / Uncheck Columns to Display & Export in PDF:</span>
+                  <div style={{display:"flex",gap:8}}>
+                    <button 
+                      onClick={() => setSelectedColumns(["Transaction ID", "Date", "Event", "Status", "Remarks", "Updated By", ...allKeys])}
+                      style={{background:"#EFF6FF",border:"1px solid #BFDBFE",color:"#1D4ED8",fontSize:".75rem",fontWeight:700,padding:"4px 12px",borderRadius:6,cursor:"pointer"}}
+                    >
+                      Select All
+                    </button>
+                    <button 
+                      onClick={() => setSelectedColumns(["Transaction ID", "Date", "Full Name", "Mobile Number", "Status"])}
+                      style={{background:"#F1F5F9",border:"1px solid #CBD5E1",color:"#475569",fontSize:".75rem",fontWeight:700,padding:"4px 12px",borderRadius:6,cursor:"pointer"}}
+                    >
+                      Reset Default
+                    </button>
+                  </div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(190px, 1fr))",gap:8,maxHeight:150,overflowY:"auto",padding:4}}>
+                  {["Transaction ID", "Date", "Event", "Status", "Remarks", "Updated By", "Serial Number", "Group", ...allKeys].filter((v, i, a) => a.indexOf(v) === i).map(col => {
+                    const isChecked = selectedColumns.includes(col);
+                    return (
+                      <label key={col} style={{display:"flex",alignItems:"center",gap:6,fontSize:".8rem",fontWeight:isChecked?700:500,color:isChecked?"#1E293B":"#64748B",cursor:"pointer",userSelect:"none"}}>
+                        <input 
+                          type="checkbox" 
+                          checked={isChecked}
+                          onChange={() => {
+                            setSelectedColumns(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col]);
+                          }}
+                          style={{width:16,height:16,cursor:"pointer"}}
+                        />
+                        <span>{col}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Summary Stats Badges */}
+          <div style={{padding:"12px 24px",background:"#F1F5F9",borderBottom:"1px solid #E2E8F0",display:"flex",alignItems:"center",justify:"space-between",gap:12,flexWrap:"wrap"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+              <span style={{fontSize:".85rem",fontWeight:800,color:"#0F172A",background:"white",padding:"5px 14px",borderRadius:20,border:"1px solid #CBD5E1"}}>
+                📊 Total Entries: <strong>{overviewFilteredRegs.length}</strong>
+              </span>
+              <span style={{fontSize:".85rem",fontWeight:700,color:"#15803D",background:"#DCFCE7",padding:"5px 14px",borderRadius:20,border:"1px solid #86EFAC"}}>
+                ✅ Approved: <strong>{overviewApprovedCount}</strong>
+              </span>
+              <span style={{fontSize:".85rem",fontWeight:700,color:"#B45309",background:"#FEF3C7",padding:"5px 14px",borderRadius:20,border:"1px solid #FDE68A"}}>
+                ⏳ Pending: <strong>{overviewPendingCount}</strong>
+              </span>
+              <span style={{fontSize:".85rem",fontWeight:700,color:"#B91C1C",background:"#FEE2E2",padding:"5px 14px",borderRadius:20,border:"1px solid #FCA5A5"}}>
+                ❌ Disapproved: <strong>{overviewDisapprovedCount}</strong>
+              </span>
+            </div>
+            <div style={{fontSize:".78rem",color:"#64748B",fontStyle:"italic"}}>
+              🔒 Read-Only Summary (Safe mode for committee members & sub-admins)
+            </div>
+          </div>
+
+          {/* Read-Only Summary Table */}
+          <div style={{maxHeight:550,overflow:"auto",padding:"0 24px 20px"}}>
+            {loadingRegs ? (
+              <div style={{textAlign:"center",padding:60,color:"#64748B",fontSize:".9rem"}}>Loading registration records...</div>
+            ) : overviewFilteredRegs.length === 0 ? (
+              <div style={{textAlign:"center",padding:60,color:"#94A3B8"}}>
+                <div style={{fontSize:"2.5rem",marginBottom:8}}>🔍</div>
+                <div style={{fontSize:".95rem",fontWeight:600}}>No registration records match your filter criteria.</div>
+                <div style={{fontSize:".8rem",marginTop:4}}>Try clearing search terms or date range filters.</div>
+              </div>
+            ) : (
+              <table style={{width:"100%",borderCollapse:"collapse",marginTop:16,fontSize:".85rem",textAlign:"left"}}>
+                <thead>
+                  <tr style={{background:"#1E293B",color:"white",position:"sticky",top:0,zIndex:10}}>
+                    <th style={{padding:"12px",borderBottom:"2px solid #0F172A",width:45,textAlign:"center"}}>#</th>
+                    {selectedColumns.map(col => (
+                      <th key={col} style={{padding:"12px",borderBottom:"2px solid #0F172A",fontWeight:700,whiteSpace:"nowrap"}}>{col}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {overviewFilteredRegs.map((r, rIdx) => {
+                    const statusVal = r.Status || r.status || "Pending";
+                    const statusBg = statusVal === "Approved" ? "#DCFCE7" : statusVal === "Disapproved" ? "#FEE2E2" : "#FEF3C7";
+                    const statusColor = statusVal === "Approved" ? "#15803D" : statusVal === "Disapproved" ? "#B91C1C" : "#B45309";
+
+                    return (
+                      <tr key={r.id || rIdx} style={{background: rIdx % 2 === 1 ? "#F8FAFC" : "white", borderBottom:"1px solid #E2E8F0", transition:"all 0.15s"}}>
+                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:"#64748B"}}>{rIdx + 1}</td>
+                        {selectedColumns.map(col => {
+                          let cellVal = "";
+                          if (col === "Date") {
+                            try { if (r._submittedAt) cellVal = new Date(r._submittedAt).toLocaleString(); } catch (e) { cellVal = "-"; }
+                          } else if (col === "Event") {
+                            cellVal = r.eventName || r.eventTitle || r.eventId || "-";
+                          } else if (col === "Status") {
+                            cellVal = (
+                              <span style={{fontSize:".75rem",fontWeight:800,padding:"3px 10px",borderRadius:12,background:statusBg,color:statusColor,display:"inline-block"}}>
+                                {statusVal}
+                              </span>
+                            );
+                          } else if (col === "Transaction ID") {
+                            cellVal = <strong>{r['Transaction ID'] || r.transactionId || "-"}</strong>;
+                          } else if (col === "Full Name" || col === "Name") {
+                            let n = r['Full Name'] || r['Name'] || r['Submitted By'] || "-";
+                            if (n.includes("|")) n = n.split("|").filter(Boolean).join(" ");
+                            cellVal = <strong>{n}</strong>;
+                          } else if (col === "Mobile Number" || col === "Mobile") {
+                            cellVal = r['Mobile Number'] || r['Mobile'] || r['Phone'] || "-";
+                          } else {
+                            cellVal = r[col] !== undefined ? String(r[col]) : "-";
+                          }
+
+                          return (
+                            <td key={col} style={{padding:"10px 12px",color:"#334155",maxHeight:50,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                              {cellVal}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
         </div>
-      </div>
-      <div className="ac" style={{padding:mob?"16px":"22px"}}>
-        <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"var(--dt)",marginBottom:14,fontWeight:700}}>Recent Donations</h3>
-        <div style={{overflowX:"auto"}}>
-          <table className="tt" style={{width:"100%",borderCollapse:"collapse",fontSize:".8rem",minWidth:500}}>
-            <thead><tr>{["ID","Donor","Amount","Program","Date","Status"].map(h=><th key={h} style={{padding:"9px 12px",textAlign:"left",fontSize:".72rem",letterSpacing:.5,textTransform:"uppercase"}}>{h}</th>)}</tr></thead>
-            <tbody>{data.recentDonations.length > 0 ? data.recentDonations.map((r,i)=>(
-              <tr key={i} style={{borderBottom:"1px solid var(--bd)"}}>
-                <td style={{padding:"10px 12px",color:"var(--mu)",fontFamily:"monospace",fontSize:".75rem"}}>{r.receiptNo || r.id}</td>
-                <td style={{padding:"10px 12px",fontWeight:600}}>{r.name}</td>
-                <td style={{padding:"10px 12px",fontWeight:700,color:"var(--sf)"}}>Rs.{Number(r.amount).toLocaleString()}</td>
-                <td style={{padding:"10px 12px"}}><span style={{fontSize:".72rem",padding:"3px 9px",borderRadius:12,background:"var(--tl)",color:"var(--dt)",fontWeight:600}}>{r.program}</span></td>
-                <td style={{padding:"10px 12px",color:"var(--mu)",fontSize:".78rem"}}>{r.date}</td>
-                <td style={{padding:"10px 12px"}}><span style={{fontSize:".72rem",padding:"3px 9px",borderRadius:12,fontWeight:600,background:r.status==="Verified"?"#EDFAF1":"#FEF9EC",color:r.status==="Verified"?"#1A7A3E":"#C8860A"}}>{r.status}</span></td>
-              </tr>
-            )) : <tr><td colSpan="6" style={{textAlign:"center",padding:20,color:"var(--mu)"}}>No recent donations found.</td></tr>}</tbody>
-          </table>
+      )}
+
+      {/* ── SUB-TAB 2: TRUST FINANCIALS & ANALYTICS ──────────────────────────── */}
+      {activeSubTab === "analytics" && (
+        <div>
+          {loadingAnalytics && auth?.idToken ? (
+            <div style={{padding:40,textAlign:"center",color:"var(--mu)"}}>Loading live analytics data...</div>
+          ) : (
+            <>
+              <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(4,1fr)",gap:14,marginBottom:20}}>
+                {cards.map((s,i)=>(
+                  <div key={i} className="ac" style={{padding:mob?"16px":"20px",background:s.bg,border:`1px solid ${s.br}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+                      <span style={{fontSize:"1.4rem"}}>{s.ic}</span>
+                      {s.ch&&<span style={{fontSize:".72rem",fontWeight:700,color:s.up?"#1A7A3E":"#C0392B",background:s.up?"#EDFAF1":"#FEF0EF",padding:"2px 7px",borderRadius:12}}>{s.ch}</span>}
+                    </div>
+                    <div style={{fontFamily:"'Playfair Display',serif",fontSize:mob?"1.3rem":"1.5rem",fontWeight:700,color:"var(--dt)",marginBottom:3}}>{s.v}</div>
+                    <div style={{fontSize:".72rem",color:"var(--mu)",fontWeight:600}}>{s.l}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"2fr 1fr",gap:16,marginBottom:16}}>
+                <div className="ac" style={{padding:mob?"16px":"22px"}}>
+                  <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"var(--dt)",marginBottom:18,fontWeight:700}}>Monthly Donations (Verified)</h3>
+                  <div style={{display:"flex",alignItems:"flex-end",gap:mob?8:12,height:150}}>
+                    {analyticsData.monthly.length > 0 ? analyticsData.monthly.map((m,i)=>(
+                      <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
+                        <div style={{fontSize:".6rem",color:"var(--mu)"}}>{m.total > 0 ? `Rs.${(m.total/1000).toFixed(1)}k` : ''}</div>
+                        <div style={{width:"100%",background:i===analyticsData.monthly.length-1?"linear-gradient(to top,var(--sf),var(--gd))":"linear-gradient(to top,var(--dt),var(--tm))",borderRadius:"5px 5px 0 0",height:`${Math.max((m.total/mx)*120, 4)}px`}}/>
+                        <div style={{fontSize:".65rem",color:"var(--mu)"}}>{m.label}</div>
+                      </div>
+                    )) : <div style={{flex:1,textAlign:"center",color:"var(--mu)",fontSize:".8rem"}}>No data</div>}
+                  </div>
+                </div>
+
+                <div className="ac" style={{padding:mob?"16px":"22px"}}>
+                  <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"var(--dt)",marginBottom:18,fontWeight:700}}>By Program</h3>
+                  {analyticsData.programs.length > 0 ? analyticsData.programs.map(r=>(
+                    <div key={r.p} style={{marginBottom:11}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:".78rem"}}>{r.p}</span><span style={{fontSize:".78rem",fontWeight:700}}>{r.v}%</span></div>
+                      <div style={{height:7,borderRadius:4,background:"#EEE"}}><div style={{height:"100%",width:`${r.v}%`,background:r.c,borderRadius:4}}/></div>
+                    </div>
+                  )) : <div style={{textAlign:"center",color:"var(--mu)",fontSize:".8rem"}}>No data</div>}
+                </div>
+              </div>
+
+              <div className="ac" style={{padding:mob?"16px":"22px"}}>
+                <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"var(--dt)",marginBottom:14,fontWeight:700}}>Recent Donations</h3>
+                <div style={{overflowX:"auto"}}>
+                  <table className="tt" style={{width:"100%",borderCollapse:"collapse",fontSize:".8rem",minWidth:500}}>
+                    <thead><tr>{["ID","Donor","Amount","Program","Date","Status"].map(h=><th key={h} style={{padding:"9px 12px",textAlign:"left",fontSize:".72rem",letterSpacing:.5,textTransform:"uppercase"}}>{h}</th>)}</tr></thead>
+                    <tbody>{analyticsData.recentDonations.length > 0 ? analyticsData.recentDonations.map((r,i)=>(
+                      <tr key={i} style={{borderBottom:"1px solid var(--bd)"}}>
+                        <td style={{padding:"10px 12px",color:"var(--mu)",fontFamily:"monospace",fontSize:".75rem"}}>{r.receiptNo || r.id}</td>
+                        <td style={{padding:"10px 12px",fontWeight:600}}>{r.name}</td>
+                        <td style={{padding:"10px 12px",fontWeight:700,color:"var(--sf)"}}>Rs.{Number(r.amount).toLocaleString()}</td>
+                        <td style={{padding:"10px 12px"}}><span style={{fontSize:".72rem",padding:"3px 9px",borderRadius:12,background:"var(--tl)",color:"var(--dt)",fontWeight:600}}>{r.program}</span></td>
+                        <td style={{padding:"10px 12px",color:"var(--mu)",fontSize:".78rem"}}>{r.date}</td>
+                        <td style={{padding:"10px 12px"}}><span style={{fontSize:".72rem",padding:"3px 9px",borderRadius:12,fontWeight:600,background:r.status==="Verified"?"#EDFAF1":"#FEF9EC",color:r.status==="Verified"?"#1A7A3E":"#C8860A"}}>{r.status}</span></td>
+                      </tr>
+                    )) : <tr><td colSpan="6" style={{textAlign:"center",padding:20,color:"var(--mu)"}}>No recent donations found.</td></tr>}</tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </div>
-      </div>
+      )}
+
     </div>
   );
 }
@@ -13820,23 +14414,6 @@ function AdminRegistrations({ mob, C, setC, auth }) {
   const [showBulkTools, setShowBulkTools] = useState(false);
   const [historyModalReg, setHistoryModalReg] = useState(null);
 
-  // ── Overview Modal & PDF Export States ────────────────────────────────────
-  const [showOverviewModal, setShowOverviewModal] = useState(false);
-  const [defaultOverviewForm, setDefaultOverviewForm] = useState(() => {
-    return C.defaultOverviewForm || localStorage.getItem("defaultOverviewForm") || "Education felicitation 2026";
-  });
-  const [overviewFormFilter, setOverviewFormFilter] = useState(() => {
-    return C.defaultOverviewForm || localStorage.getItem("defaultOverviewForm") || "Education felicitation 2026";
-  });
-  const [overviewDateFrom, setOverviewDateFrom] = useState("");
-  const [overviewDateTo, setOverviewDateTo] = useState("");
-  const [overviewSearch, setOverviewSearch] = useState("");
-  const [overviewStatusFilter, setOverviewStatusFilter] = useState("All");
-  const [showColumnPicker, setShowColumnPicker] = useState(false);
-  const [selectedColumns, setSelectedColumns] = useState([
-    "Transaction ID", "Date", "Full Name", "Mobile Number", "Vibhag", "Stream", "Obtained Marks", "% Obtained", "Status"
-  ]);
-
   const saveToFb = async (newC) => {
     try {
       await fbSave(newC, auth?.idToken);
@@ -13844,14 +14421,6 @@ function AdminRegistrations({ mob, C, setC, auth }) {
     } catch(e) {
       alert("Error saving: " + e.message);
     }
-  };
-
-  const handleSetDefaultOverviewForm = async (formName) => {
-    setDefaultOverviewForm(formName);
-    localStorage.setItem("defaultOverviewForm", formName);
-    const newC = { ...C, defaultOverviewForm: formName };
-    await saveToFb(newC);
-    alert(`"${formName}" has been saved as your Default Form View!`);
   };
 
   const handleApplyBulkGroup = async () => {
@@ -14313,194 +14882,6 @@ function AdminRegistrations({ mob, C, setC, auth }) {
     return Array.from(vals).sort();
   };
 
-  // ── Overview Filter Logic ─────────────────────────────────────────
-  const overviewFilteredRegs = activeRegsList.filter(r => {
-    if (!r) return false;
-    if (r.isGlobalGuest || r.isSpecialGuest || r.globalGuestId || r.formId === "global_guest_directory") return false;
-
-    // Form Filter
-    if (overviewFormFilter !== "All") {
-      const rEvent = String(r.eventName || r.eventTitle || r.eventId || r.formId || "").toLowerCase();
-      const targetFilter = String(overviewFormFilter).toLowerCase();
-      if (!rEvent.includes(targetFilter) && !targetFilter.includes(rEvent)) return false;
-    }
-
-    // Status Filter
-    if (overviewStatusFilter !== "All") {
-      const rStatus = r.Status || r.status || "Pending";
-      if (rStatus !== overviewStatusFilter) return false;
-    }
-
-    // Date Range Filter
-    if (overviewDateFrom || overviewDateTo) {
-      if (r._submittedAt) {
-        const subDate = new Date(r._submittedAt);
-        if (overviewDateFrom) {
-          const fromDate = new Date(overviewDateFrom);
-          fromDate.setHours(0, 0, 0, 0);
-          if (subDate < fromDate) return false;
-        }
-        if (overviewDateTo) {
-          const toDate = new Date(overviewDateTo);
-          toDate.setHours(23, 59, 59, 999);
-          if (subDate > toDate) return false;
-        }
-      }
-    }
-
-    // Search Query
-    if (overviewSearch) {
-      const q = overviewSearch.toLowerCase();
-      if (!Object.values(r).some(val => String(val).toLowerCase().includes(q))) return false;
-    }
-
-    return true;
-  });
-
-  const overviewApprovedCount = overviewFilteredRegs.filter(r => (r.Status || r.status) === "Approved").length;
-  const overviewPendingCount = overviewFilteredRegs.filter(r => (r.Status || r.status) === "Pending" || !(r.Status || r.status)).length;
-  const overviewDisapprovedCount = overviewFilteredRegs.filter(r => (r.Status || r.status) === "Disapproved").length;
-
-  const handleExportPDF = () => {
-    if (overviewFilteredRegs.length === 0) {
-      alert("No registration records match your filter criteria to export.");
-      return;
-    }
-
-    try {
-      const colsToExport = selectedColumns.length > 0 ? selectedColumns : ["Transaction ID", "Date", "Full Name", "Mobile Number", "Status"];
-      const useLandscape = colsToExport.length > 5;
-      const doc = new jsPDF({
-        orientation: useLandscape ? 'landscape' : 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = doc.internal.pageSize.width;
-      const pageHeight = doc.internal.pageSize.height;
-      const margin = 12;
-      const contentWidth = pageWidth - (margin * 2);
-
-      // Header Banner
-      doc.setFillColor(30, 41, 59);
-      doc.rect(0, 0, pageWidth, 22, 'F');
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(255, 255, 255);
-      doc.text("MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST", pageWidth / 2, 9, { align: "center" });
-
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "normal");
-      doc.text(`REGISTRATION OVERVIEW REPORT - ${overviewFormFilter.toUpperCase()}`, pageWidth / 2, 16, { align: "center" });
-
-      let yPos = 28;
-      doc.setFontSize(8.5);
-      doc.setTextColor(51, 65, 85);
-      doc.setFont("helvetica", "bold");
-
-      const todayStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-      const dateRangeStr = (overviewDateFrom || overviewDateTo) ? `${overviewDateFrom || 'Start'} to ${overviewDateTo || 'Today'}` : 'All Dates';
-
-      doc.text(`Report Date: ${todayStr}  |  Date Filter: ${dateRangeStr}  |  Total Entries: ${overviewFilteredRegs.length}`, margin, yPos);
-      doc.setFont("helvetica", "normal");
-      doc.text(`Status Summary: Approved (${overviewApprovedCount}), Pending (${overviewPendingCount}), Disapproved (${overviewDisapprovedCount})`, pageWidth - margin, yPos, { align: "right" });
-
-      yPos += 5;
-      doc.setDrawColor(203, 213, 225);
-      doc.setLineWidth(0.4);
-      doc.line(margin, yPos, pageWidth - margin, yPos);
-
-      yPos += 5;
-
-      const numCols = colsToExport.length;
-      const colWidth = contentWidth / numCols;
-      const rowHeight = 7.5;
-      const headerHeight = 8.5;
-
-      const drawTableHeader = (currentY) => {
-        doc.setFillColor(51, 65, 85);
-        doc.rect(margin, currentY, contentWidth, headerHeight, 'F');
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        doc.setTextColor(255, 255, 255);
-
-        colsToExport.forEach((colName, cIdx) => {
-          const x = margin + (cIdx * colWidth) + 2;
-          const text = doc.splitTextToSize(colName, colWidth - 3)[0] || colName;
-          doc.text(text, x, currentY + 5.5);
-        });
-        return currentY + headerHeight;
-      };
-
-      yPos = drawTableHeader(yPos);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7.5);
-
-      overviewFilteredRegs.forEach((r, rIdx) => {
-        if (yPos + rowHeight > pageHeight - 12) {
-          doc.addPage();
-          yPos = 12;
-          yPos = drawTableHeader(yPos);
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(7.5);
-        }
-
-        if (rIdx % 2 === 1) {
-          doc.setFillColor(248, 250, 252);
-          doc.rect(margin, yPos, contentWidth, rowHeight, 'F');
-        }
-
-        doc.setDrawColor(226, 232, 240);
-        doc.setLineWidth(0.15);
-        doc.rect(margin, yPos, contentWidth, rowHeight, 'S');
-
-        doc.setTextColor(30, 41, 59);
-
-        colsToExport.forEach((colName, cIdx) => {
-          let val = "";
-          if (colName === "Date") {
-            try { if (r._submittedAt) val = new Date(r._submittedAt).toLocaleDateString(); } catch (e) { val = "-"; }
-          } else if (colName === "Event") {
-            val = r.eventName || r.eventTitle || r.eventId || "-";
-          } else if (colName === "Status") {
-            val = r.Status || r.status || "Pending";
-          } else if (colName === "Transaction ID") {
-            val = r['Transaction ID'] || r.transactionId || "-";
-          } else if (colName === "Full Name" || colName === "Name") {
-            val = r['Full Name'] || r['Name'] || r['Submitted By'] || "-";
-            if (val.includes("|")) val = val.split("|").filter(Boolean).join(" ");
-          } else if (colName === "Mobile Number" || colName === "Mobile") {
-            val = r['Mobile Number'] || r['Mobile'] || r['Phone'] || "-";
-          } else {
-            val = r[colName] !== undefined ? String(r[colName]) : "-";
-          }
-
-          const x = margin + (cIdx * colWidth) + 2;
-          const displayVal = doc.splitTextToSize(String(val), colWidth - 3)[0] || String(val);
-          doc.text(displayVal, x, yPos + 5);
-        });
-
-        yPos += rowHeight;
-      });
-
-      const totalPages = doc.internal.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        doc.setPage(i);
-        doc.setFontSize(7.5);
-        doc.setTextColor(148, 163, 184);
-        doc.text(`Page ${i} of ${totalPages}  |  Mumbai Meghwal Panchayat & Vidya Gohil Trust Portal`, pageWidth / 2, pageHeight - 5, { align: "center" });
-      }
-
-      const cleanFormTitle = overviewFormFilter.replace(/[^a-zA-Z0-9]/g, '_');
-      doc.save(`Registration_Overview_${cleanFormTitle}_${todayStr.replace(/\s+/g, '_')}.pdf`);
-    } catch (err) {
-      console.error("PDF Export Error:", err);
-      alert("Failed to export PDF: " + err.message);
-    }
-  };
-
   const handleExportCSV = () => {
     if(filteredRegs.length === 0) return;
     const headers = ["Date", "Event", "Transaction ID", "Status", "Remarks", "Updated By", ...allKeys];
@@ -14602,9 +14983,6 @@ function AdminRegistrations({ mob, C, setC, auth }) {
             </button>
             <button onClick={handleExportCSV} className="bt" style={{padding:"6px 12px",borderRadius:8,fontSize:".8rem",fontWeight:600,display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>
               <span>📥</span> Export CSV
-            </button>
-            <button onClick={() => setShowOverviewModal(true)} style={{padding:"6px 14px",borderRadius:8,fontSize:".8rem",fontWeight:700,display:"flex",alignItems:"center",gap:6,background:"linear-gradient(135deg, #1E293B, #0F172A)",color:"white",border:"none",cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 6px rgba(0,0,0,0.15)"}}>
-              <span>📊</span> Overview & Export PDF
             </button>
             <button onClick={() => setShowBulkTools(!showBulkTools)} style={{padding:"6px 12px",borderRadius:8,fontSize:".8rem",fontWeight:600,display:"flex",alignItems:"center",gap:4,background:showBulkTools?"#E8650A":"#F5F5F5",color:showBulkTools?"white":"var(--dt)",border:"1px solid var(--bd)",cursor:"pointer",whiteSpace:"nowrap"}}>
               ⚡ Bulk Tools {showBulkTools ? "▲" : "▼"}
@@ -15191,289 +15569,6 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                  </object>
                )}
             </div>
-          </div>
-        </div>
-      )}
-      {/* ── OVERVIEW & PDF EXPORT MODAL ────────────────────────────────────── */}
-      {showOverviewModal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(15, 23, 42, 0.75)",backdropFilter:"blur(4px)",zIndex:99999,display:"flex",alignItems:"center",justify:"center",padding:mob?10:20}}>
-          <div style={{background:"white",borderRadius:16,width:"100%",maxWidth:1250,height:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 25px 50px -12px rgba(0,0,0,0.35)",overflow:"hidden"}}>
-            
-            {/* Modal Header */}
-            <div style={{padding:"16px 24px",background:"linear-gradient(135deg, #1E293B, #0F172A)",color:"white",display:"flex",justify:"space-between",alignItems:"center"}}>
-              <div>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <h3 style={{margin:0,fontSize:"1.2rem",fontWeight:800}}>📊 Registration Overview & PDF Report Generator</h3>
-                  {defaultOverviewForm && (
-                    <span style={{fontSize:".75rem",background:"rgba(255,255,255,0.15)",color:"#F1F5F9",padding:"3px 10px",borderRadius:12,border:"1px solid rgba(255,255,255,0.2)"}}>
-                      Default View: <strong>{defaultOverviewForm}</strong>
-                    </span>
-                  )}
-                </div>
-                <div style={{fontSize:".8rem",color:"#94A3B8",marginTop:3}}>
-                  Read-Only Summary for Committee Members & Admins • Select columns, filter date ranges, set default form, & export PDF
-                </div>
-              </div>
-              <button onClick={()=>setShowOverviewModal(false)} style={{background:"rgba(255,255,255,0.1)",border:"none",color:"white",width:32,height:32,borderRadius:8,fontSize:"1.2rem",cursor:"pointer",display:"flex",alignItems:"center",justify:"center",transition:"all 0.2s"}}>✕</button>
-            </div>
-
-            {/* Filter & Control Bar */}
-            <div style={{padding:"14px 24px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",flexDirection:"column",gap:12}}>
-              
-              <div style={{display:"flex",alignItems:"center",justify:"space-between",gap:12,flexWrap:"wrap"}}>
-                
-                {/* Form Selector & Set Default Button */}
-                <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                  <label style={{fontSize:".8rem",fontWeight:700,color:"#334155"}}>Form View:</label>
-                  <select 
-                    value={overviewFormFilter} 
-                    onChange={e=>setOverviewFormFilter(e.target.value)}
-                    style={{padding:"8px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:700,background:"white",color:"#1E293B",outline:"none",cursor:"pointer",maxWidth:250}}
-                  >
-                    <option value="All">📋 All Registrations</option>
-                    <option value="Education felicitation 2026">🎓 Education felicitation 2026</option>
-                    {(C.forms || []).map(f => (
-                      <option key={f.id} value={f.name || f.id}>{f.name || f.id}</option>
-                    ))}
-                    {(C.events || []).map(ev => (
-                      <option key={ev.id} value={ev.title}>{ev.title}</option>
-                    ))}
-                  </select>
-
-                  <button 
-                    type="button"
-                    onClick={() => handleSetDefaultOverviewForm(overviewFormFilter)}
-                    style={{
-                      padding:"7px 12px",borderRadius:8,
-                      border: defaultOverviewForm === overviewFormFilter ? "1px solid #16A34A" : "1px solid #CBD5E1",
-                      background: defaultOverviewForm === overviewFormFilter ? "#DCFCE7" : "white",
-                      color: defaultOverviewForm === overviewFormFilter ? "#15803D" : "#475569",
-                      fontSize:".78rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4
-                    }}
-                    title="Save current form as your default view"
-                  >
-                    <span>⭐</span> {defaultOverviewForm === overviewFormFilter ? "Default Active" : "Set as Default View"}
-                  </button>
-                </div>
-
-                {/* Date Range & Status Filters */}
-                <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:".78rem",fontWeight:600,color:"#64748B"}}>From:</span>
-                    <input 
-                      type="date" 
-                      value={overviewDateFrom} 
-                      onChange={e=>setOverviewDateFrom(e.target.value)}
-                      style={{padding:"6px 10px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".8rem",outline:"none"}}
-                    />
-                  </div>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:".78rem",fontWeight:600,color:"#64748B"}}>To:</span>
-                    <input 
-                      type="date" 
-                      value={overviewDateTo} 
-                      onChange={e=>setOverviewDateTo(e.target.value)}
-                      style={{padding:"6px 10px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".8rem",outline:"none"}}
-                    />
-                  </div>
-                  {(overviewDateFrom || overviewDateTo) && (
-                    <button onClick={() => { setOverviewDateFrom(""); setOverviewDateTo(""); }} style={{background:"none",border:"none",color:"#DC2626",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}>
-                      Clear Dates
-                    </button>
-                  )}
-                </div>
-
-                {/* Status Filter */}
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontSize:".78rem",fontWeight:600,color:"#64748B"}}>Status:</span>
-                  <select 
-                    value={overviewStatusFilter}
-                    onChange={e=>setOverviewStatusFilter(e.target.value)}
-                    style={{padding:"6px 10px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".8rem",outline:"none",cursor:"pointer"}}
-                  >
-                    <option value="All">All Statuses</option>
-                    <option value="Approved">Approved Only</option>
-                    <option value="Pending">Pending Only</option>
-                    <option value="Disapproved">Disapproved Only</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Action Buttons & Column Selection Strip */}
-              <div style={{display:"flex",alignItems:"center",justify:"space-between",gap:12,flexWrap:"wrap",paddingTop:4,borderTop:"1px dashed #E2E8F0"}}>
-                <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                  <input 
-                    type="text" 
-                    placeholder="🔍 Search name, mobile, txn..." 
-                    value={overviewSearch}
-                    onChange={e=>setOverviewSearch(e.target.value)}
-                    style={{padding:"6px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".82rem",width:220,outline:"none"}}
-                  />
-                  <button 
-                    onClick={() => setShowColumnPicker(!showColumnPicker)}
-                    style={{padding:"6px 14px",borderRadius:8,border:"1px solid #3B82F6",background:showColumnPicker?"#EFF6FF":"white",color:"#2563EB",fontSize:".8rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
-                  >
-                    <span>⚙️</span> Select Columns ({selectedColumns.length}) {showColumnPicker ? "▲" : "▼"}
-                  </button>
-                </div>
-
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <button 
-                    onClick={handleExportPDF}
-                    style={{padding:"7px 16px",borderRadius:8,background:"linear-gradient(135deg, #DC2626, #991B1B)",color:"white",border:"none",fontSize:".82rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,boxShadow:"0 2px 8px rgba(220,38,38,0.25)"}}
-                  >
-                    <span>📄</span> Export PDF Report
-                  </button>
-                  <button 
-                    onClick={handleExportCSV}
-                    style={{padding:"7px 14px",borderRadius:8,background:"white",color:"#334155",border:"1px solid #CBD5E1",fontSize:".82rem",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
-                  >
-                    <span>📥</span> Export CSV
-                  </button>
-                </div>
-              </div>
-
-              {/* Column Selection Checkbox Drawer */}
-              {showColumnPicker && (
-                <div style={{background:"white",padding:"14px 18px",borderRadius:10,border:"1px solid #93C5FD",boxShadow:"0 4px 12px rgba(59,130,246,0.1)",marginTop:4,animation:"fadeIn 0.2s ease-out"}}>
-                  <div style={{display:"flex",alignItems:"center",justify:"space-between",marginBottom:10}}>
-                    <span style={{fontSize:".8rem",fontWeight:800,color:"#1E3A8A"}}>Check / Uncheck Columns to Display & Export in PDF:</span>
-                    <div style={{display:"flex",gap:8}}>
-                      <button 
-                        onClick={() => setSelectedColumns(["Transaction ID", "Date", "Event", "Status", "Remarks", "Updated By", ...allKeys])}
-                        style={{background:"#EFF6FF",border:"1px solid #BFDBFE",color:"#1D4ED8",fontSize:".75rem",fontWeight:700,padding:"3px 10px",borderRadius:6,cursor:"pointer"}}
-                      >
-                        Select All
-                      </button>
-                      <button 
-                        onClick={() => setSelectedColumns(["Transaction ID", "Date", "Full Name", "Mobile Number", "Status"])}
-                        style={{background:"#F1F5F9",border:"1px solid #CBD5E1",color:"#475569",fontSize:".75rem",fontWeight:700,padding:"3px 10px",borderRadius:6,cursor:"pointer"}}
-                      >
-                        Reset Default
-                      </button>
-                    </div>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(180px, 1fr))",gap:8,maxHeight:140,overflowY:"auto",padding:4}}>
-                    {["Transaction ID", "Date", "Event", "Status", "Remarks", "Updated By", "Serial Number", "Group", ...allKeys].filter((v, i, a) => a.indexOf(v) === i).map(col => {
-                      const isChecked = selectedColumns.includes(col);
-                      return (
-                        <label key={col} style={{display:"flex",alignItems:"center",gap:6,fontSize:".78rem",fontWeight:isChecked?700:500,color:isChecked?"#1E293B":"#64748B",cursor:"pointer",userSelect:"none"}}>
-                          <input 
-                            type="checkbox" 
-                            checked={isChecked}
-                            onChange={() => {
-                              setSelectedColumns(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col]);
-                            }}
-                            style={{width:15,height:15,cursor:"pointer"}}
-                          />
-                          <span>{col}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Summary Stats Badges */}
-            <div style={{padding:"10px 24px",background:"#F1F5F9",borderBottom:"1px solid #E2E8F0",display:"flex",alignItems:"center",justify:"space-between",gap:12,flexWrap:"wrap"}}>
-              <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-                <span style={{fontSize:".82rem",fontWeight:800,color:"#0F172A",background:"white",padding:"4px 12px",borderRadius:20,border:"1px solid #CBD5E1"}}>
-                  📊 Total Entries: <strong>{overviewFilteredRegs.length}</strong>
-                </span>
-                <span style={{fontSize:".82rem",fontWeight:700,color:"#15803D",background:"#DCFCE7",padding:"4px 12px",borderRadius:20,border:"1px solid #86EFAC"}}>
-                  ✅ Approved: <strong>{overviewApprovedCount}</strong>
-                </span>
-                <span style={{fontSize:".82rem",fontWeight:700,color:"#B45309",background:"#FEF3C7",padding:"4px 12px",borderRadius:20,border:"1px solid #FDE68A"}}>
-                  ⏳ Pending: <strong>{overviewPendingCount}</strong>
-                </span>
-                <span style={{fontSize:".82rem",fontWeight:700,color:"#B91C1C",background:"#FEE2E2",padding:"4px 12px",borderRadius:20,border:"1px solid #FCA5A5"}}>
-                  ❌ Disapproved: <strong>{overviewDisapprovedCount}</strong>
-                </span>
-              </div>
-              <div style={{fontSize:".75rem",color:"#64748B",fontStyle:"italic"}}>
-                🔒 Read-Only View (Safe mode for committee members & sub-admins)
-              </div>
-            </div>
-
-            {/* Read-Only Summary Table */}
-            <div style={{flex:1,overflow:"auto",padding:"0 24px 20px"}}>
-              {overviewFilteredRegs.length === 0 ? (
-                <div style={{textAlign:"center",padding:60,color:"#94A3B8"}}>
-                  <div style={{fontSize:"2.5rem",marginBottom:8}}>🔍</div>
-                  <div style={{fontSize:".95rem",fontWeight:600}}>No registration records match your filter criteria.</div>
-                  <div style={{fontSize:".8rem",marginTop:4}}>Try clearing search terms or date range filters.</div>
-                </div>
-              ) : (
-                <table style={{width:"100%",borderCollapse:"collapse",marginTop:16,fontSize:".82rem",textAlign:"left"}}>
-                  <thead>
-                    <tr style={{background:"#1E293B",color:"white",position:"sticky",top:0,zIndex:10}}>
-                      <th style={{padding:"10px 12px",borderBottom:"2px solid #0F172A",width:45,textAlign:"center"}}>#</th>
-                      {selectedColumns.map(col => (
-                        <th key={col} style={{padding:"10px 12px",borderBottom:"2px solid #0F172A",fontWeight:700,whiteSpace:"nowrap"}}>{col}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {overviewFilteredRegs.map((r, rIdx) => {
-                      const statusVal = r.Status || r.status || "Pending";
-                      const statusBg = statusVal === "Approved" ? "#DCFCE7" : statusVal === "Disapproved" ? "#FEE2E2" : "#FEF3C7";
-                      const statusColor = statusVal === "Approved" ? "#15803D" : statusVal === "Disapproved" ? "#B91C1C" : "#B45309";
-
-                      return (
-                        <tr key={r.id || rIdx} style={{background: rIdx % 2 === 1 ? "#F8FAFC" : "white", borderBottom:"1px solid #E2E8F0", transition:"all 0.15s"}}>
-                          <td style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:"#64748B"}}>{rIdx + 1}</td>
-                          {selectedColumns.map(col => {
-                            let cellVal = "";
-                            if (col === "Date") {
-                              try { if (r._submittedAt) cellVal = new Date(r._submittedAt).toLocaleString(); } catch (e) { cellVal = "-"; }
-                            } else if (col === "Event") {
-                              cellVal = r.eventName || r.eventTitle || r.eventId || "-";
-                            } else if (col === "Status") {
-                              cellVal = (
-                                <span style={{fontSize:".75rem",fontWeight:800,padding:"3px 10px",borderRadius:12,background:statusBg,color:statusColor,display:"inline-block"}}>
-                                  {statusVal}
-                                </span>
-                              );
-                            } else if (col === "Transaction ID") {
-                              cellVal = <strong>{r['Transaction ID'] || r.transactionId || "-"}</strong>;
-                            } else if (col === "Full Name" || col === "Name") {
-                              let n = r['Full Name'] || r['Name'] || r['Submitted By'] || "-";
-                              if (n.includes("|")) n = n.split("|").filter(Boolean).join(" ");
-                              cellVal = <strong>{n}</strong>;
-                            } else if (col === "Mobile Number" || col === "Mobile") {
-                              cellVal = r['Mobile Number'] || r['Mobile'] || r['Phone'] || "-";
-                            } else {
-                              cellVal = r[col] !== undefined ? String(r[col]) : "-";
-                            }
-
-                            return (
-                              <td key={col} style={{padding:"10px 12px",color:"#334155",maxHeight:50,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                                {cellVal}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div style={{padding:"12px 24px",background:"#F8FAFC",borderTop:"1px solid #E2E8F0",display:"flex",alignItems:"center",justify:"space-between"}}>
-              <div style={{fontSize:".78rem",color:"#64748B"}}>
-                Showing <strong>{overviewFilteredRegs.length}</strong> entries | Columns: <strong>{selectedColumns.length}</strong> selected
-              </div>
-              <button 
-                onClick={()=>setShowOverviewModal(false)}
-                style={{padding:"8px 20px",borderRadius:8,background:"#1E293B",color:"white",border:"none",fontSize:".85rem",fontWeight:700,cursor:"pointer"}}
-              >
-                Close Overview
-              </button>
-            </div>
-
           </div>
         </div>
       )}
