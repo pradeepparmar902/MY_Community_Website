@@ -13837,14 +13837,6 @@ function AdminRegistrations({ mob, C, setC, auth }) {
     "Transaction ID", "Date", "Full Name", "Mobile Number", "Vibhag", "Stream", "Obtained Marks", "% Obtained", "Status"
   ]);
 
-  const handleSetDefaultOverviewForm = async (formName) => {
-    setDefaultOverviewForm(formName);
-    localStorage.setItem("defaultOverviewForm", formName);
-    const newC = { ...C, defaultOverviewForm: formName };
-    await saveToFb(newC);
-    alert(`"${formName}" has been saved as your Default Form View!`);
-  };
-
   const saveToFb = async (newC) => {
     try {
       await fbSave(newC, auth?.idToken);
@@ -13852,6 +13844,14 @@ function AdminRegistrations({ mob, C, setC, auth }) {
     } catch(e) {
       alert("Error saving: " + e.message);
     }
+  };
+
+  const handleSetDefaultOverviewForm = async (formName) => {
+    setDefaultOverviewForm(formName);
+    localStorage.setItem("defaultOverviewForm", formName);
+    const newC = { ...C, defaultOverviewForm: formName };
+    await saveToFb(newC);
+    alert(`"${formName}" has been saved as your Default Form View!`);
   };
 
   const handleApplyBulkGroup = async () => {
@@ -14311,6 +14311,8 @@ function AdminRegistrations({ mob, C, setC, auth }) {
       vals.add(val);
     });
     return Array.from(vals).sort();
+  };
+
   // ── Overview Filter Logic ─────────────────────────────────────────
   const overviewFilteredRegs = activeRegsList.filter(r => {
     if (!r) return false;
@@ -15477,7 +15479,6 @@ function AdminRegistrations({ mob, C, setC, auth }) {
       )}
     </div>
   );
-}
 }
 
 // ── POLICY PAGE COMPONENT ───────────────────────────────────────────────────
