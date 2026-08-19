@@ -7250,6 +7250,17 @@ function Overview({ mob, C, setC, auth }) {
     "Transaction ID", "Date", "Full Name", "Mobile Number", "Vibhag", "Stream", "Obtained Marks", "% Obtained", "Status"
   ]);
 
+  // Report Mode: "detailed" | "pivot"
+  const [reportMode, setReportMode] = useState("detailed");
+
+  // PDF Header Customization States
+  const [pdfHeaderTitle, setPdfHeaderTitle] = useState("MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST");
+  const [pdfHeaderSubtitle, setPdfHeaderSubtitle] = useState("");
+  const [showHeaderEditor, setShowHeaderEditor] = useState(false);
+
+  // Pivot Summary Group-By Columns State
+  const [pivotGroupByCols, setPivotGroupByCols] = useState(["Vibhag"]);
+
   // Analytics states
   const [analyticsData, setAnalyticsData] = useState({
     totalDonations: 0,
@@ -7426,7 +7437,74 @@ function Overview({ mob, C, setC, auth }) {
     return a.localeCompare(b);
   });
 
-  // PDF Export
+  // Calculate Pivot Summary Data
+  const getPivotSummaryData = () => {
+    if (!pivotGroupByCols || pivotGroupByCols.length === 0) {
+      return { rows: [], totals: { approved: 0, pending: 0, rejected: 0, total: 0 } };
+    }
+
+    const groupsMap = new Map();
+    let grandApproved = 0;
+    let grandPending = 0;
+    let grandRejected = 0;
+    let grandTotal = 0;
+
+    overviewFilteredRegs.forEach(r => {
+      if (!r) return;
+      const keyVals = pivotGroupByCols.map(col => {
+        if (col === "Date") {
+          if (r._submittedAt) {
+            try { return new Date(r._submittedAt).toLocaleDateString(); } catch (e) { return "Unknown Date"; }
+          }
+          return "Unknown Date";
+        }
+        if (col === "Event") return r.eventName || r.eventTitle || r.eventId || "Unspecified Event";
+        if (col === "Status") return r.Status || r.status || "Pending";
+        return String(r[col] || r[col.toLowerCase()] || "Unspecified").trim() || "Unspecified";
+      });
+
+      const compositeKey = keyVals.join(" || ");
+      if (!groupsMap.has(compositeKey)) {
+        groupsMap.set(compositeKey, {
+          keyVals,
+          approved: 0,
+          pending: 0,
+          rejected: 0,
+          total: 0
+        });
+      }
+
+      const item = groupsMap.get(compositeKey);
+      const st = String(r.Status || r.status || "Pending").trim();
+      if (st === "Approved") {
+        item.approved++;
+        grandApproved++;
+      } else if (st === "Disapproved" || st === "Rejected") {
+        item.rejected++;
+        grandRejected++;
+      } else {
+        item.pending++;
+        grandPending++;
+      }
+      item.total++;
+      grandTotal++;
+    });
+
+    const rows = Array.from(groupsMap.values());
+    rows.sort((a, b) => a.keyVals.join(" ").localeCompare(b.keyVals.join(" ")));
+
+    return {
+      rows,
+      totals: {
+        approved: grandApproved,
+        pending: grandPending,
+        rejected: grandRejected,
+        total: grandTotal
+      }
+    };
+  };
+
+  // Detailed Records PDF Export
   const handleExportPDF = () => {
     if (overviewFilteredRegs.length === 0) {
       alert("No registration records match your filter criteria to export.");
@@ -7451,14 +7529,17 @@ function Overview({ mob, C, setC, auth }) {
       doc.setFillColor(30, 41, 59);
       doc.rect(0, 0, pageWidth, 22, 'F');
 
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(255, 255, 255);
-      doc.text("MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST", pageWidth / 2, 9, { align: "center" });
+      const titleText = pdfHeaderTitle.trim() || "MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST";
+      const subtitleText = pdfHeaderSubtitle.trim() || `REGISTRATION OVERVIEW REPORT - ${overviewFormFilter.toUpperCase()}`;
 
-      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(255, 255, 255);
+      doc.text(titleText, pageWidth / 2, 9, { align: "center" });
+
+      doc.setFontSize(8.5);
       doc.setFont("helvetica", "normal");
-      doc.text(`REGISTRATION OVERVIEW REPORT - ${overviewFormFilter.toUpperCase()}`, pageWidth / 2, 16, { align: "center" });
+      doc.text(subtitleText, pageWidth / 2, 16, { align: "center" });
 
       let yPos = 28;
       doc.setFontSize(8.5);
@@ -7567,6 +7648,158 @@ function Overview({ mob, C, setC, auth }) {
     }
   };
 
+  // Pivot Summary PDF Export
+  const handleExportPivotPDF = () => {
+    const { rows, totals } = getPivotSummaryData();
+    if (rows.length === 0) {
+      alert("No pivot summary data to export.");
+      return;
+    }
+
+    try {
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      const margin = 12;
+      const contentWidth = pageWidth - (margin * 2);
+
+      // Header Banner
+      doc.setFillColor(30, 41, 59);
+      doc.rect(0, 0, pageWidth, 22, 'F');
+
+      const titleText = pdfHeaderTitle.trim() || "MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST";
+      const subtitleText = pdfHeaderSubtitle.trim() || `SUMMARY COUNT REPORT - ${overviewFormFilter.toUpperCase()}`;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(255, 255, 255);
+      doc.text(titleText, pageWidth / 2, 9, { align: "center" });
+
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "normal");
+      doc.text(subtitleText, pageWidth / 2, 16, { align: "center" });
+
+      let yPos = 28;
+      doc.setFontSize(8.5);
+      doc.setTextColor(51, 65, 85);
+      doc.setFont("helvetica", "bold");
+
+      const todayStr = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      const dateRangeStr = (overviewDateFrom || overviewDateTo) ? `${overviewDateFrom || 'Start'} to ${overviewDateTo || 'Today'}` : 'All Dates';
+
+      doc.text(`Report Date: ${todayStr}  |  Pivot Fields: ${pivotGroupByCols.join(" + ")}  |  Total Entries: ${totals.total}`, margin, yPos);
+
+      yPos += 5;
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.4);
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+
+      yPos += 5;
+
+      const groupColCount = pivotGroupByCols.length;
+      const statCols = ["Approved", "Pending", "Rejected", "Total"];
+      const statColWidth = 24;
+      const remainingWidth = contentWidth - (4 * statColWidth);
+      const groupColWidth = remainingWidth / groupColCount;
+
+      const rowHeight = 7.5;
+      const headerHeight = 8.5;
+
+      const drawTableHeader = (currentY) => {
+        doc.setFillColor(51, 65, 85);
+        doc.rect(margin, currentY, contentWidth, headerHeight, 'F');
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(255, 255, 255);
+
+        pivotGroupByCols.forEach((colName, idx) => {
+          const x = margin + (idx * groupColWidth) + 2;
+          doc.text(colName, x, currentY + 5.5);
+        });
+
+        statCols.forEach((statName, idx) => {
+          const x = margin + (groupColCount * groupColWidth) + (idx * statColWidth) + 2;
+          doc.text(statName, x, currentY + 5.5);
+        });
+
+        return currentY + headerHeight;
+      };
+
+      yPos = drawTableHeader(yPos);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+
+      rows.forEach((r, rIdx) => {
+        if (yPos + rowHeight > pageHeight - 14) {
+          doc.addPage();
+          yPos = 12;
+          yPos = drawTableHeader(yPos);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7.5);
+        }
+
+        if (rIdx % 2 === 1) {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(margin, yPos, contentWidth, rowHeight, 'F');
+        }
+
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.15);
+        doc.rect(margin, yPos, contentWidth, rowHeight, 'S');
+
+        doc.setTextColor(30, 41, 59);
+
+        // Group columns
+        r.keyVals.forEach((val, idx) => {
+          const x = margin + (idx * groupColWidth) + 2;
+          const displayVal = doc.splitTextToSize(String(val), groupColWidth - 3)[0] || String(val);
+          doc.text(displayVal, x, yPos + 5);
+        });
+
+        // Stats columns
+        const statVals = [r.approved, r.pending, r.rejected, r.total];
+        statVals.forEach((v, idx) => {
+          const x = margin + (groupColCount * groupColWidth) + (idx * statColWidth) + 2;
+          doc.text(String(v), x, yPos + 5);
+        });
+
+        yPos += rowHeight;
+      });
+
+      // Grand Totals Row
+      if (yPos + rowHeight > pageHeight - 14) {
+        doc.addPage();
+        yPos = 12;
+      }
+      doc.setFillColor(30, 41, 59);
+      doc.rect(margin, yPos, contentWidth, rowHeight, 'F');
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(255, 255, 255);
+      doc.text("GRAND TOTAL", margin + 2, yPos + 5);
+
+      const grandVals = [totals.approved, totals.pending, totals.rejected, totals.total];
+      grandVals.forEach((v, idx) => {
+        const x = margin + (groupColCount * groupColWidth) + (idx * statColWidth) + 2;
+        doc.text(String(v), x, yPos + 5);
+      });
+
+      // Page Numbers
+      const totalPages = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`Page ${i} of ${totalPages}  |  Mumbai Meghwal Panchayat & Vidya Gohil Trust Portal`, pageWidth / 2, pageHeight - 5, { align: "center" });
+      }
+
+      const cleanFormTitle = overviewFormFilter.replace(/[^a-zA-Z0-9]/g, '_');
+      doc.save(`Pivot_Summary_Report_${cleanFormTitle}_${todayStr.replace(/\s+/g, '_')}.pdf`);
+    } catch (err) {
+      console.error("Pivot PDF Export Error:", err);
+      alert("Failed to export Pivot PDF: " + err.message);
+    }
+  };
+
   const handleExportCSV = () => {
     if (overviewFilteredRegs.length === 0) return;
     const headers = ["Date", "Event", "Transaction ID", "Status", "Remarks", "Updated By", ...allKeys];
@@ -7603,6 +7836,28 @@ function Overview({ mob, C, setC, auth }) {
     document.body.removeChild(link);
   };
 
+  const handleExportPivotCSV = () => {
+    const { rows, totals } = getPivotSummaryData();
+    if (rows.length === 0) return;
+
+    const headers = [...pivotGroupByCols, "Approved", "Pending", "Rejected", "Total"];
+    const csvRows = rows.map(r => {
+      const vals = r.keyVals.map(v => `"${String(v).replace(/"/g, '""')}"`);
+      return [...vals, r.approved, r.pending, r.rejected, r.total].join(",");
+    });
+    const totalRow = [...pivotGroupByCols.map((_, i) => i === 0 ? '"GRAND TOTAL"' : '""'), totals.approved, totals.pending, totals.rejected, totals.total].join(",");
+
+    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + csvRows.join("\n") + "\n" + totalRow;
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    const ts = new Date().toLocaleString('sv-SE').replace(' ', '_').replace(/:/g, '-');
+    link.setAttribute("download", `Pivot_Summary_Report_${ts}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const cards=[
     {l:"Total Donations (Verified)",v:`Rs.${analyticsData.totalDonations.toLocaleString()}`,ch:"",up:true,ic:"💰",bg:"#FFF4EC",br:"#FDDBB8"},
     {l:"Active Volunteers",v:analyticsData.activeVolunteers.toString(),ch:"",up:true,ic:"🤝",bg:"#E8F4F8",br:"#B8D8E8"},
@@ -7611,6 +7866,7 @@ function Overview({ mob, C, setC, auth }) {
   ];
   
   const mx = Math.max(...analyticsData.monthly.map(m=>m.total), 1);
+  const pivotData = getPivotSummaryData();
 
   return (
     <div style={{padding:mob?"12px":"24px",width:"100%",boxSizing:"border-box"}}>
@@ -7619,7 +7875,7 @@ function Overview({ mob, C, setC, auth }) {
       <div style={{display:"flex",alignItems:"center",justify:"space-between",marginBottom:20,borderBottom:"2px solid #E2E8F0",paddingBottom:12,flexWrap:"wrap",gap:12}}>
         <div>
           <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",margin:0,fontSize:"1.4rem",fontWeight:800}}>Committee Overview & Reports</h2>
-          <div style={{fontSize:".82rem",color:"var(--mu)",marginTop:2}}>Read-only summaries, form view selector, and custom PDF report export</div>
+          <div style={{fontSize:".82rem",color:"var(--mu)",marginTop:2}}>Read-only summaries, form view selector, dynamic pivot count reports, and custom PDF export</div>
         </div>
 
         <div style={{display:"flex",gap:8,background:"#F1F5F9",padding:4,borderRadius:12,border:"1px solid #CBD5E1"}}>
@@ -7656,6 +7912,7 @@ function Overview({ mob, C, setC, auth }) {
           {/* Controls Bar */}
           <div style={{padding:"18px 24px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",flexDirection:"column",gap:14}}>
             
+            {/* Top Row: Report Mode Switcher & Form View Selector */}
             <div style={{display:"flex",alignItems:"center",justify:"space-between",gap:12,flexWrap:"wrap"}}>
               
               {/* Form Selector & Set Default */}
@@ -7663,7 +7920,12 @@ function Overview({ mob, C, setC, auth }) {
                 <label style={{fontSize:".85rem",fontWeight:700,color:"#334155"}}>Form View:</label>
                 <select 
                   value={overviewFormFilter} 
-                  onChange={e=>setOverviewFormFilter(e.target.value)}
+                  onChange={e=>{
+                    setOverviewFormFilter(e.target.value);
+                    if (!pdfHeaderSubtitle || pdfHeaderSubtitle.startsWith("REGISTRATION OVERVIEW REPORT") || pdfHeaderSubtitle.startsWith("SUMMARY COUNT REPORT")) {
+                      setPdfHeaderSubtitle(`REGISTRATION OVERVIEW REPORT - ${e.target.value.toUpperCase()}`);
+                    }
+                  }}
                   style={{padding:"8px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".88rem",fontWeight:700,background:"white",color:"#1E293B",outline:"none",cursor:"pointer",minWidth:220}}
                 >
                   <option value="All">📋 All Registrations</option>
@@ -7738,45 +8000,140 @@ function Overview({ mob, C, setC, auth }) {
 
             </div>
 
-            {/* Action Bar & Search */}
+            {/* Mode Selector & Action Bar */}
             <div style={{display:"flex",alignItems:"center",justify:"space-between",gap:12,flexWrap:"wrap",paddingTop:4}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                <input 
-                  type="text" 
-                  placeholder="🔍 Search name, mobile, txn..." 
-                  value={overviewSearch}
-                  onChange={e=>setOverviewSearch(e.target.value)}
-                  style={{padding:"8px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",width:240,outline:"none"}}
-                />
+              
+              {/* Report Mode Switcher Pill */}
+              <div style={{display:"flex",alignItems:"center",gap:6,background:"#E2E8F0",padding:3,borderRadius:10}}>
                 <button 
-                  onClick={() => setShowColumnPicker(!showColumnPicker)}
-                  style={{padding:"8px 16px",borderRadius:8,border:"1px solid #3B82F6",background:showColumnPicker?"#EFF6FF":"white",color:"#2563EB",fontSize:".82rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
+                  onClick={() => setReportMode("detailed")}
+                  style={{
+                    padding:"6px 14px",borderRadius:8,border:"none",
+                    background: reportMode === "detailed" ? "white" : "transparent",
+                    color: reportMode === "detailed" ? "#0F172A" : "#64748B",
+                    fontWeight: reportMode === "detailed" ? 800 : 600,
+                    fontSize:".82rem",cursor:"pointer",boxShadow: reportMode === "detailed" ? "0 2px 6px rgba(0,0,0,0.08)" : "none"
+                  }}
                 >
-                  <span>⚙️</span> Select Columns ({selectedColumns.length}) {showColumnPicker ? "▲" : "▼"}
+                  📑 Detailed Records Table
+                </button>
+                <button 
+                  onClick={() => setReportMode("pivot")}
+                  style={{
+                    padding:"6px 14px",borderRadius:8,border:"none",
+                    background: reportMode === "pivot" ? "white" : "transparent",
+                    color: reportMode === "pivot" ? "#0F172A" : "#64748B",
+                    fontWeight: reportMode === "pivot" ? 800 : 600,
+                    fontSize:".82rem",cursor:"pointer",boxShadow: reportMode === "pivot" ? "0 2px 6px rgba(0,0,0,0.08)" : "none"
+                  }}
+                >
+                  📊 Pivot Summary Count Report
                 </button>
               </div>
 
-              <div style={{display:"flex",alignItems:"center",gap:10}}>
+              {/* Action Buttons */}
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                
                 <button 
-                  onClick={handleExportPDF}
-                  style={{padding:"9px 20px",borderRadius:8,background:"linear-gradient(135deg, #DC2626, #991B1B)",color:"white",border:"none",fontSize:".85rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,boxShadow:"0 3px 10px rgba(220,38,38,0.3)"}}
+                  onClick={() => setShowHeaderEditor(!showHeaderEditor)}
+                  style={{padding:"8px 14px",borderRadius:8,border:"1px solid #CBD5E1",background:showHeaderEditor?"#F1F5F9":"white",color:"#334155",fontSize:".82rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
                 >
-                  <span>📄</span> Export PDF Report
+                  <span>✏️</span> Customize PDF Header {showHeaderEditor ? "▲" : "▼"}
                 </button>
-                <button 
-                  onClick={handleExportCSV}
-                  style={{padding:"9px 16px",borderRadius:8,background:"white",color:"#334155",border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
-                >
-                  <span>📥</span> Export CSV
-                </button>
+
+                {reportMode === "detailed" ? (
+                  <>
+                    <input 
+                      type="text" 
+                      placeholder="🔍 Search name, mobile, txn..." 
+                      value={overviewSearch}
+                      onChange={e=>setOverviewSearch(e.target.value)}
+                      style={{padding:"8px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",width:200,outline:"none"}}
+                    />
+                    <button 
+                      onClick={() => setShowColumnPicker(!showColumnPicker)}
+                      style={{padding:"8px 14px",borderRadius:8,border:"1px solid #3B82F6",background:showColumnPicker?"#EFF6FF":"white",color:"#2563EB",fontSize:".82rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
+                    >
+                      <span>⚙️</span> Columns ({selectedColumns.length}) {showColumnPicker ? "▲" : "▼"}
+                    </button>
+                    <button 
+                      onClick={handleExportPDF}
+                      style={{padding:"9px 18px",borderRadius:8,background:"linear-gradient(135deg, #DC2626, #991B1B)",color:"white",border:"none",fontSize:".85rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,boxShadow:"0 3px 10px rgba(220,38,38,0.3)"}}
+                    >
+                      <span>📄</span> Export Detailed PDF
+                    </button>
+                    <button 
+                      onClick={handleExportCSV}
+                      style={{padding:"9px 14px",borderRadius:8,background:"white",color:"#334155",border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
+                    >
+                      <span>📥</span> Export CSV
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button 
+                      onClick={handleExportPivotPDF}
+                      style={{padding:"9px 18px",borderRadius:8,background:"linear-gradient(135deg, #2563EB, #1D4ED8)",color:"white",border:"none",fontSize:".85rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,boxShadow:"0 3px 10px rgba(37,99,235,0.3)"}}
+                    >
+                      <span>📊</span> Export Pivot PDF
+                    </button>
+                    <button 
+                      onClick={handleExportPivotCSV}
+                      style={{padding:"9px 14px",borderRadius:8,background:"white",color:"#334155",border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
+                    >
+                      <span>📥</span> Export Pivot CSV
+                    </button>
+                  </>
+                )}
+
               </div>
             </div>
 
-            {/* Column Picker Drawer */}
-            {showColumnPicker && (
+            {/* Expandable PDF Header Editor */}
+            {showHeaderEditor && (
+              <div style={{background:"#F1F5F9",padding:"14px 18px",borderRadius:10,border:"1px solid #CBD5E1",marginTop:6,display:"flex",flexDirection:"column",gap:10,animation:"fadeIn 0.2s ease-out"}}>
+                <div style={{fontSize:".82rem",fontWeight:800,color:"#0F172A"}}>✏️ Customize PDF Report Header Text:</div>
+                <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:12}}>
+                  <div>
+                    <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>PDF Header Title (Line 1):</label>
+                    <input 
+                      type="text" 
+                      value={pdfHeaderTitle} 
+                      onChange={e=>setPdfHeaderTitle(e.target.value)} 
+                      placeholder="e.g. MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST"
+                      style={{width:"100%",padding:"8px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:600,background:"white",boxSizing:"border-box"}}
+                    />
+                  </div>
+                  <div>
+                    <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>PDF Header Subtitle (Line 2):</label>
+                    <input 
+                      type="text" 
+                      value={pdfHeaderSubtitle} 
+                      onChange={e=>setPdfHeaderSubtitle(e.target.value)} 
+                      placeholder={`e.g. REGISTRATION OVERVIEW REPORT - ${overviewFormFilter.toUpperCase()}`}
+                      style={{width:"100%",padding:"8px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:600,background:"white",boxSizing:"border-box"}}
+                    />
+                  </div>
+                </div>
+                <div style={{display:"flex",justify:"flex-end",gap:8}}>
+                  <button 
+                    onClick={() => {
+                      setPdfHeaderTitle("MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST");
+                      setPdfHeaderSubtitle(`REGISTRATION OVERVIEW REPORT - ${overviewFormFilter.toUpperCase()}`);
+                    }}
+                    style={{background:"none",border:"none",color:"#64748B",fontSize:".78rem",fontWeight:600,cursor:"pointer",textDecoration:"underline"}}
+                  >
+                    Reset Default Header
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Column Picker Drawer (Detailed Mode) */}
+            {reportMode === "detailed" && showColumnPicker && (
               <div style={{background:"white",padding:"16px 20px",borderRadius:10,border:"1px solid #93C5FD",boxShadow:"0 4px 14px rgba(59,130,246,0.12)",marginTop:8,animation:"fadeIn 0.2s ease-out"}}>
                 <div style={{display:"flex",alignItems:"center",justify:"space-between",marginBottom:10}}>
-                  <span style={{fontSize:".82rem",fontWeight:800,color:"#1E3A8A"}}>Check / Uncheck Columns to Display & Export in PDF:</span>
+                  <span style={{fontSize:".82rem",fontWeight:800,color:"#1E3A8A"}}>Check / Uncheck Columns to Display & Export in Detailed PDF:</span>
                   <div style={{display:"flex",gap:8}}>
                     <button 
                       onClick={() => setSelectedColumns(["Transaction ID", "Date", "Event", "Status", "Remarks", "Updated By", ...allKeys])}
@@ -7814,6 +8171,64 @@ function Overview({ mob, C, setC, auth }) {
             )}
           </div>
 
+          {/* Dynamic Pivot Group-By Selection Drawer (Pivot Mode) */}
+          {reportMode === "pivot" && (
+            <div style={{padding:"14px 24px",background:"#EFF6FF",borderBottom:"1px solid #BFDBFE",display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",justify:"space-between",flexWrap:"wrap",gap:10}}>
+                <div style={{fontSize:".85rem",fontWeight:800,color:"#1E3A8A"}}>
+                  📌 Select Column(s) to Group & Pivot By (Multi-level Drill Down):
+                </div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {/* Preset Shortcuts */}
+                  <span style={{fontSize:".75rem",fontWeight:600,color:"#3B82F6",alignSelf:"center"}}>Shortcuts:</span>
+                  <button onClick={() => setPivotGroupByCols(["Vibhag"])} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #93C5FD",background:pivotGroupByCols.join(",")==="Vibhag"?"#2563EB":"white",color:pivotGroupByCols.join(",")==="Vibhag"?"white":"#1D4ED8",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}>
+                    Vibhag
+                  </button>
+                  <button onClick={() => setPivotGroupByCols(["Date"])} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #93C5FD",background:pivotGroupByCols.join(",")==="Date"?"#2563EB":"white",color:pivotGroupByCols.join(",")==="Date"?"white":"#1D4ED8",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}>
+                    Date
+                  </button>
+                  <button onClick={() => setPivotGroupByCols(["Stream"])} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #93C5FD",background:pivotGroupByCols.join(",")==="Stream"?"#2563EB":"white",color:pivotGroupByCols.join(",")==="Stream"?"white":"#1D4ED8",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}>
+                    Stream
+                  </button>
+                  <button onClick={() => setPivotGroupByCols(["Vibhag", "Stream"])} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #93C5FD",background:pivotGroupByCols.join(",")==="Vibhag,Stream"?"#2563EB":"white",color:pivotGroupByCols.join(",")==="Vibhag,Stream"?"white":"#1D4ED8",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}>
+                    Vibhag + Stream
+                  </button>
+                  <button onClick={() => setPivotGroupByCols(["Vibhag", "Date"])} style={{padding:"4px 10px",borderRadius:6,border:"1px solid #93C5FD",background:pivotGroupByCols.join(",")==="Vibhag,Date"?"#2563EB":"white",color:pivotGroupByCols.join(",")==="Vibhag,Date"?"white":"#1D4ED8",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}>
+                    Vibhag + Date
+                  </button>
+                </div>
+              </div>
+
+              {/* Group-by Column Checkboxes */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(170px, 1fr))",gap:8,maxHeight:120,overflowY:"auto",background:"white",padding:"10px 14px",borderRadius:8,border:"1px solid #CBD5E1"}}>
+                {["Date", "Vibhag", "Stream", "Event", "Status", ...allKeys].filter((v, i, a) => a.indexOf(v) === i).map(col => {
+                  const isChecked = pivotGroupByCols.includes(col);
+                  return (
+                    <label key={col} style={{display:"flex",alignItems:"center",gap:6,fontSize:".8rem",fontWeight:isChecked?800:500,color:isChecked?"#1D4ED8":"#475569",cursor:"pointer",userSelect:"none"}}>
+                      <input 
+                        type="checkbox" 
+                        checked={isChecked}
+                        onChange={() => {
+                          if (isChecked) {
+                            if (pivotGroupByCols.length > 1) {
+                              setPivotGroupByCols(prev => prev.filter(c => c !== col));
+                            } else {
+                              alert("Please keep at least 1 column selected to group by.");
+                            }
+                          } else {
+                            setPivotGroupByCols(prev => [...prev, col]);
+                          }
+                        }}
+                        style={{width:16,height:16,cursor:"pointer"}}
+                      />
+                      <span>{col}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Summary Stats Badges */}
           <div style={{padding:"12px 24px",background:"#F1F5F9",borderBottom:"1px solid #E2E8F0",display:"flex",alignItems:"center",justify:"space-between",gap:12,flexWrap:"wrap"}}>
             <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
@@ -7827,7 +8242,7 @@ function Overview({ mob, C, setC, auth }) {
                 ⏳ Pending: <strong>{overviewPendingCount}</strong>
               </span>
               <span style={{fontSize:".85rem",fontWeight:700,color:"#B91C1C",background:"#FEE2E2",padding:"5px 14px",borderRadius:20,border:"1px solid #FCA5A5"}}>
-                ❌ Disapproved: <strong>{overviewDisapprovedCount}</strong>
+                ❌ Disapproved / Rejected: <strong>{overviewDisapprovedCount}</strong>
               </span>
             </div>
             <div style={{fontSize:".78rem",color:"#64748B",fontStyle:"italic"}}>
@@ -7835,72 +8250,137 @@ function Overview({ mob, C, setC, auth }) {
             </div>
           </div>
 
-          {/* Read-Only Summary Table */}
-          <div style={{maxHeight:550,overflow:"auto",padding:"0 24px 20px"}}>
-            {loadingRegs ? (
-              <div style={{textAlign:"center",padding:60,color:"#64748B",fontSize:".9rem"}}>Loading registration records...</div>
-            ) : overviewFilteredRegs.length === 0 ? (
-              <div style={{textAlign:"center",padding:60,color:"#94A3B8"}}>
-                <div style={{fontSize:"2.5rem",marginBottom:8}}>🔍</div>
-                <div style={{fontSize:".95rem",fontWeight:600}}>No registration records match your filter criteria.</div>
-                <div style={{fontSize:".8rem",marginTop:4}}>Try clearing search terms or date range filters.</div>
-              </div>
-            ) : (
-              <table style={{width:"100%",borderCollapse:"collapse",marginTop:16,fontSize:".85rem",textAlign:"left"}}>
-                <thead>
-                  <tr style={{background:"#1E293B",color:"white",position:"sticky",top:0,zIndex:10}}>
-                    <th style={{padding:"12px",borderBottom:"2px solid #0F172A",width:45,textAlign:"center"}}>#</th>
-                    {selectedColumns.map(col => (
-                      <th key={col} style={{padding:"12px",borderBottom:"2px solid #0F172A",fontWeight:700,whiteSpace:"nowrap"}}>{col}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {overviewFilteredRegs.map((r, rIdx) => {
-                    const statusVal = r.Status || r.status || "Pending";
-                    const statusBg = statusVal === "Approved" ? "#DCFCE7" : statusVal === "Disapproved" ? "#FEE2E2" : "#FEF3C7";
-                    const statusColor = statusVal === "Approved" ? "#15803D" : statusVal === "Disapproved" ? "#B91C1C" : "#B45309";
+          {/* ── DETAILED MODE TABLE ────────────────────────────────────────────── */}
+          {reportMode === "detailed" && (
+            <div style={{maxHeight:550,overflow:"auto",padding:"0 24px 20px"}}>
+              {loadingRegs ? (
+                <div style={{textAlign:"center",padding:60,color:"#64748B",fontSize:".9rem"}}>Loading registration records...</div>
+              ) : overviewFilteredRegs.length === 0 ? (
+                <div style={{textAlign:"center",padding:60,color:"#94A3B8"}}>
+                  <div style={{fontSize:"2.5rem",marginBottom:8}}>🔍</div>
+                  <div style={{fontSize:".95rem",fontWeight:600}}>No registration records match your filter criteria.</div>
+                  <div style={{fontSize:".8rem",marginTop:4}}>Try clearing search terms or date range filters.</div>
+                </div>
+              ) : (
+                <table style={{width:"100%",borderCollapse:"collapse",marginTop:16,fontSize:".85rem",textAlign:"left"}}>
+                  <thead>
+                    <tr style={{background:"#1E293B",color:"white",position:"sticky",top:0,zIndex:10}}>
+                      <th style={{padding:"12px",borderBottom:"2px solid #0F172A",width:45,textAlign:"center"}}>#</th>
+                      {selectedColumns.map(col => (
+                        <th key={col} style={{padding:"12px",borderBottom:"2px solid #0F172A",fontWeight:700,whiteSpace:"nowrap"}}>{col}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overviewFilteredRegs.map((r, rIdx) => {
+                      const statusVal = r.Status || r.status || "Pending";
+                      const statusBg = statusVal === "Approved" ? "#DCFCE7" : statusVal === "Disapproved" ? "#FEE2E2" : "#FEF3C7";
+                      const statusColor = statusVal === "Approved" ? "#15803D" : statusVal === "Disapproved" ? "#B91C1C" : "#B45309";
 
-                    return (
-                      <tr key={r.id || rIdx} style={{background: rIdx % 2 === 1 ? "#F8FAFC" : "white", borderBottom:"1px solid #E2E8F0", transition:"all 0.15s"}}>
-                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:"#64748B"}}>{rIdx + 1}</td>
-                        {selectedColumns.map(col => {
-                          let cellVal = "";
-                          if (col === "Date") {
-                            try { if (r._submittedAt) cellVal = new Date(r._submittedAt).toLocaleString(); } catch (e) { cellVal = "-"; }
-                          } else if (col === "Event") {
-                            cellVal = r.eventName || r.eventTitle || r.eventId || "-";
-                          } else if (col === "Status") {
-                            cellVal = (
-                              <span style={{fontSize:".75rem",fontWeight:800,padding:"3px 10px",borderRadius:12,background:statusBg,color:statusColor,display:"inline-block"}}>
-                                {statusVal}
-                              </span>
+                      return (
+                        <tr key={r.id || rIdx} style={{background: rIdx % 2 === 1 ? "#F8FAFC" : "white", borderBottom:"1px solid #E2E8F0", transition:"all 0.15s"}}>
+                          <td style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:"#64748B"}}>{rIdx + 1}</td>
+                          {selectedColumns.map(col => {
+                            let cellVal = "";
+                            if (col === "Date") {
+                              try { if (r._submittedAt) cellVal = new Date(r._submittedAt).toLocaleString(); } catch (e) { cellVal = "-"; }
+                            } else if (col === "Event") {
+                              cellVal = r.eventName || r.eventTitle || r.eventId || "-";
+                            } else if (col === "Status") {
+                              cellVal = (
+                                <span style={{fontSize:".75rem",fontWeight:800,padding:"3px 10px",borderRadius:12,background:statusBg,color:statusColor,display:"inline-block"}}>
+                                  {statusVal}
+                                </span>
+                              );
+                            } else if (col === "Transaction ID") {
+                              cellVal = <strong>{r['Transaction ID'] || r.transactionId || "-"}</strong>;
+                            } else if (col === "Full Name" || col === "Name") {
+                              let n = r['Full Name'] || r['Name'] || r['Submitted By'] || "-";
+                              if (n.includes("|")) n = n.split("|").filter(Boolean).join(" ");
+                              cellVal = <strong>{n}</strong>;
+                            } else if (col === "Mobile Number" || col === "Mobile") {
+                              cellVal = r['Mobile Number'] || r['Mobile'] || r['Phone'] || "-";
+                            } else {
+                              cellVal = r[col] !== undefined ? String(r[col]) : "-";
+                            }
+
+                            return (
+                              <td key={col} style={{padding:"10px 12px",color:"#334155",maxHeight:50,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                                {cellVal}
+                              </td>
                             );
-                          } else if (col === "Transaction ID") {
-                            cellVal = <strong>{r['Transaction ID'] || r.transactionId || "-"}</strong>;
-                          } else if (col === "Full Name" || col === "Name") {
-                            let n = r['Full Name'] || r['Name'] || r['Submitted By'] || "-";
-                            if (n.includes("|")) n = n.split("|").filter(Boolean).join(" ");
-                            cellVal = <strong>{n}</strong>;
-                          } else if (col === "Mobile Number" || col === "Mobile") {
-                            cellVal = r['Mobile Number'] || r['Mobile'] || r['Phone'] || "-";
-                          } else {
-                            cellVal = r[col] !== undefined ? String(r[col]) : "-";
-                          }
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
 
-                          return (
-                            <td key={col} style={{padding:"10px 12px",color:"#334155",maxHeight:50,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                              {cellVal}
-                            </td>
-                          );
-                        })}
+          {/* ── PIVOT SUMMARY COUNT TABLE ─────────────────────────────────────── */}
+          {reportMode === "pivot" && (
+            <div style={{maxHeight:550,overflow:"auto",padding:"0 24px 20px"}}>
+              {loadingRegs ? (
+                <div style={{textAlign:"center",padding:60,color:"#64748B",fontSize:".9rem"}}>Loading pivot summary data...</div>
+              ) : pivotData.rows.length === 0 ? (
+                <div style={{textAlign:"center",padding:60,color:"#94A3B8"}}>
+                  <div style={{fontSize:"2.5rem",marginBottom:8}}>🔍</div>
+                  <div style={{fontSize:".95rem",fontWeight:600}}>No summary data available for current selection.</div>
+                </div>
+              ) : (
+                <table style={{width:"100%",borderCollapse:"collapse",marginTop:16,fontSize:".88rem",textAlign:"left"}}>
+                  <thead>
+                    <tr style={{background:"#1E293B",color:"white",position:"sticky",top:0,zIndex:10}}>
+                      <th style={{padding:"12px",borderBottom:"2px solid #0F172A",width:45,textAlign:"center"}}>#</th>
+                      {pivotGroupByCols.map(col => (
+                        <th key={col} style={{padding:"12px",borderBottom:"2px solid #0F172A",fontWeight:700,whiteSpace:"nowrap"}}>{col}</th>
+                      ))}
+                      <th style={{padding:"12px",borderBottom:"2px solid #0F172A",fontWeight:700,color:"#86EFAC",textAlign:"center"}}>Approved</th>
+                      <th style={{padding:"12px",borderBottom:"2px solid #0F172A",fontWeight:700,color:"#FDE68A",textAlign:"center"}}>Pending</th>
+                      <th style={{padding:"12px",borderBottom:"2px solid #0F172A",fontWeight:700,color:"#FCA5A5",textAlign:"center"}}>Rejected</th>
+                      <th style={{padding:"12px",borderBottom:"2px solid #0F172A",fontWeight:800,textAlign:"center",background:"#0F172A"}}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pivotData.rows.map((row, rIdx) => (
+                      <tr key={rIdx} style={{background: rIdx % 2 === 1 ? "#F8FAFC" : "white", borderBottom:"1px solid #E2E8F0"}}>
+                        <td style={{padding:"11px 12px",textAlign:"center",fontWeight:600,color:"#64748B"}}>{rIdx + 1}</td>
+                        {row.keyVals.map((val, idx) => (
+                          <td key={idx} style={{padding:"11px 12px",fontWeight:700,color:"#1E293B"}}>
+                            {val}
+                          </td>
+                        ))}
+                        <td style={{padding:"11px 12px",textAlign:"center",fontWeight:700,color:"#15803D",background:"#F0FDF4"}}>
+                          {row.approved}
+                        </td>
+                        <td style={{padding:"11px 12px",textAlign:"center",fontWeight:700,color:"#B45309",background:"#FFFBEB"}}>
+                          {row.pending}
+                        </td>
+                        <td style={{padding:"11px 12px",textAlign:"center",fontWeight:700,color:"#B91C1C",background:"#FEF2F2"}}>
+                          {row.rejected}
+                        </td>
+                        <td style={{padding:"11px 12px",textAlign:"center",fontWeight:800,color:"#0F172A",background:"#F1F5F9",fontSize:".95rem"}}>
+                          {row.total}
+                        </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
+                    ))}
+                    {/* GRAND TOTAL ROW */}
+                    <tr style={{background:"#1E293B",color:"white",fontWeight:800}}>
+                      <td colSpan={pivotGroupByCols.length + 1} style={{padding:"14px 16px",fontSize:".95rem",letterSpacing:.5,textTransform:"uppercase"}}>
+                        GRAND TOTAL SUMMARY
+                      </td>
+                      <td style={{padding:"14px 12px",textAlign:"center",color:"#86EFAC",fontSize:".95rem"}}>{pivotData.totals.approved}</td>
+                      <td style={{padding:"14px 12px",textAlign:"center",color:"#FDE68A",fontSize:".95rem"}}>{pivotData.totals.pending}</td>
+                      <td style={{padding:"14px 12px",textAlign:"center",color:"#FCA5A5",fontSize:".95rem"}}>{pivotData.totals.rejected}</td>
+                      <td style={{padding:"14px 12px",textAlign:"center",color:"white",fontSize:"1.05rem",background:"#0F172A"}}>{pivotData.totals.total}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
 
         </div>
       )}
@@ -7973,6 +8453,73 @@ function Overview({ mob, C, setC, auth }) {
         </div>
       )}
 
+      {/* ── SUB-TAB 2: TRUST FINANCIALS & ANALYTICS ──────────────────────────── */}
+      {activeSubTab === "analytics" && (
+        <div>
+          {loadingAnalytics && auth?.idToken ? (
+            <div style={{padding:40,textAlign:"center",color:"var(--mu)"}}>Loading live analytics data...</div>
+          ) : (
+            <>
+              <div style={{display:"grid",gridTemplateColumns:mob?"1fr 1fr":"repeat(4,1fr)",gap:14,marginBottom:20}}>
+                {cards.map((s,i)=>(
+                  <div key={i} className="ac" style={{padding:mob?"16px":"20px",background:s.bg,border:`1px solid ${s.br}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+                      <span style={{fontSize:"1.4rem"}}>{s.ic}</span>
+                      {s.ch&&<span style={{fontSize:".72rem",fontWeight:700,color:s.up?"#1A7A3E":"#C0392B",background:s.up?"#EDFAF1":"#FEF0EF",padding:"2px 7px",borderRadius:12}}>{s.ch}</span>}
+                    </div>
+                    <div style={{fontFamily:"'Playfair Display',serif",fontSize:mob?"1.3rem":"1.5rem",fontWeight:700,color:"var(--dt)",marginBottom:3}}>{s.v}</div>
+                    <div style={{fontSize:".72rem",color:"var(--mu)",fontWeight:600}}>{s.l}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"2fr 1fr",gap:16,marginBottom:16}}>
+                <div className="ac" style={{padding:mob?"16px":"22px"}}>
+                  <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"var(--dt)",marginBottom:18,fontWeight:700}}>Monthly Donations (Verified)</h3>
+                  <div style={{display:"flex",alignItems:"flex-end",gap:mob?8:12,height:150}}>
+                    {analyticsData.monthly.length > 0 ? analyticsData.monthly.map((m,i)=>(
+                      <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
+                        <div style={{fontSize:".6rem",color:"var(--mu)"}}>{m.total > 0 ? `Rs.${(m.total/1000).toFixed(1)}k` : ''}</div>
+                        <div style={{width:"100%",background:i===analyticsData.monthly.length-1?"linear-gradient(to top,var(--sf),var(--gd))":"linear-gradient(to top,var(--dt),var(--tm))",borderRadius:"5px 5px 0 0",height:`${Math.max((m.total/mx)*120, 4)}px`}}/>
+                        <div style={{fontSize:".65rem",color:"var(--mu)"}}>{m.label}</div>
+                      </div>
+                    )) : <div style={{flex:1,textAlign:"center",color:"var(--mu)",fontSize:".8rem"}}>No data</div>}
+                  </div>
+                </div>
+
+                <div className="ac" style={{padding:mob?"16px":"22px"}}>
+                  <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"var(--dt)",marginBottom:18,fontWeight:700}}>By Program</h3>
+                  {analyticsData.programs.length > 0 ? analyticsData.programs.map(r=>(
+                    <div key={r.p} style={{marginBottom:11}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{fontSize:".78rem"}}>{r.p}</span><span style={{fontSize:".78rem",fontWeight:700}}>{r.v}%</span></div>
+                      <div style={{height:7,borderRadius:4,background:"#EEE"}}><div style={{height:"100%",width:`${r.v}%`,background:r.c,borderRadius:4}}/></div>
+                    </div>
+                  )) : <div style={{textAlign:"center",color:"var(--mu)",fontSize:".8rem"}}>No data</div>}
+                </div>
+              </div>
+
+              <div className="ac" style={{padding:mob?"16px":"22px"}}>
+                <h3 style={{fontFamily:"'Playfair Display',serif",fontSize:"1rem",color:"var(--dt)",marginBottom:14,fontWeight:700}}>Recent Donations</h3>
+                <div style={{overflowX:"auto"}}>
+                  <table className="tt" style={{width:"100%",borderCollapse:"collapse",fontSize:".8rem",minWidth:500}}>
+                    <thead><tr>{["ID","Donor","Amount","Program","Date","Status"].map(h=><th key={h} style={{padding:"9px 12px",textAlign:"left",fontSize:".72rem",letterSpacing:.5,textTransform:"uppercase"}}>{h}</th>)}</tr></thead>
+                    <tbody>{analyticsData.recentDonations.length > 0 ? analyticsData.recentDonations.map((r,i)=>(
+                      <tr key={i} style={{borderBottom:"1px solid var(--bd)"}}>
+                        <td style={{padding:"10px 12px",color:"var(--mu)",fontFamily:"monospace",fontSize:".75rem"}}>{r.receiptNo || r.id}</td>
+                        <td style={{padding:"10px 12px",fontWeight:600}}>{r.name}</td>
+                        <td style={{padding:"10px 12px",fontWeight:700,color:"var(--sf)"}}>Rs.{Number(r.amount).toLocaleString()}</td>
+                        <td style={{padding:"10px 12px"}}><span style={{fontSize:".72rem",padding:"3px 9px",borderRadius:12,background:"var(--tl)",color:"var(--dt)",fontWeight:600}}>{r.program}</span></td>
+                        <td style={{padding:"10px 12px",color:"var(--mu)",fontSize:".78rem"}}>{r.date}</td>
+                        <td style={{padding:"10px 12px"}}><span style={{fontSize:".72rem",padding:"3px 9px",borderRadius:12,fontWeight:600,background:r.status==="Verified"?"#EDFAF1":"#FEF9EC",color:r.status==="Verified"?"#1A7A3E":"#C8860A"}}>{r.status}</span></td>
+                      </tr>
+                    )) : <tr><td colSpan="6" style={{textAlign:"center",padding:20,color:"var(--mu)"}}>No recent donations found.</td></tr>}</tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
