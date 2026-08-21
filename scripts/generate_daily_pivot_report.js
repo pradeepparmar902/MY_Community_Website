@@ -6,6 +6,7 @@ const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "mmp-cwc-new";
 
 const AUTH_URL = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`;
 const SIGNUP_URL = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}`;
+const CONTENT_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/content/main`;
 const FIRESTORE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/registrations?pageSize=1000`;
 
 const SENDER_EMAIL = process.env.SMTP_USER || "pradeepparmar902@gmail.com";
@@ -68,9 +69,21 @@ async function getAuthToken() {
   throw new Error("Unable to authenticate with Firebase Auth");
 }
 
-async function fetchRegistrations() {
+async function fetchContentConfig(idToken) {
+  try {
+    const headers = idToken ? { "Authorization": `Bearer ${idToken}` } : {};
+    const res = await fetch(CONTENT_URL, { headers });
+    if (!res.ok) return {};
+    const doc = await res.json();
+    const raw = doc?.fields?.data?.stringValue;
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+async function fetchRegistrations(idToken) {
   console.log("Fetching registrations from Firestore (mmp-cwc-new)...");
-  const idToken = await getAuthToken();
   const headers = { "Authorization": `Bearer ${idToken}` };
 
   let allDocs = [];
@@ -101,13 +114,7 @@ async function fetchRegistrations() {
 }
 
 function computePivotData(registrations) {
-  // Filter active registrations (matching Education Felicitation 2026)
-  const active = registrations.filter(r => {
-    if (!r || r.deleted || r.isGlobalGuest || r.isSpecialGuest) return false;
-    const ev = String(r.eventName || r.eventTitle || r.eventId || "").toLowerCase();
-    // Match education felicitation or include all active event registrations
-    return ev.includes("education") || ev.includes("felicitation") || ev.includes("2026") || true;
-  });
+  const active = registrations.filter(r => !r.deleted && !r.isGlobalGuest && !r.isSpecialGuest);
 
   const groupsMap = new Map();
   let grandApproved = 0;
@@ -152,12 +159,15 @@ function computePivotData(registrations) {
   };
 }
 
-function generatePDF(pivotData) {
+function generatePDF(pivotData, config = {}) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
   const margin = 12;
   const contentWidth = pageWidth - (margin * 2);
+
+  const headerTitle = (config.pdfHeaderTitle || "MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST").trim();
+  const headerSubtitle = (config.pdfHeaderSubtitle || "SUMMARY COUNT REPORT - EDUCATION FELICITATION 2026").trim();
 
   // Top Dark Banner
   doc.setFillColor(30, 41, 59);
@@ -166,11 +176,11 @@ function generatePDF(pivotData) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(255, 255, 255);
-  doc.text("MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST", pageWidth / 2, 9, { align: "center" });
+  doc.text(headerTitle, pageWidth / 2, 9, { align: "center" });
 
   doc.setFontSize(8.5);
   doc.setFont("helvetica", "normal");
-  doc.text("SUMMARY COUNT REPORT - EDUCATION FELICITATION 2026", pageWidth / 2, 16, { align: "center" });
+  doc.text(headerSubtitle, pageWidth / 2, 16, { align: "center" });
 
   let yPos = 28;
   doc.setFontSize(8.5);
@@ -271,7 +281,7 @@ function generatePDF(pivotData) {
   return Buffer.from(doc.output("arraybuffer"));
 }
 
-async function sendEmailWithPDF(pdfBuffer, pivotData) {
+async function sendEmailWithPDF(pdfBuffer, pivotData, config = {}) {
   if (!SENDER_PASS) {
     console.warn("⚠️ SMTP_PASS is not set in environment. PDF was generated but email could not be sent.");
     return;
@@ -287,6 +297,9 @@ async function sendEmailWithPDF(pdfBuffer, pivotData) {
 
   const todayStr = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
   const filename = `Pivot_Summary_Report_Education_felicitation_2026_${todayStr.replace(/\s+/g, "_")}.pdf`;
+
+  const headerTitle = (config.pdfHeaderTitle || "MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST").trim();
+  const headerSubtitle = (config.pdfHeaderSubtitle || "SUMMARY COUNT REPORT - EDUCATION FELICITATION 2026").trim();
 
   const rowsHtml = pivotData.rows.map((r, i) => `
     <tr style="background: ${i % 2 === 1 ? '#f8fafc' : '#ffffff'}; border-bottom: 1px solid #e2e8f0;">
@@ -305,8 +318,8 @@ async function sendEmailWithPDF(pdfBuffer, pivotData) {
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
         <div style="background: #1e293b; color: white; padding: 18px 24px; border-radius: 8px 8px 0 0; text-align: center;">
-          <h2 style="margin: 0; font-size: 16px;">MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST</h2>
-          <p style="margin: 4px 0 0 0; font-size: 13px; color: #94a3b8;">SUMMARY COUNT REPORT - EDUCATION FELICITATION 2026</p>
+          <h2 style="margin: 0; font-size: 16px;">${headerTitle}</h2>
+          <p style="margin: 4px 0 0 0; font-size: 13px; color: #94a3b8;">${headerSubtitle}</p>
         </div>
 
         <div style="padding: 24px; background: #ffffff; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
@@ -381,13 +394,15 @@ async function sendEmailWithPDF(pdfBuffer, pivotData) {
 
 async function main() {
   try {
-    const regs = await fetchRegistrations();
+    const idToken = await getAuthToken();
+    const config = await fetchContentConfig(idToken);
+    const regs = await fetchRegistrations(idToken);
     console.log(`Fetched ${regs.length} registrations.`);
     const pivotData = computePivotData(regs);
     console.log(`Computed ${pivotData.rows.length} pivot rows. Total: ${pivotData.totals.total}`);
-    const pdfBuffer = generatePDF(pivotData);
+    const pdfBuffer = generatePDF(pivotData, config);
     console.log(`Generated PDF (${pdfBuffer.length} bytes).`);
-    await sendEmailWithPDF(pdfBuffer, pivotData);
+    await sendEmailWithPDF(pdfBuffer, pivotData, config);
     console.log("🎉 Daily Pivot Report process completed successfully!");
   } catch (err) {
     console.error("❌ Error in daily pivot report:", err);
