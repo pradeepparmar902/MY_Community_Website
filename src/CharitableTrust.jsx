@@ -19414,7 +19414,7 @@ function VibhagSummaryCard({ summaryData }) {
 }
 
 // ── Community AI & Registration Chatbot Widget ──────────────────────────────────────────
-function CommunityChatbot({ C, auth }) {
+function CommunityChatbot({ C, auth, onShowLogin }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [userSessionScope, setUserSessionScope] = useState(auth?.idToken ? "all" : "public"); // "all" | "vibhag" | "individual" | "public"
@@ -19593,8 +19593,8 @@ function CommunityChatbot({ C, auth }) {
       cmd: "/check",
       icon: "🔍",
       label: "Check My Application Status",
-      desc: "Look up your application by Transaction ID (e.g. VG-7, EDU26-2) or Mobile",
-      action: "Check VG-7",
+      desc: "Look up your application status by logged-in mobile or Transaction ID",
+      action: "/check",
       adminOnly: false
     },
     {
@@ -19761,7 +19761,37 @@ function CommunityChatbot({ C, auth }) {
       return false;
     });
 
-    if (matchedKb) {
+    if (qLower === "/check" || qLower === "check" || qLower === "my status" || qLower === "check status" || qLower === "check my application status" || qLower.includes("application status")) {
+      // 1. Check if user is logged into the website with phone/email
+      const loggedInMob = String(auth?.mobile || verifiedMember?.mobile || "").replace(/\D/g, "").slice(-10);
+      const loggedInEmail = String(auth?.email || "").toLowerCase().trim();
+
+      if (loggedInMob || (loggedInEmail && loggedInEmail !== "mmp_report_runner@gmail.com")) {
+        const userApps = currentRegs.filter(r => {
+          const m1 = String(r.submitterMob || "").replace(/\D/g, "").slice(-10);
+          const m2 = String(r["Mobile Number"] || "").replace(/\D/g, "").slice(-10);
+          const m3 = String(r["Alternate Mobile Number"] || "").replace(/\D/g, "").slice(-10);
+          const em = String(r["Email Address"] || "").toLowerCase().trim();
+          return (loggedInMob && (m1 === loggedInMob || m2 === loggedInMob || m3 === loggedInMob)) || (loggedInEmail && em === loggedInEmail);
+        });
+
+        if (userApps.length > 0) {
+          botType = "apps_list";
+          botReply = `✅ **Found ${userApps.length} Application(s) for your registered account (${loggedInMob ? `+91 ${loggedInMob}` : loggedInEmail})**: `;
+          cardData = { apps: userApps };
+        } else {
+          botReply = `🔍 **No application found for your logged-in account (${loggedInMob ? `+91 ${loggedInMob}` : loggedInEmail})**.\n\n• If you submitted using a different mobile number or have a **Transaction ID (e.g. VG-7, EDU26-2)**, please type it directly in the chat.\n• If you have not registered yet, visit the **Events** section on the website to submit your form.`;
+        }
+      } else {
+        // User NOT logged in -> Require Login for privacy protection
+        botReply = `🔐 **Please Log In to Check Your Application Status**
+
+For security and privacy, you need to log in with your registered mobile number to view your application status.
+
+• 👉 **Option 1**: Log in on the website with your registered Mobile Number / OTP.
+• 👉 **Option 2**: If you already know your **Transaction ID (e.g. VG-7, EDU26-2)** or **10-digit Mobile Number**, you can type it directly in this chat to verify.`;
+      }
+    } else if (matchedKb) {
       if (matchedKb.adminOnly && !isAnyAdmin) {
         botReply = `🔒 **Access Restricted**\n\nThis question/data is restricted to authorized Committee Admins.\n\n👉 Please type your 10-digit Authorized Mobile Number to unlock.`;
       } else {
@@ -20500,7 +20530,7 @@ export default function App() {
       )}
       {/* Login modal — overlays whatever page is showing */}
       {/* Floating Community AI & Registration Chatbot */}
-      <CommunityChatbot C={C} auth={auth} />
+      <CommunityChatbot C={C} auth={auth} onShowLogin={()=>setShowLogin(true)} />
 
       {/* Login modal — overlays whatever page is showing */}
       {showLogin && <LoginScreen C={C} onLogin={handleLogin} onSkip={()=>setShowLogin(false)}/>}
