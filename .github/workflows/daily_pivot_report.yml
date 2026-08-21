@@ -29,10 +29,10 @@ jobs:
         env:
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY || 'AIzaSyD8S_dRHVNlmUnRV-AfOXocqR0EoPUh8k4' }}
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID || 'vdiyagohilcharitable' }}
-          FIREBASE_AUTH_EMAIL: ${{ secrets.FIREBASE_AUTH_EMAIL || 'pradeepparmar902@gmail.com' }}
-          FIREBASE_AUTH_PASSWORD: ${{ secrets.FIREBASE_AUTH_PASSWORD || secrets.ADMIN_PASSWORD }}
+          FIREBASE_AUTH_EMAIL: ${{ secrets.FIREBASE_AUTH_EMAIL_MMP_CWC_COM || secrets.FIREBASE_AUTH_EMAIL }}
+          FIREBASE_AUTH_PASSWORD: ${{ secrets.FIREBASE_AUTH_PASSWORD_MMP_CWC_COM || secrets.FIREBASE_AUTH_PASSWORD }}
           SMTP_USER: ${{ secrets.SMTP_USER || 'pradeepparmar902@gmail.com' }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_PASS: ${{ secrets.GMAIL_PASSWORD_PRADEEPARMAR902 || secrets.SMTP_PASS }}
           RECIPIENT_EMAILS: ${{ secrets.RECIPIENT_EMAILS || 'pradeepparmar902@gmail.com, makharishk@gmail.com, 89night@gmail.com' }}
         run: |
           node scripts/generate_daily_pivot_report.js
