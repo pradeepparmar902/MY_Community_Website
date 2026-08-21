@@ -15,18 +15,22 @@ const SENDER_PASS = process.env.SMTP_PASS; // Gmail App Password
 const RECIPIENTS = process.env.RECIPIENT_EMAILS || "pradeepparmar902@gmail.com, makharishk@gmail.com, 89night@gmail.com";
 
 async function getAuthToken() {
-  if (!FIREBASE_AUTH_PASSWORD) {
+  const email = (FIREBASE_AUTH_EMAIL || "").trim();
+  const password = (FIREBASE_AUTH_PASSWORD || "").trim();
+
+  if (!password) {
     console.warn("⚠️ FIREBASE_AUTH_PASSWORD not set. Trying unauthenticated request...");
     return null;
   }
   try {
-    console.log(`Authenticating with Firebase Auth as ${FIREBASE_AUTH_EMAIL}...`);
+    const maskedEmail = email.replace(/(?<=.).(?=.*@)/g, "*");
+    console.log(`Authenticating with Firebase Auth as ${maskedEmail}...`);
     const res = await fetch(AUTH_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        email: FIREBASE_AUTH_EMAIL,
-        password: FIREBASE_AUTH_PASSWORD,
+        email: email,
+        password: password,
         returnSecureToken: true
       })
     });
