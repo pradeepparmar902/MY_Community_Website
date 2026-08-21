@@ -19591,21 +19591,39 @@ const generateVibhagSummaryWhatsAppText = (summaryData) => {
 
   let text = "🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n";
   text += "🎓 *Education Felicitation 2026 — Executive Summary*\n";
-  text += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-  text += `📅 *Date:* ${dateStr}  ⏱️ *Time:* ${timeStr}\n\n`;
-
-  text += "📊 *Overall Progress:*\n";
-  text += `• Total Applications : *${total}*\n`;
-  text += `• ⏳ Pending: *${pending}*  │  🟢 Approved: *${approved}*  │  🔴 Rejected: *${rejected}*\n\n`;
-
+  text += `📅 *Date:* ${dateStr}  ⏱️ *Time:* ${timeStr}\n`;
+  text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+  text += `📊 *Overall:* Total: *${total}* │ ⏳: *${pending}* │ 🟢: *${approved}* │ 🔴: *${rejected}*\n`;
+  text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+  
   if (vibhagList && vibhagList.length > 0) {
-    text += "📍 *Vibhag-wise Breakdown:*\n";
+    text += "📍 *VIBHAG-WISE BREAKDOWN TABLE:*\n";
+    text += "```\n";
+    text += "#  Vibhag Name       Tot  ⏳  🟢\n";
+    text += "── ───────────────── ─── ─── ───\n";
+
+    let sumTot = 0, sumPen = 0, sumApp = 0;
     vibhagList.forEach(([vName, vStat], idx) => {
-      text += `${idx + 1}. ${vName} ➜ *${vStat.total}* (⏳${vStat.pending} │ 🟢${vStat.approved})\n`;
+      const numStr = String(idx + 1).padStart(2, "0");
+      let cleanV = vName.length > 17 ? vName.slice(0, 15) + ".." : vName.padEnd(17, " ");
+      const tStr = String(vStat.total).padStart(3, " ");
+      const pStr = String(vStat.pending).padStart(3, " ");
+      const aStr = String(vStat.approved).padStart(3, " ");
+      sumTot += vStat.total;
+      sumPen += vStat.pending;
+      sumApp += vStat.approved;
+      text += `${numStr} ${cleanV} ${tStr} ${pStr} ${aStr}\n`;
     });
+
+    text += "── ───────────────── ─── ─── ───\n";
+    const totT = String(sumTot).padStart(3, " ");
+    const totP = String(sumPen).padStart(3, " ");
+    const totA = String(sumApp).padStart(3, " ");
+    text += `   TOTAL             ${totT} ${totP} ${totA}\n`;
+    text += "```\n";
   }
 
-  text += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+  text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
   text += "🌐 *Live Portal:* https://pradeepparmar902.github.io/MY_Community_Website/";
   return text;
 };
