@@ -17994,6 +17994,405 @@ function AdminProfile({ auth, mob, adminProfile, setAdminProfile }) {
   );
 }
 
+
+// ── Community AI & Registration Chatbot Widget ──────────────────────────────────────────
+function CommunityChatbot({ C, auth }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [isCommitteeAdmin, setIsCommitteeAdmin] = useState(Boolean(auth?.idToken));
+  const [verifiedMobile, setVerifiedMobile] = useState("");
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [regs, setRegs] = useState([]);
+  const [regsLoaded, setRegsLoaded] = useState(false);
+  const chatBottomRef = useRef(null);
+
+  const [messages, setMessages] = useState([
+    {
+      id: "m_welcome",
+      sender: "bot",
+      text: "👋 **Namaste & Welcome!**\n\nI am your **MMP & Vidya Gohil Trust Assistant**.\n\n• 🔍 **Check Application Status**: Type your **Transaction ID (e.g. VG-9)** or registered **Mobile Number**.\n• 🛡️ **Committee Admin**: Enter your authorized mobile to view live Vibhag & count analytics.\n• 🎓 **FAQs**: Ask about Education Felicitation 2026, events, eligibility, or donations."
+    }
+  ]);
+
+  useEffect(() => {
+    if (auth?.idToken) {
+      setIsCommitteeAdmin(true);
+    }
+  }, [auth]);
+
+  useEffect(() => {
+    if (isOpen && chatBottomRef.current) {
+      chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isOpen]);
+
+  // Load registrations when chatbot is opened or queried
+  const ensureRegistrations = async () => {
+    if (regsLoaded && regs.length > 0) return regs;
+    try {
+      setLoading(true);
+      const data = await fbFetchRegistrations(auth?.idToken);
+      const cleanList = (data || []).filter(r => !r.deleted && !r.isGlobalGuest && !r.isSpecialGuest);
+      setRegs(cleanList);
+      setRegsLoaded(true);
+      setLoading(false);
+      return cleanList;
+    } catch (e) {
+      console.error("Chatbot regs load error:", e);
+      setLoading(false);
+      return [];
+    }
+  };
+
+  const handleSendMessage = async (userText) => {
+    const query = (userText || input).trim();
+    if (!query) return;
+    setInput("");
+
+    const newMsgId = "m_" + Date.now();
+    const userMsg = { id: newMsgId, sender: "user", text: query };
+    setMessages(prev => [...prev, userMsg]);
+    setLoading(true);
+
+    const currentRegs = await ensureRegistrations();
+    const qLower = query.toLowerCase();
+
+    // 1. Check for Committee Mobile Numbers or Mobile Lookup
+    const phoneMatch = query.match(/(?:\+91[- ]?)?([6-9]\d{9})/);
+    const txnMatch = query.match(/(?:VG|vg|txn|TXN)?[-_ #]?(\d{1,4})/i);
+
+    // List of Authorized Committee Mobiles
+    const committeeMobiles = (C.committeeMobiles || [
+      "9820785209", "9967821964", "8082234187", "7977561920", "8779227886", "8591563577", "9820000000"
+    ]).map(m => String(m).replace(/\D/g, "").slice(-10));
+
+    let botReply = "";
+    let botData = null;
+
+    if (phoneMatch) {
+      const rawDigits = phoneMatch[1].slice(-10);
+      const isAuthorizedCommittee = committeeMobiles.includes(rawDigits) || Boolean(auth?.idToken);
+
+      if (isAuthorizedCommittee) {
+        setIsCommitteeAdmin(true);
+        setVerifiedMobile(rawDigits);
+        botReply = `🛡️ **Verified Committee Admin Access Activated!** (Mobile: ${rawDigits})\n\nWelcome Committee Member! You now have full access to:\n• 📊 **Vibhag Summary Counts** (type *"Vibhag Count"*)\n• ⏳ **Pending Review List** (type *"Pending"*)\n• 🔍 **Search Any Applicant** by Transaction ID (e.g. *"VG-9"*) or Mobile Number.`;
+        
+        // Check if this committee member also has any personal registration
+        const personalRegs = currentRegs.filter(r => {
+          const m1 = String(r.submitterMob || "").replace(/\D/g, "").slice(-10);
+          const m2 = String(r["Mobile Number"] || "").replace(/\D/g, "").slice(-10);
+          const m3 = String(r["Alternate Mobile Number"] || "").replace(/\D/g, "").slice(-10);
+          return m1 === rawDigits || m2 === rawDigits || m3 === rawDigits;
+        });
+
+        if (personalRegs.length > 0) {
+          botReply += `\n\n📌 *Also found ${personalRegs.length} registration(s) linked to your personal mobile:*\n`;
+          personalRegs.forEach(r => {
+            botReply += `\n• **Txn ID**: ${r["Transaction ID"] || r.transactionId} | **${r["Full Name"]}** | **${r["Vibhag"] || "Unspecified"}** | Status: **${r.Status || r.status || "Pending"}**`;
+          });
+        }
+      } else {
+        // Regular Applicant Look-up
+        const found = currentRegs.filter(r => {
+          const m1 = String(r.submitterMob || "").replace(/\D/g, "").slice(-10);
+          const m2 = String(r["Mobile Number"] || "").replace(/\D/g, "").slice(-10);
+          const m3 = String(r["Alternate Mobile Number"] || "").replace(/\D/g, "").slice(-10);
+          return m1 === rawDigits || m2 === rawDigits || m3 === rawDigits;
+        });
+
+        if (found.length > 0) {
+          botReply = `✅ **Found ${found.length} Application(s) for Mobile ${rawDigits}**: `;
+          found.forEach((r, idx) => {
+            const status = r.Status || r.status || "Pending";
+            const statusIcon = status === "Approved" ? "🟢" : status === "Needs Info" ? "🟡" : status === "Disapproved" ? "🔴" : "⏳";
+            botReply += `\n\n**Application #${idx + 1}**:
+• **Transaction ID**: ${r["Transaction ID"] || r.transactionId || "N/A"}
+• **Applicant Name**: ${r["Full Name"] || "N/A"}
+• **Event**: ${r.eventName || r.eventTitle || "Education Felicitation 2026"}
+• **Vibhag**: ${r["Vibhag"] || "Unspecified"}
+• **Stream**: ${r["Stream"] || "N/A"}
+• **Status**: ${statusIcon} **${status}**
+• **Remarks**: ${r.Remarks || "Application is currently under verification by the committee."}`;
+            if (status === "Approved" && r["Supporting Document"]) {
+              botReply += `\n• 📄 [View Submitted Document](${r["Supporting Document"]})`;
+            }
+          });
+        } else {
+          botReply = `🔍 No registration was found for mobile number **${rawDigits}**.\n\nPlease ensure you entered the exact 10-digit mobile number used during registration, or try looking up by **Transaction ID** (e.g. *VG-9*).`;
+        }
+      }
+    } else if (qLower.includes("vg") || qLower.includes("txn") || (txnMatch && (qLower.includes("status") || qLower.includes("check") || qLower.startsWith("vg") || /^[0-9]+$/.test(query.trim())))) {
+      // Transaction ID Search
+      const rawNum = txnMatch ? txnMatch[1] : query.replace(/\D/g, "");
+      const searchId = "VG-" + rawNum;
+
+      const found = currentRegs.filter(r => {
+        const tId = String(r["Transaction ID"] || r.transactionId || "").toUpperCase();
+        return tId === searchId || tId === ("VG" + rawNum) || tId === String(rawNum);
+      });
+
+      if (found.length > 0) {
+        const r = found[0];
+        const status = r.Status || r.status || "Pending";
+        const statusIcon = status === "Approved" ? "🟢" : status === "Needs Info" ? "🟡" : status === "Disapproved" ? "🔴" : "⏳";
+
+        botReply = `✅ **Registration Record Found (${r["Transaction ID"] || searchId})**:
+• **Applicant Name**: ${r["Full Name"] || "N/A"}
+• **Event**: ${r.eventName || r.eventTitle || "Education Felicitation 2026"}
+• **Vibhag**: ${r["Vibhag"] || "Unspecified"}
+• **Stream**: ${r["Stream"] || "N/A"}
+• **Marks / %**: ${r["Obtained Marks"] || ""}/${r["Out Of Marks"] || ""} (${r["% Obtained"] || r["%"] || "N/A"}%)
+• **Status**: ${statusIcon} **${status}**
+• **Remarks**: ${r.Remarks || "Application is currently under committee review."}`;
+
+        if (status === "Approved") {
+          botReply += `\n\n🎉 *Congratulations! Your application has been approved.* Certificate release instructions will be shared on the portal.`;
+        }
+      } else {
+        botReply = `🔍 No record found for Transaction ID **${searchId}**.\n\nPlease check the ID received on your submission screen or SMS.`;
+      }
+    } else if (qLower.includes("vibhag") || qLower.includes("summary") || qLower.includes("count") || qLower.includes("total") || qLower.includes("report") || qLower.includes("pending") || qLower.includes("kalwa") || qLower.includes("mahalaxmi") || qLower.includes("pakhadi")) {
+      // Summary / Analytics Query
+      if (!isCommitteeAdmin && !auth?.idToken) {
+        botReply = `🔒 **Committee Admin Verification Required**\n\nSummary count reports and committee analytics are restricted to authorized committee members.\n\n👉 Please type your **10-digit Authorized Mobile Number** (or log in as Admin on the website) to unlock full Vibhag & count analytics.`;
+      } else {
+        // Generate Live Analytics
+        const vibhagMap = {};
+        let totalApproved = 0, totalPending = 0, totalRejected = 0, totalAll = 0;
+
+        currentRegs.forEach(r => {
+          const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "Unspecified").trim();
+          if (!vibhagMap[v]) vibhagMap[v] = { approved: 0, pending: 0, rejected: 0, total: 0 };
+          const s = String(r.Status || r.status || "Pending").trim();
+          if (s === "Approved") { vibhagMap[v].approved++; totalApproved++; }
+          else if (s === "Disapproved" || s === "Rejected") { vibhagMap[v].rejected++; totalRejected++; }
+          else { vibhagMap[v].pending++; totalPending++; }
+          vibhagMap[v].total++; totalAll++;
+        });
+
+        const sortedVibhags = Object.entries(vibhagMap).sort((a, b) => a[0].localeCompare(b[0]));
+
+        botReply = `📊 **Live Registration Summary (Education Felicitation 2026)**:\n\n• **Total Entries**: **${totalAll}**\n• 🟢 **Approved**: ${totalApproved}\n• ⏳ **Pending**: ${totalPending}\n• 🔴 **Rejected**: ${totalRejected}\n\n**Breakdown by Vibhag**: `;
+
+        sortedVibhags.forEach(([vName, vStat]) => {
+          botReply += `\n• **${vName}**: ${vStat.total} (⏳ ${vStat.pending} Pending | 🟢 ${vStat.approved} Approved)`;
+        });
+      }
+    } else if (qLower.includes("event") || qLower.includes("felicitation") || qLower.includes("date") || qLower.includes("venue") || qLower.includes("when")) {
+      const evs = C.events || [];
+      botReply = `📅 **Upcoming Trust Events**: `;
+      evs.forEach(ev => {
+        botReply += `\n\n🎓 **${ev.title}**\n• **Date**: ${ev.date} ${ev.month || ""}\n• **Venue**: ${ev.location || "Mumbai"}\n• **Category**: ${ev.tag || "Education"}`;
+      });
+      botReply += `\n\nTo submit a registration, please click the **Register** button on the Events section on the website.`;
+    } else if (qLower.includes("donate") || qLower.includes("donation") || qLower.includes("80g") || qLower.includes("tax") || qLower.includes("receipt")) {
+      botReply = `💰 **Donations & 80G Tax Exemption**:
+• Vidya Gohil Charitable Trust offers **80G Tax Benefits** for all eligible donations under Indian Income Tax regulations.
+• You can donate online securely via Razorpay (UPI, Google Pay, PhonePe, Cards, NetBanking) on our **Donate** page.
+• Automated 80G tax receipts and 10BE acknowledgement certificates are provided.`;
+    } else if (qLower.includes("contact") || qLower.includes("phone") || qLower.includes("address") || qLower.includes("office") || qLower.includes("help")) {
+      const contact = C.contact || {};
+      const trust = C.trust || {};
+      botReply = `📞 **Trust Office & Committee Contact**:
+• **Trust**: ${trust.name || "Mumbai Meghwal Panchayat & Vidya Gohil Trust"}
+• **Office**: ${contact.address || "Mumbai, Maharashtra"}
+• **Email**: ${contact.email || "info@mmp-cwc.com"}
+• **Helpline**: ${contact.phone || "+91 9820785209"}`;
+    } else {
+      botReply = `🤖 **How can I assist you?**\n\nHere are some things you can try:\n• Enter your **Transaction ID (e.g. VG-9)** to check application status\n• Enter your **10-digit Mobile Number** to check your submissions\n• Type your **Authorized Committee Mobile** for Vibhag summary counts\n• Ask about **Education Felicitation 2026**, **Events**, or **Donations**.`;
+    }
+
+    setMessages(prev => [...prev, { id: "m_" + Date.now(), sender: "bot", text: botReply, data: botData }]);
+    setLoading(false);
+  };
+
+  return (
+    <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,fontFamily:"inherit"}}>
+      {/* Floating Trigger Pill */}
+      {!isOpen && (
+        <button
+          onClick={() => { setIsOpen(true); setIsMinimized(false); ensureRegistrations(); }}
+          style={{
+            background: "linear-gradient(135deg, #1E293B, #0F172A)",
+            color: "white",
+            border: "2px solid #E2E8F0",
+            padding: "12px 20px",
+            borderRadius: 30,
+            fontSize: ".9rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            boxShadow: "0 8px 24px rgba(15,23,42,0.35)",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+          }}
+          className="ch"
+        >
+          <span style={{fontSize:"1.3rem"}}>💬</span>
+          <span>Trust Assistant</span>
+          {isCommitteeAdmin ? (
+            <span style={{background:"#10B981",color:"white",fontSize:".65rem",padding:"2px 7px",borderRadius:10,fontWeight:800}}>Admin</span>
+          ) : (
+            <span style={{width:8,height:8,borderRadius:"50%",background:"#10B981",display:"inline-block",boxShadow:"0 0 0 2px rgba(16,185,129,0.3)"}}></span>
+          )}
+        </button>
+      )}
+
+      {/* Expanded Chat Window */}
+      {isOpen && (
+        <div style={{
+          width: "min(390px, calc(100vw - 32px))",
+          height: isMinimized ? "56px" : "min(540px, calc(100vh - 100px))",
+          background: "white",
+          borderRadius: 16,
+          boxShadow: "0 12px 36px rgba(0,0,0,0.25)",
+          border: "1px solid #CBD5E1",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          transition: "all 0.3s ease"
+        }}>
+          {/* Header */}
+          <div style={{
+            background: "linear-gradient(135deg, #1E293B, #0F172A)",
+            color: "white",
+            padding: "12px 16px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center"
+          }}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:"1.2rem"}}>🤖</span>
+              <div>
+                <div style={{fontSize:".85rem",fontWeight:800,lineHeight:1.2}}>MMP & Vidya Gohil Assistant</div>
+                <div style={{fontSize:".68rem",color:isCommitteeAdmin?"#86EFAC":"#94A3B8",display:"flex",alignItems:"center",gap:4}}>
+                  <span style={{width:6,height:6,borderRadius:"50%",background:isCommitteeAdmin?"#22C55E":"#10B981",display:"inline-block"}}></span>
+                  {isCommitteeAdmin ? "🛡️ Committee Admin Mode Active" : "🟢 Online | Public Mode"}
+                </div>
+              </div>
+            </div>
+
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <button
+                onClick={() => setIsMinimized(!isMinimized)}
+                style={{background:"none",border:"none",color:"#94A3B8",fontSize:"1rem",cursor:"pointer",padding:4}}
+                title={isMinimized ? "Maximize" : "Minimize"}
+              >
+                {isMinimized ? "▲" : "▼"}
+              </button>
+              <button
+                onClick={() => setIsOpen(false)}
+                style={{background:"none",border:"none",color:"#94A3B8",fontSize:"1.1rem",cursor:"pointer",padding:4}}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          {!isMinimized && (
+            <>
+              {/* Quick Actions Bar */}
+              <div style={{padding:"8px 12px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",gap:6,overflowX:"auto",whiteSpace:"nowrap"}}>
+                <button
+                  onClick={() => handleSendMessage("Check VG-9")}
+                  style={{fontSize:".7rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"3px 8px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
+                >
+                  🔍 Sample: VG-9
+                </button>
+                <button
+                  onClick={() => handleSendMessage("Vibhag Summary Count")}
+                  style={{fontSize:".7rem",background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:12,padding:"3px 8px",color:"#1D4ED8",cursor:"pointer",fontWeight:700}}
+                >
+                  📊 Vibhag Counts
+                </button>
+                <button
+                  onClick={() => handleSendMessage("Education Felicitation 2026")}
+                  style={{fontSize:".7rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"3px 8px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
+                >
+                  🎓 Education 2026
+                </button>
+              </div>
+
+              {/* Messages Area */}
+              <div style={{flex:1,padding:14,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,background:"#F1F5F9"}}>
+                {messages.map(m => (
+                  <div
+                    key={m.id}
+                    style={{
+                      alignSelf: m.sender === "user" ? "flex-end" : "flex-start",
+                      maxWidth: "88%",
+                      background: m.sender === "user" ? "#2563EB" : "white",
+                      color: m.sender === "user" ? "white" : "#1E293B",
+                      padding: "10px 14px",
+                      borderRadius: m.sender === "user" ? "14px 14px 2px 14px" : "14px 14px 14px 2px",
+                      fontSize: ".82rem",
+                      lineHeight: 1.5,
+                      boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                      border: m.sender === "user" ? "none" : "1px solid #E2E8F0",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word"
+                    }}
+                  >
+                    {m.text}
+                  </div>
+                ))}
+                {loading && (
+                  <div style={{alignSelf:"flex-start",background:"white",padding:"8px 12px",borderRadius:12,fontSize:".75rem",color:"#64748B",border:"1px solid #E2E8F0"}}>
+                    ⏳ Fetching details...
+                  </div>
+                )}
+                <div ref={chatBottomRef} />
+              </div>
+
+              {/* Input Footer */}
+              <form
+                onSubmit={e => { e.preventDefault(); handleSendMessage(); }}
+                style={{padding:"10px 12px",background:"white",borderTop:"1px solid #E2E8F0",display:"flex",gap:8}}
+              >
+                <input
+                  type="text"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  placeholder={isCommitteeAdmin ? "Ask count, search Txn ID / Mobile..." : "Enter Txn ID (VG-9) or Mobile..."}
+                  style={{
+                    flex: 1,
+                    padding: "9px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #CBD5E1",
+                    fontSize: ".82rem",
+                    outline: "none"
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || loading}
+                  style={{
+                    background: input.trim() && !loading ? "linear-gradient(135deg, #2563EB, #1D4ED8)" : "#E2E8F0",
+                    color: input.trim() && !loading ? "white" : "#94A3B8",
+                    border: "none",
+                    padding: "0 14px",
+                    borderRadius: 8,
+                    fontWeight: 700,
+                    fontSize: ".85rem",
+                    cursor: input.trim() && !loading ? "pointer" : "default"
+                  }}
+                >
+                  Send
+                </button>
+              </form>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 export default function App() {
   const [page,    setPage]    = useState("public");
   const [lang,    setLang]    = useState("en");
@@ -18151,6 +18550,10 @@ export default function App() {
       ) : (
         <Admin  C={C} setC={setC} setPage={setPage} auth={auth} onLogout={handleLogout} onShowLogin={()=>setShowLogin(true)}/>
       )}
+      {/* Login modal — overlays whatever page is showing */}
+      {/* Floating Community AI & Registration Chatbot */}
+      <CommunityChatbot C={C} auth={auth} />
+
       {/* Login modal — overlays whatever page is showing */}
       {showLogin && <LoginScreen C={C} onLogin={handleLogin} onSkip={()=>setShowLogin(false)}/>}
     </div>
