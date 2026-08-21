@@ -14573,16 +14573,32 @@ function ChatbotAccessManager({ C, setC, auth }) {
                 <label style={{fontSize:".8rem",fontWeight:700,color:"#334155",display:"block",marginBottom:6}}>
                   Chatbot Header Title (Displayed at top of Chat Window):
                 </label>
-                <input
-                  type="text"
-                  value={C.chatbotTitle !== undefined ? C.chatbotTitle : (C.trust?.name ? `${C.trust.name} Assistant` : "MMP & Vidya Gohil Assistant")}
-                  onChange={e => {
-                    const newC = { ...C, chatbotTitle: e.target.value };
-                    if (setC) setC(newC);
-                  }}
-                  placeholder="e.g. Mumbai Meghwal Panchayat Assistant"
-                  style={{width:"100%",padding:"11px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".9rem",fontWeight:700,boxSizing:"border-box"}}
-                />
+                <div style={{display:"flex",gap:8}}>
+                  <input
+                    type="text"
+                    value={C.chatbotTitle !== undefined ? C.chatbotTitle : (C.trust?.name ? `${C.trust.name} Assistant` : "Mumbai Meghwal Panchayat Assistant")}
+                    onChange={e => {
+                      const newC = { ...C, chatbotTitle: e.target.value };
+                      if (setC) setC(newC);
+                    }}
+                    placeholder="e.g. Mumbai Meghwal Panchayat Assistant"
+                    style={{flex:1,padding:"11px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".9rem",fontWeight:700,boxSizing:"border-box"}}
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await fbSave(C, auth?.idToken);
+                        alert("Header Title saved successfully to database!");
+                      } catch(err) {
+                        alert("Save failed: " + err.message);
+                      }
+                    }}
+                    style={{padding:"10px 16px",background:"#2563EB",color:"white",border:"none",borderRadius:8,fontWeight:700,fontSize:".82rem",cursor:"pointer",whiteSpace:"nowrap"}}
+                  >
+                    💾 Save Title
+                  </button>
+                </div>
                 <span style={{fontSize:".72rem",color:"#64748B",display:"block",marginTop:4}}>
                   Appears prominently in the dark top header bar of the chatbot window.
                 </span>
@@ -14975,84 +14991,6 @@ function ChatbotAccessManager({ C, setC, auth }) {
 
       {activeTab === "kb" && (
         <div>
-          {/* Chatbot Welcome Message & Title Settings */}
-          <div style={{background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"20px 24px",marginBottom:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-            <div style={{fontSize:".95rem",fontWeight:800,color:"#0F172A",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>
-              <span>⚙️</span> Chatbot Welcome Message & Title Configuration:
-            </div>
-            
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))",gap:16,marginBottom:14}}>
-              <div>
-                <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Chatbot Header Title:</label>
-                <input
-                  type="text"
-                  value={C.chatbotTitle !== undefined ? C.chatbotTitle : "MMP & Vidya Gohil Assistant"}
-                  onChange={e => {
-                    const newC = { ...C, chatbotTitle: e.target.value };
-                    if (setC) setC(newC);
-                  }}
-                  placeholder="e.g. MMP & Vidya Gohil Assistant"
-                  style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:700,boxSizing:"border-box"}}
-                />
-              </div>
-
-              <div>
-                <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Launcher Pill Label:</label>
-                <input
-                  type="text"
-                  value={C.chatbotPillLabel !== undefined ? C.chatbotPillLabel : "Trust Assistant"}
-                  onChange={e => {
-                    const newC = { ...C, chatbotPillLabel: e.target.value };
-                    if (setC) setC(newC);
-                  }}
-                  placeholder="e.g. Trust Assistant"
-                  style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:700,boxSizing:"border-box"}}
-                />
-              </div>
-            </div>
-
-            <div style={{marginBottom:14}}>
-              <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>
-                Chatbot Welcome Greeting Message (Supports **bold**, bullet • points, links):
-              </label>
-              <textarea
-                value={C.chatbotWelcomeText !== undefined ? C.chatbotWelcomeText : "👋 **Namaste & Welcome!**\n\nI am your **MMP & Vidya Gohil Trust Assistant**.\n\n• 🔍 **Check Application Status**: Type your **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.\n• ⚡ **Question Shortcuts**: Type **`/`** to see all FAQ shortcuts (Education Committee, CWC, Events, Vibhag Summary).\n• 🛡️ **Committee Admin**: Enter your authorized mobile to unlock live analytics."}
-                onChange={e => {
-                  const newC = { ...C, chatbotWelcomeText: e.target.value };
-                  if (setC) setC(newC);
-                }}
-                rows={5}
-                style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",lineHeight:1.5,fontFamily:"inherit",boxSizing:"border-box"}}
-              />
-            </div>
-
-            <div style={{display:"flex",justifyContent:"flex-end"}}>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    await fbSave(C, auth?.idToken);
-                    alert("Chatbot Title & Welcome Message saved successfully!");
-                  } catch(err) {
-                    alert("Failed to save: " + err.message);
-                  }
-                }}
-                style={{
-                  padding:"9px 20px",
-                  background:"linear-gradient(135deg, #10B981, #059669)",
-                  color:"white",
-                  border:"none",
-                  borderRadius:6,
-                  fontWeight:700,
-                  fontSize:".85rem",
-                  cursor:"pointer",
-                  boxShadow:"0 2px 6px rgba(16,185,129,0.25)"
-                }}
-              >
-                💾 Save Welcome Message & Title
-              </button>
-            </div>
-          </div>
           {/* Add / Edit Q&A Form */}
           <div style={{background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"20px 24px",marginBottom:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
@@ -19606,7 +19544,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
   const activeUser = getActiveUser();
   const isAnyAdmin = userSessionScope === "all" || userSessionScope === "vibhag";
 
-  const chatbotTitle = C.chatbotTitle || "MMP & Vidya Gohil Assistant";
+  const chatbotTitle = C.chatbotTitle || (C.trust?.name ? `${C.trust.name} Assistant` : "Mumbai Meghwal Panchayat Assistant");
   const pillLabel = C.chatbotPillLabel || "Trust Assistant";
   const welcomeText = C.chatbotWelcomeText || "👋 **Namaste & Welcome!**\n\nI am your **MMP & Vidya Gohil Trust Assistant**.\n\n• 🔍 **Check Application Status**: Type your **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.\n• ⚡ **Question Shortcuts**: Type **`/`** to see all FAQ shortcuts (Education Committee, CWC, Events, Vibhag Summary).\n• 🛡️ **Committee Admin**: Enter your authorized mobile to unlock live analytics.";
 
