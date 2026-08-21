@@ -19589,34 +19589,24 @@ const generateVibhagSummaryWhatsAppText = (summaryData) => {
   const dateStr = now.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 
-  let text = "═══════════════════════\n";
-  text += "🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n";
-  text += "🏆 *Education Felicitation 2026*\n";
-  text += "═══════════════════════\n\n";
-  text += `📊 *${(scopeTitle || "REGISTRATION SUMMARY REPORT").toUpperCase()}*\n`;
-  text += `📅 *Date:* ${dateStr}  ⏰ *Time:* ${timeStr}\n\n`;
+  let text = "🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n";
+  text += "🎓 *Education Felicitation 2026 — Executive Summary*\n";
+  text += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+  text += `📅 *Date:* ${dateStr}  ⏱️ *Time:* ${timeStr}\n\n`;
 
-  text += "📈 *OVERALL METRICS*\n";
-  text += "━━━━━━━━━━━━━━━━━━━━━━━\n";
-  text += `▪️ Total Applications  : *${total}*\n`;
-  text += `▪️ Approved Entries    : *${approved}*  🟢\n`;
-  text += `▪️ Pending Verification: *${pending}*  ⏳\n`;
-  text += `▪️ Rejected / Cancelled: *${rejected}*  🔴\n`;
-  text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n";
+  text += "📊 *Overall Progress:*\n";
+  text += `• Total Applications : *${total}*\n`;
+  text += `• ⏳ Pending: *${pending}*  │  🟢 Approved: *${approved}*  │  🔴 Rejected: *${rejected}*\n\n`;
 
   if (vibhagList && vibhagList.length > 0) {
-    text += "📍 *VIBHAG-WISE BREAKDOWN*\n";
-    text += "───────────────────────\n";
+    text += "📍 *Vibhag-wise Breakdown:*\n";
     vibhagList.forEach(([vName, vStat], idx) => {
-      text += `${idx + 1}. *${vName}*\n`;
-      text += `   Total: *${vStat.total}* │ ⏳ Pending: *${vStat.pending}* │ 🟢 Approved: *${vStat.approved}*\n\n`;
+      text += `${idx + 1}. ${vName} ➜ *${vStat.total}* (⏳${vStat.pending} │ 🟢${vStat.approved})\n`;
     });
-    text += "───────────────────────\n\n";
   }
 
-  text += "🌐 *Live Community Analytics Portal:*\n";
-  text += "👉 https://pradeepparmar902.github.io/MY_Community_Website/\n";
-  text += "═══════════════════════";
+  text += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+  text += "🌐 *Live Portal:* https://pradeepparmar902.github.io/MY_Community_Website/";
   return text;
 };
 
@@ -19641,28 +19631,22 @@ const generateApplicationWhatsAppText = (app) => {
     ? "🔴 REJECTED" 
     : "⏳ PENDING REVIEW";
 
-  const remarks = app.Remarks || (status === "Approved" ? "Application verified & approved by Education Committee." : status === "Needs Info" ? "Additional marksheets or information corrections needed." : "Application is under committee review.");
+  const remarks = app.Remarks || (status === "Approved" ? "Application verified & approved." : status === "Needs Info" ? "Additional marksheets or correction required." : "Application is under committee review.");
 
-  let text = "═══════════════════════\n";
-  text += "🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n";
-  text += "🏆 *Education Felicitation 2026*\n";
-  text += "═══════════════════════\n\n";
-  text += "📋 *APPLICATION STATUS REPORT*\n\n";
-  text += `🆔 *Txn ID :* ${txnId}\n`;
+  let text = "🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n";
+  text += "🎓 *Education Felicitation 2026 — Application Status*\n";
+  text += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+  text += `🆔 *Txn ID  :* ${txnId}\n`;
   text += `👤 *Student :* ${displayName}\n`;
-  text += `📍 *Vibhag :* ${vibhag}\n`;
-  text += `📚 *Stream :* ${stream}\n`;
-  text += `📊 *Score :* ${marks}${marksDetail}\n`;
+  text += `📍 *Vibhag  :* ${vibhag}\n`;
+  text += `📚 *Stream  :* ${stream} (${marks}${marksDetail})\n`;
   if (mobile) {
-    text += `📱 *Mobile :* +91 ${String(mobile).replace(/\D/g, "").slice(-10)}\n`;
+    text += `📱 *Mobile  :* +91 ${String(mobile).replace(/\D/g, "").slice(-10)}\n`;
   }
-  text += "\n───────────────────────\n";
-  text += `📌 *STATUS :* ${statusBadge}\n`;
+  text += `📌 *Status  :* ${statusBadge}\n`;
   text += `💬 *Remarks :* ${remarks}\n`;
-  text += "───────────────────────\n\n";
-  text += "🌐 *Official Community Portal:*\n";
-  text += "👉 https://pradeepparmar902.github.io/MY_Community_Website/\n";
-  text += "═══════════════════════";
+  text += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+  text += "🌐 *Portal:* https://pradeepparmar902.github.io/MY_Community_Website/";
   return text;
 };
 
