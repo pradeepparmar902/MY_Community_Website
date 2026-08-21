@@ -14213,6 +14213,7 @@ function LoginScreen({ C, onLogin, onSkip }) {
 // ── ADMIN REGISTRATIONS ────────────────────────────────────────────────────────
 
 
+
 // ── Dedicated Chatbot Committee Admin Access Manager Component ───────────────────────────
 function ChatbotAccessManager({ C, setC, auth }) {
   const [accessScope, setAccessScope] = useState("all"); // "all" | "vibhag" | "individual"
@@ -14245,10 +14246,20 @@ function ChatbotAccessManager({ C, setC, auth }) {
     if (setC) setC(newC);
     try {
       await fbSave(newC, auth?.idToken);
-      alert("Chatbot Access permissions saved to database successfully!");
     } catch(e) {
       alert("Failed to save to database: " + e.message);
     }
+  };
+
+  const updateMemberScope = (idx, newScope, newVibhag) => {
+    const updated = currentList.map((m, i) => {
+      if (i !== idx) return m;
+      const item = typeof m === "string" ? { name: "Committee Member", mobile: m, role: "Admin" } : { ...m };
+      item.scope = newScope;
+      item.vibhag = newScope === "vibhag" ? (newVibhag || "10 MAHALAXMI") : newScope === "all" ? "All Vibhags" : "Individual Only";
+      return item;
+    });
+    saveMobilesToFirebase(updated);
   };
 
   return (
@@ -14259,14 +14270,14 @@ function ChatbotAccessManager({ C, setC, auth }) {
             <span>🤖</span> Chatbot Access Management (Multi-Level)
           </h2>
           <p style={{fontSize:".85rem",color:"var(--mu)",margin:0}}>
-            Configure granular access for Chatbot users: <strong>All Level (Full Access)</strong>, <strong>Vibhag Level (Specific Area)</strong>, or <strong>Individual User Level (Own Mobile/Txn ID)</strong>.
+            Super Admin can grant or change access for any user dynamically using the 3 radio options: <strong>Mobile/trans_id</strong>, <strong>Vibhag</strong>, or <strong>ALL</strong>.
           </p>
         </div>
       </div>
 
-      {/* Add New Member Form with Scope Selector */}
+      {/* Add New Member Form */}
       <div style={{background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"20px 24px",marginBottom:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-        <div style={{fontSize:".9rem",fontWeight:800,color:"#0F172A",marginBottom:12}}>➕ Authorize Member & Assign Access Level:</div>
+        <div style={{fontSize:".9rem",fontWeight:800,color:"#0F172A",marginBottom:12}}>➕ Authorize New Member & Choose Access Level:</div>
         <form 
           onSubmit={e => {
             e.preventDefault();
@@ -14290,6 +14301,7 @@ function ChatbotAccessManager({ C, setC, auth }) {
             const updated = [...currentList, newEntry];
             saveMobilesToFirebase(updated);
             form.reset();
+            alert(`${name} (+91 ${mobile}) has been added with ${accessScope.toUpperCase()} access!`);
           }}
           style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",gap:14,alignItems:"end"}}
         >
@@ -14302,16 +14314,21 @@ function ChatbotAccessManager({ C, setC, auth }) {
             <input name="cMobile" type="tel" placeholder="e.g. 9967821964" required style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
           </div>
           <div>
-            <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Access Level Scope:</label>
-            <select 
-              value={accessScope} 
-              onChange={e=>setAccessScope(e.target.value)}
-              style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box",fontWeight:600}}
-            >
-              <option value="all">🌐 All Level (Full Analytics & All Lookups)</option>
-              <option value="vibhag">📍 Vibhag Level (Specific Vibhag Count & Lookups)</option>
-              <option value="individual">👤 Individual Level (Own Mobile / Txn ID Only)</option>
-            </select>
+            <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Access Level:</label>
+            <div style={{display:"flex",background:"#F1F5F9",padding:3,borderRadius:8,border:"1px solid #CBD5E1",gap:2}}>
+              <label style={{flex:1,textAlign:"center",padding:"7px 4px",borderRadius:6,fontSize:".73rem",fontWeight:accessScope==="individual"?800:600,background:accessScope==="individual"?"#475569":"transparent",color:accessScope==="individual"?"white":"#475569",cursor:"pointer",userSelect:"none"}}>
+                <input type="radio" name="newScope" value="individual" checked={accessScope==="individual"} onChange={()=>setAccessScope("individual")} style={{display:"none"}}/>
+                📱 Mobile/Txn
+              </label>
+              <label style={{flex:1,textAlign:"center",padding:"7px 4px",borderRadius:6,fontSize:".73rem",fontWeight:accessScope==="vibhag"?800:600,background:accessScope==="vibhag"?"#D97706":"transparent",color:accessScope==="vibhag"?"white":"#78350F",cursor:"pointer",userSelect:"none"}}>
+                <input type="radio" name="newScope" value="vibhag" checked={accessScope==="vibhag"} onChange={()=>setAccessScope("vibhag")} style={{display:"none"}}/>
+                📍 Vibhag
+              </label>
+              <label style={{flex:1,textAlign:"center",padding:"7px 4px",borderRadius:6,fontSize:".73rem",fontWeight:accessScope==="all"?800:600,background:accessScope==="all"?"#2563EB":"transparent",color:accessScope==="all"?"white":"#1E40AF",cursor:"pointer",userSelect:"none"}}>
+                <input type="radio" name="newScope" value="all" checked={accessScope==="all"} onChange={()=>setAccessScope("all")} style={{display:"none"}}/>
+                🌐 ALL
+              </label>
+            </div>
           </div>
 
           {accessScope === "vibhag" && (
@@ -14354,11 +14371,11 @@ function ChatbotAccessManager({ C, setC, auth }) {
         </form>
       </div>
 
-      {/* Authorized Numbers Table */}
+      {/* Authorized Numbers Table with Direct Inline Controls */}
       <div style={{background:"white",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
         <div style={{padding:"14px 18px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",fontWeight:700,fontSize:".88rem",color:"#0F172A",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span>Authorized Users & Committee Scope ({currentList.length})</span>
-          <span style={{fontSize:".75rem",color:"#64748B"}}>Granular access enforced by Chatbot in real-time</span>
+          <span style={{fontSize:".75rem",color:"#64748B"}}>Directly toggle access level for any user below</span>
         </div>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:".85rem"}}>
@@ -14366,8 +14383,8 @@ function ChatbotAccessManager({ C, setC, auth }) {
               <tr style={{background:"#1E293B",color:"white"}}>
                 <th style={{padding:"11px 16px",textAlign:"left"}}>User / Member Name</th>
                 <th style={{padding:"11px 16px",textAlign:"left"}}>Authorized Mobile Number</th>
-                <th style={{padding:"11px 16px",textAlign:"left"}}>Access Level Scope</th>
-                <th style={{padding:"11px 16px",textAlign:"left"}}>Assigned Vibhag / Role</th>
+                <th style={{padding:"11px 16px",textAlign:"left",minWidth:280}}>Access Level Scope (Dynamic)</th>
+                <th style={{padding:"11px 16px",textAlign:"left"}}>Designation</th>
                 <th style={{padding:"11px 16px",textAlign:"center"}}>Chatbot Status</th>
                 <th style={{padding:"11px 16px",textAlign:"right"}}>Action</th>
               </tr>
@@ -14375,20 +14392,117 @@ function ChatbotAccessManager({ C, setC, auth }) {
             <tbody>
               {currentList.map((m, idx) => {
                 const item = typeof m === "string" ? { name: "Committee Member", mobile: m, scope: "all", vibhag: "All Vibhags", role: "Admin", addedAt: "-" } : m;
-                const scopeBadge = item.scope === "all" ? (
-                  <span style={{background:"#EFF6FF",color:"#1D4ED8",padding:"3px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700}}>🌐 All Level</span>
-                ) : item.scope === "vibhag" ? (
-                  <span style={{background:"#FEF3C7",color:"#B45309",padding:"3px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700}}>📍 Vibhag: {item.vibhag}</span>
-                ) : (
-                  <span style={{background:"#F1F5F9",color:"#475569",padding:"3px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700}}>👤 Individual Only</span>
-                );
+                const currentScope = item.scope || "all";
 
                 return (
                   <tr key={idx} style={{borderBottom:"1px solid #F1F5F9",background:idx%2===1?"#F8FAFC":"white"}}>
                     <td style={{padding:"12px 16px",fontWeight:700,color:"#0F172A"}}>{item.name}</td>
                     <td style={{padding:"12px 16px",fontWeight:700,color:"#2563EB",fontFamily:"monospace",fontSize:".9rem"}}>+91 {item.mobile}</td>
-                    <td style={{padding:"12px 16px"}}>{scopeBadge}</td>
-                    <td style={{padding:"12px 16px",color:"#475569"}}>{item.vibhag || item.role} ({item.role})</td>
+                    
+                    {/* Inline Interactive Scope Selector (Radio Buttons + Vibhag Dropdown) */}
+                    <td style={{padding:"10px 16px"}}>
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        <div style={{display:"inline-flex",background:"#F1F5F9",padding:3,borderRadius:8,border:"1px solid #CBD5E1",gap:2,width:"fit-content"}}>
+                          <label style={{
+                            padding: "4px 8px",
+                            borderRadius: 6,
+                            fontSize: ".72rem",
+                            fontWeight: currentScope === "individual" ? 800 : 600,
+                            background: currentScope === "individual" ? "#475569" : "transparent",
+                            color: currentScope === "individual" ? "white" : "#475569",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                            userSelect: "none"
+                          }}>
+                            <input 
+                              type="radio" 
+                              name={`scope_${idx}`} 
+                              value="individual" 
+                              checked={currentScope === "individual"} 
+                              onChange={() => updateMemberScope(idx, "individual", item.vibhag)}
+                              style={{display:"none"}}
+                            />
+                            📱 Mobile/Txn
+                          </label>
+
+                          <label style={{
+                            padding: "4px 8px",
+                            borderRadius: 6,
+                            fontSize: ".72rem",
+                            fontWeight: currentScope === "vibhag" ? 800 : 600,
+                            background: currentScope === "vibhag" ? "#D97706" : "transparent",
+                            color: currentScope === "vibhag" ? "white" : "#78350F",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                            userSelect: "none"
+                          }}>
+                            <input 
+                              type="radio" 
+                              name={`scope_${idx}`} 
+                              value="vibhag" 
+                              checked={currentScope === "vibhag"} 
+                              onChange={() => updateMemberScope(idx, "vibhag", item.vibhag || "10 MAHALAXMI")}
+                              style={{display:"none"}}
+                            />
+                            📍 Vibhag
+                          </label>
+
+                          <label style={{
+                            padding: "4px 8px",
+                            borderRadius: 6,
+                            fontSize: ".72rem",
+                            fontWeight: currentScope === "all" ? 800 : 600,
+                            background: currentScope === "all" ? "#2563EB" : "transparent",
+                            color: currentScope === "all" ? "white" : "#1E40AF",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                            userSelect: "none"
+                          }}>
+                            <input 
+                              type="radio" 
+                              name={`scope_${idx}`} 
+                              value="all" 
+                              checked={currentScope === "all"} 
+                              onChange={() => updateMemberScope(idx, "all", "All Vibhags")}
+                              style={{display:"none"}}
+                            />
+                            🌐 ALL
+                          </label>
+                        </div>
+
+                        {/* Inline Vibhag Dropdown when Vibhag radio is chosen */}
+                        {currentScope === "vibhag" && (
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <span style={{fontSize:".7rem",color:"#B45309",fontWeight:700}}>Assigned:</span>
+                            <select 
+                              value={item.vibhag || "10 MAHALAXMI"}
+                              onChange={e => updateMemberScope(idx, "vibhag", e.target.value)}
+                              style={{
+                                padding: "4px 8px",
+                                borderRadius: 6,
+                                border: "1px solid #FCD34D",
+                                background: "#FFFBEB",
+                                fontSize: ".74rem",
+                                fontWeight: 700,
+                                color: "#92400E",
+                                outline: "none",
+                                cursor: "pointer"
+                              }}
+                            >
+                              {VIBHAG_LIST.map(v => <option key={v} value={v}>{v}</option>)}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+
+                    <td style={{padding:"12px 16px",color:"#475569"}}>{item.role}</td>
                     <td style={{padding:"12px 16px",textAlign:"center"}}>
                       <span style={{background:"#DCFCE7",color:"#15803D",padding:"4px 10px",borderRadius:12,fontSize:".75rem",fontWeight:800}}>
                         🛡️ Active
@@ -14416,13 +14530,14 @@ function ChatbotAccessManager({ C, setC, auth }) {
 
       <div style={{marginTop:16,background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:8,padding:"14px 18px",fontSize:".82rem",color:"#1E40AF",lineHeight:1.6}}>
         📌 <strong>Access Levels Explained:</strong>
-        <br/>• <strong>🌐 All Level</strong>: Can ask for complete registration summaries across all Vibhags, export counts, and search any applicant across the database.
-        <br/>• <strong>📍 Vibhag Level</strong>: Can ask for summary counts, pending lists, and search applicants specifically within their assigned Vibhag.
-        <br/>• <strong>👤 Individual Level</strong>: Can only query their own mobile number or specific Transaction ID (e.g. VG-9).
+        <br/>• <strong>🌐 ALL</strong>: Full Access — Can ask for complete registration summaries across all Vibhags, export counts, and search any applicant across the entire database.
+        <br/>• <strong>📍 Vibhag</strong>: Area Access — Can ask for summary counts, pending lists, and search applicants specifically within their assigned Vibhag.
+        <br/>• <strong>📱 Mobile/trans_id</strong>: Individual User Access — Can only query their own mobile number or specific Transaction ID (e.g. VG-9).
       </div>
     </div>
   );
 }
+
 
 function AdminAccess({ C, setC, master, auth }) {
   if (!master) return <div style={{padding:40,textAlign:"center"}}>Access Denied.</div>;
