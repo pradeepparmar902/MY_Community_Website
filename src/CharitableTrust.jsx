@@ -18688,21 +18688,24 @@ function FormattedChatText({ text, onQuickClick }) {
 // ── Application Record Card ─────────────────────────────────────────────────────────────
 function ApplicationRecordCard({ app, onAction }) {
   const status = app.Status || app.status || "Pending";
-  const displayName = String(app["Full Name"] || app.name || "Applicant").replace(/\|/g, " ").replace(/\s+/g, " ").trim();
   const isApproved = status === "Approved";
   const isNeedsInfo = status === "Needs Info";
   const isDisapproved = status === "Disapproved" || status === "Rejected";
 
+  // Clean pipe-delimited names e.g. "Mahima|Bhupendra |Mahida" -> "Mahima Bhupendra Mahida"
+  const rawName = String(app["Full Name"] || app["Submitted By"] || app.name || "Applicant");
+  const displayName = rawName.replace(/\|/g, " ").replace(/\s+/g, " ").trim();
+
   const badgeBg = isApproved ? "#DCFCE7" : isNeedsInfo ? "#FEF3C7" : isDisapproved ? "#FEE2E2" : "#EFF6FF";
   const badgeColor = isApproved ? "#15803D" : isNeedsInfo ? "#B45309" : isDisapproved ? "#DC2626" : "#1D4ED8";
-  const badgeIcon = isApproved ? "🟢" : isNeedsInfo ? "🟡" : isDisapproved ? "🔴" : "⏳";
+  const badgeIcon = isApproved ? "🟢" : isNeedsInfo ? "⚠️" : isDisapproved ? "🔴" : "⏳";
 
   return (
     <div style={{
       background: "white",
       borderRadius: 12,
-      border: "1px solid #E2E8F0",
-      boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+      border: isNeedsInfo ? "1.5px solid #FCD34D" : "1px solid #E2E8F0",
+      boxShadow: isNeedsInfo ? "0 4px 14px rgba(217,119,6,0.12)" : "0 2px 10px rgba(0,0,0,0.05)",
       overflow: "hidden",
       marginTop: 8,
       marginBottom: 6
@@ -18710,7 +18713,7 @@ function ApplicationRecordCard({ app, onAction }) {
       {/* Card Header */}
       <div style={{
         padding: "10px 14px",
-        background: "linear-gradient(135deg, #F8FAFC, #F1F5F9)",
+        background: isNeedsInfo ? "linear-gradient(135deg, #FFFBEB, #FEF3C7)" : "linear-gradient(135deg, #F8FAFC, #F1F5F9)",
         borderBottom: "1px solid #E2E8F0",
         display: "flex",
         justifyContent: "space-between",
@@ -18760,18 +18763,18 @@ function ApplicationRecordCard({ app, onAction }) {
         </div>
       </div>
 
-      {/* Remarks Alert */}
+      {/* Remarks Alert Block */}
       <div style={{
         margin: "0 14px 10px 14px",
-        padding: "8px 10px",
-        background: isApproved ? "#F0FDF4" : "#F8FAFC",
-        border: `1px solid ${isApproved ? "#BBF7D0" : "#E2E8F0"}`,
+        padding: "8px 12px",
+        background: isNeedsInfo ? "#FFFBEB" : isApproved ? "#F0FDF4" : "#F8FAFC",
+        border: `1px solid ${isNeedsInfo ? "#FCD34D" : isApproved ? "#BBF7D0" : "#E2E8F0"}`,
         borderRadius: 8,
         fontSize: ".75rem",
-        color: isApproved ? "#166534" : "#475569",
+        color: isNeedsInfo ? "#92400E" : isApproved ? "#166534" : "#475569",
         lineHeight: 1.4
       }}>
-        💬 <strong>Remarks:</strong> {app.Remarks || (isApproved ? "Application verified & approved by Committee." : "Application is under committee review.")}
+        💬 <strong>Remarks:</strong> {app.Remarks || (isApproved ? "Application verified & approved by Committee." : isNeedsInfo ? "Additional information or document re-upload required." : "Application is under committee review.")}
       </div>
 
       {/* Card Footer Actions */}
