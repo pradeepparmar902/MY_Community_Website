@@ -19444,6 +19444,31 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
     "65 KALWA"
   ];
 
+  // Helper to get active logged-in user from all possible auth sources (Firebase Auth, LocalStorage, Auth prop)
+  const getActiveUser = () => {
+    let storedUser = null;
+    try {
+      const cached = localStorage.getItem("trustPublicProfile") || localStorage.getItem("globalProfile");
+      if (cached) storedUser = JSON.parse(cached);
+    } catch (e) {}
+
+    const fbUser = fbAuth?.currentUser;
+    const rawPhone = storedUser?.mobile || storedUser?.['Mobile Number'] || storedUser?.phone || auth?.mobile || fbUser?.phoneNumber || verifiedMember?.mobile || "";
+    const cleanPhone = String(rawPhone).replace(/\D/g, "").slice(-10);
+    const name = storedUser?.name || storedUser?.['Full Name'] || auth?.name || fbUser?.displayName || verifiedMember?.name || "";
+    const email = String(storedUser?.email || auth?.email || fbUser?.email || "").toLowerCase().trim();
+
+    const isLoggedIn = Boolean(cleanPhone || (email && email !== "mmp_report_runner@gmail.com") || auth?.idToken || fbUser);
+
+    return {
+      isLoggedIn,
+      mobile: cleanPhone,
+      name,
+      email
+    };
+  };
+
+  const activeUser = getActiveUser();
   const isAnyAdmin = userSessionScope === "all" || userSessionScope === "vibhag";
 
   const chatbotTitle = C.chatbotTitle || "MMP & Vidya Gohil Assistant";
@@ -19761,35 +19786,33 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       return false;
     });
 
-    if (qLower === "/check" || qLower === "check" || qLower === "my status" || qLower === "check status" || qLower === "check my application status" || qLower.includes("application status")) {
-      // 1. Check if user is logged into the website with phone/email
-      const loggedInMob = String(auth?.mobile || verifiedMember?.mobile || "").replace(/\D/g, "").slice(-10);
-      const loggedInEmail = String(auth?.email || "").toLowerCase().trim();
+    if (qLower === "/check" || qLower === "check" || qLower === "my status" || qLower === "check status" || qLower === "check my application status" || qLower.includes("application status") || qLower.includes("check application")) {
+      // Look up logged in mobile across all sources
+      const currentActiveUser = getActiveUser();
+      const userPhone = currentActiveUser.mobile;
+      const userEmail = currentActiveUser.email;
 
-      if (loggedInMob || (loggedInEmail && loggedInEmail !== "mmp_report_runner@gmail.com")) {
+      if (currentActiveUser.isLoggedIn && (userPhone || userEmail)) {
         const userApps = currentRegs.filter(r => {
           const m1 = String(r.submitterMob || "").replace(/\D/g, "").slice(-10);
           const m2 = String(r["Mobile Number"] || "").replace(/\D/g, "").slice(-10);
           const m3 = String(r["Alternate Mobile Number"] || "").replace(/\D/g, "").slice(-10);
           const em = String(r["Email Address"] || "").toLowerCase().trim();
-          return (loggedInMob && (m1 === loggedInMob || m2 === loggedInMob || m3 === loggedInMob)) || (loggedInEmail && em === loggedInEmail);
+
+          if (userPhone && (m1 === userPhone || m2 === userPhone || m3 === userPhone)) return true;
+          if (userEmail && em === userEmail) return true;
+          return false;
         });
 
         if (userApps.length > 0) {
           botType = "apps_list";
-          botReply = `✅ **Found ${userApps.length} Application(s) for your registered account (${loggedInMob ? `+91 ${loggedInMob}` : loggedInEmail})**: `;
+          botReply = `✅ **Found ${userApps.length} Application(s) for your registered account (${currentActiveUser.name ? `${currentActiveUser.name} - ` : ""}${userPhone ? `+91 ${userPhone}` : userEmail})**: `;
           cardData = { apps: userApps };
         } else {
-          botReply = `🔍 **No application found for your logged-in account (${loggedInMob ? `+91 ${loggedInMob}` : loggedInEmail})**.\n\n• If you submitted using a different mobile number or have a **Transaction ID (e.g. VG-7, EDU26-2)**, please type it directly in the chat.\n• If you have not registered yet, visit the **Events** section on the website to submit your form.`;
+          botReply = `🔍 **No application found for your registered account (${userPhone ? `+91 ${userPhone}` : userEmail})**.\n\n• If you submitted using a different mobile number or have a **Transaction ID (e.g. VG-7, EDU26-2)**, please type it directly in the chat.\n• If you haven't registered yet, please visit the **Events** section to apply.`;
         }
       } else {
-        // User NOT logged in -> Require Login for privacy protection
-        botReply = `🔐 **Please Log In to Check Your Application Status**
-
-For security and privacy, you need to log in with your registered mobile number to view your application status.
-
-• 👉 **Option 1**: Log in on the website with your registered Mobile Number / OTP.
-• 👉 **Option 2**: If you already know your **Transaction ID (e.g. VG-7, EDU26-2)** or **10-digit Mobile Number**, you can type it directly in this chat to verify.`;
+        botReply = `🔐 **Please Log In to Check Your Application Status**\n\nFor security and privacy, please log in with your registered mobile number on the website.\n\n• 👉 **Option 1**: Log in using the **Login** button at top right.\n• 👉 **Option 2**: Type your **Transaction ID (e.g. VG-7, EDU26-2)** or **10-digit Mobile Number** directly below to verify.`;
       }
     } else if (matchedKb) {
       if (matchedKb.adminOnly && !isAnyAdmin) {
@@ -19966,8 +19989,8 @@ For security and privacy, you need to log in with your registered mobile number 
       }
     } else {
       botReply = isAnyAdmin ? 
-        `🤖 **How can I assist you?**\n\nType **`/`** to browse all question shortcuts, or try:\n• **/all** — Summary data of all entries\n• **/vibhag 15 RAMDEV NAGAR** — Summary for a specific Vibhag\n• **/check VG-7** — Check application status\n• **/events** — Event guidelines` :
-        `🤖 **How can I assist you?**\n\nHere are some things you can try:\n• Enter your **Transaction ID (e.g. VG-7, EDU26-2)** to check application status\n• Enter your **10-digit Mobile Number** to check your submissions\n• Type **`/`** for question shortcuts.`;
+        `🤖 **How can I assist you?**\n\nType **`/`** to browse all question shortcuts, or try:\n• **/all** — Summary data of all entries\n• **/vibhag 15 RAMDEV NAGAR** — Summary for a specific Vibhag\n• **/check** — Check application status\n• **/events** — Event guidelines` :
+        `🤖 **How can I assist you?**\n\nHere are some things you can try:\n• **/check** — Check your registered application status\n• Enter your **Transaction ID (e.g. VG-7, EDU26-2)** to check application status\n• Type **`/`** for question shortcuts.`;
     }
 
     setMessages(prev => [...prev, { id: "m_" + Date.now(), sender: "bot", type: botType, text: botReply, cardData }]);
@@ -19988,6 +20011,10 @@ For security and privacy, you need to log in with your registered mobile number 
     zIndex: 9999,
     fontFamily: "inherit"
   };
+
+  const headerStatusLabel = isAnyAdmin
+    ? (userSessionScope === "all" ? "🌐 All Level Admin" : `📍 ${sessionVibhag}`)
+    : (activeUser.isLoggedIn ? `👤 ${activeUser.name ? activeUser.name.split(' ')[0] : 'Logged In'} (+91 ${activeUser.mobile})` : "🟢 Online | Public");
 
   return (
     <div 
@@ -20029,6 +20056,10 @@ For security and privacy, you need to log in with your registered mobile number 
           {isAnyAdmin ? (
             <span style={{background:"#10B981",color:"white",fontSize:".65rem",padding:"2px 7px",borderRadius:10,fontWeight:800}}>
               {userSessionScope === "all" ? "Admin (All)" : "Vibhag Admin"}
+            </span>
+          ) : activeUser.isLoggedIn ? (
+            <span style={{background:"#2563EB",color:"white",fontSize:".65rem",padding:"2px 7px",borderRadius:10,fontWeight:800}}>
+              {activeUser.name ? activeUser.name.split(' ')[0] : "Logged In"}
             </span>
           ) : (
             <span style={{width:8,height:8,borderRadius:"50%",background:"#10B981",display:"inline-block",boxShadow:"0 0 0 2px rgba(16,185,129,0.3)"}}></span>
@@ -20083,9 +20114,9 @@ For security and privacy, you need to log in with your registered mobile number 
               </div>
               <div>
                 <div style={{fontSize:".86rem",fontWeight:800,lineHeight:1.2}}>{chatbotTitle}</div>
-                <div style={{fontSize:".67rem",color:isAnyAdmin?"#86EFAC":"#94A3B8",display:"flex",alignItems:"center",gap:4,marginTop:2}}>
-                  <span style={{width:6,height:6,borderRadius:"50%",background:isAnyAdmin?"#22C55E":"#10B981",display:"inline-block"}}></span>
-                  {userSessionScope === "all" ? "🌐 All Level Admin" : userSessionScope === "vibhag" ? `📍 ${sessionVibhag}` : "🟢 Online | Public"}
+                <div style={{fontSize:".67rem",color:isAnyAdmin?"#86EFAC":activeUser.isLoggedIn?"#93C5FD":"#94A3B8",display:"flex",alignItems:"center",gap:4,marginTop:2}}>
+                  <span style={{width:6,height:6,borderRadius:"50%",background:isAnyAdmin?"#22C55E":activeUser.isLoggedIn?"#3B82F6":"#10B981",display:"inline-block"}}></span>
+                  {headerStatusLabel}
                 </div>
               </div>
             </div>
@@ -20110,7 +20141,7 @@ For security and privacy, you need to log in with your registered mobile number 
 
           {!isMinimized && (
             <>
-              {/* Quick Actions Bar (Clean - Only Essential Controls) */}
+              {/* Quick Actions Bar */}
               <div style={{padding:"8px 12px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",gap:6,alignItems:"center"}}>
                 <button
                   onClick={() => { setShowSlashMenu(!showSlashMenu); setSlashSubmenu(null); }}
