@@ -7254,9 +7254,14 @@ function Overview({ mob, C, setC, auth }) {
   const [reportMode, setReportMode] = useState("detailed");
 
   // PDF Header Customization States
-  const [pdfHeaderTitle, setPdfHeaderTitle] = useState("MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST");
-  const [pdfHeaderSubtitle, setPdfHeaderSubtitle] = useState("");
+  const [pdfHeaderTitle, setPdfHeaderTitle] = useState(() => {
+    return C.pdfHeaderTitle || localStorage.getItem("pdfHeaderTitle") || "MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST";
+  });
+  const [pdfHeaderSubtitle, setPdfHeaderSubtitle] = useState(() => {
+    return C.pdfHeaderSubtitle || localStorage.getItem("pdfHeaderSubtitle") || "";
+  });
   const [showHeaderEditor, setShowHeaderEditor] = useState(false);
+  const [savingHeader, setSavingHeader] = useState(false);
 
   // Pivot Summary Group-By Columns State
   const [pivotGroupByCols, setPivotGroupByCols] = useState(["Vibhag"]);
@@ -7362,6 +7367,21 @@ function Overview({ mob, C, setC, auth }) {
       } catch (e) { console.error(e); }
     }
     alert(`"${formName}" has been saved as your Default Form View!`);
+  };
+
+  const handleSavePdfHeader = async () => {
+    setSavingHeader(true);
+    localStorage.setItem("pdfHeaderTitle", pdfHeaderTitle);
+    localStorage.setItem("pdfHeaderSubtitle", pdfHeaderSubtitle);
+    if (setC) {
+      const newC = { ...C, pdfHeaderTitle, pdfHeaderSubtitle };
+      try {
+        await fbSave(newC, auth?.idToken);
+        setC(newC);
+      } catch (e) { console.error("Save header error:", e); }
+    }
+    setSavingHeader(false);
+    alert("PDF Header custom text saved to database successfully!");
   };
 
   // Active Registrations
@@ -8115,15 +8135,41 @@ function Overview({ mob, C, setC, auth }) {
                     />
                   </div>
                 </div>
-                <div style={{display:"flex",justify:"flex-end",gap:8}}>
+                <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                   <button 
                     onClick={() => {
-                      setPdfHeaderTitle("MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST");
-                      setPdfHeaderSubtitle(`REGISTRATION OVERVIEW REPORT - ${overviewFormFilter.toUpperCase()}`);
+                      const defTitle = "MUMBAI MEGHWAL PANCHAYAT & VIDYA GOHIL CHARITABLE TRUST";
+                      const defSub = `REGISTRATION OVERVIEW REPORT - ${overviewFormFilter.toUpperCase()}`;
+                      setPdfHeaderTitle(defTitle);
+                      setPdfHeaderSubtitle(defSub);
+                      localStorage.setItem("pdfHeaderTitle", defTitle);
+                      localStorage.setItem("pdfHeaderSubtitle", defSub);
                     }}
                     style={{background:"none",border:"none",color:"#64748B",fontSize:".78rem",fontWeight:600,cursor:"pointer",textDecoration:"underline"}}
                   >
                     Reset Default Header
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={handleSavePdfHeader}
+                    disabled={savingHeader}
+                    style={{
+                      background: "linear-gradient(135deg, #2563EB, #1D4ED8)",
+                      color: "white",
+                      border: "none",
+                      padding: "8px 18px",
+                      borderRadius: 8,
+                      fontSize: ".85rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      boxShadow: "0 2px 8px rgba(37,99,235,0.3)"
+                    }}
+                  >
+                    <span>💾</span> {savingHeader ? "Saving..." : "Save Header to Database"}
                   </button>
                 </div>
               </div>
