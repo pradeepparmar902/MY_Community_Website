@@ -20099,7 +20099,9 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       }
     }
 
-    setMessages(prev => [...prev, { id: "m_" + Date.now(), sender: "bot", type: botType, text: botReply, cardData }]);
+    const finalBotReply = (botReply && botReply.trim()) ? botReply : "⚠️ **This Question is not relevant to this community.**\n\nI am specifically designed to help with **Mumbai Meghwal Panchayat & Vidya Gohil Trust** community activities, Education Felicitation 2026 event registrations, and application status tracking.\n\n👉 Type **`/`** to view all available community questions & shortcuts.";
+
+    setMessages(prev => [...prev, { id: "m_" + Date.now(), sender: "bot", type: botType, text: finalBotReply, cardData }]);
     setLoading(false);
   };
 
