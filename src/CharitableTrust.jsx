@@ -20004,6 +20004,9 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
   if (C.chatbotEnabled === false) {
     return null;
   }
+  const w = useW();
+  const isMob = w <= 640;
+
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [userSessionScope, setUserSessionScope] = useState(auth?.idToken ? "all" : "public"); // "all" | "vibhag" | "individual" | "public"
@@ -20621,18 +20624,29 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
     setLoading(false);
   };
 
-  // Position Styling (Supports Free Draggable Movement anywhere on screen & default bottom-right anchor)
-  const positionStyle = (pos.x !== null && pos.y !== null) ? {
+  // Position Styling (Fully Responsive for Mobile Viewports & Draggable on Desktop)
+  const positionStyle = (isMob && isOpen) ? {
+    position: "fixed",
+    left: 8,
+    right: 8,
+    bottom: 8,
+    top: isMinimized ? "auto" : 8,
+    zIndex: 99999,
+    fontFamily: "inherit",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "flex-end"
+  } : (pos.x !== null && pos.y !== null && !isMob) ? {
     position: "fixed",
     left: `${pos.x}px`,
     top: `${pos.y}px`,
-    zIndex: 9999,
+    zIndex: 99999,
     fontFamily: "inherit"
   } : {
     position: "fixed",
-    right: 24,
-    bottom: 24,
-    zIndex: 9999,
+    right: isMob ? 14 : 24,
+    bottom: isMob ? 14 : 24,
+    zIndex: 99999,
     fontFamily: "inherit"
   };
 
@@ -20691,18 +20705,22 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
         </div>
       )}
 
-      {/* Expanded Chat Window (Movable from Header) */}
+      {/* Expanded Chat Window (Fully Mobile Adaptive & Responds to Keyboard) */}
       {isOpen && (
         <div style={{
-          width: "min(410px, calc(100vw - 32px))",
-          height: isMinimized ? "58px" : "min(590px, calc(100vh - 80px))",
+          width: isMob ? "100%" : "min(410px, calc(100vw - 32px))",
+          height: isMinimized 
+            ? "58px" 
+            : (isMob ? "min(92dvh, calc(100vh - 16px))" : "min(590px, calc(100vh - 80px))"),
+          maxHeight: isMob ? "calc(100dvh - 16px)" : "590px",
           background: "white",
           borderRadius: 18,
-          boxShadow: "0 14px 40px rgba(0,0,0,0.22)",
+          boxShadow: "0 14px 40px rgba(0,0,0,0.25)",
           border: "1px solid #CBD5E1",
           display: "flex",
           flexDirection: "column",
-          overflow: "hidden"
+          overflow: "hidden",
+          boxSizing: "border-box"
         }}>
           {/* Header (Drag Handle) */}
           <div 
