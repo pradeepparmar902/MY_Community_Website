@@ -14670,13 +14670,121 @@ function ChatbotAccessManager({ C, setC, auth }) {
 
   return (
     <div style={{animation:"fadeIn .3s ease"}}>
+      {/* Chatbot Global Master Enable / Disable Toggle Banner */}
+      <div style={{
+        background: C.chatbotEnabled !== false ? "linear-gradient(135deg, #F0FDF4, #DCFCE7)" : "linear-gradient(135deg, #FEF2F2, #FEE2E2)",
+        border: `1.5px solid ${C.chatbotEnabled !== false ? "#86EFAC" : "#FCA5A5"}`,
+        borderRadius: 14,
+        padding: "14px 20px",
+        marginBottom: 20,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 14,
+        boxShadow: "0 2px 10px rgba(0,0,0,0.04)"
+      }}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{
+            width: 44,
+            height: 44,
+            borderRadius: "50%",
+            background: C.chatbotEnabled !== false ? "#16A34A" : "#DC2626",
+            color: "white",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "1.4rem",
+            boxShadow: `0 4px 12px ${C.chatbotEnabled !== false ? "rgba(22,163,74,0.3)" : "rgba(220,38,38,0.3)"}`
+          }}>
+            {C.chatbotEnabled !== false ? "🤖" : "🛑"}
+          </div>
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:"1.05rem",fontWeight:800,color: C.chatbotEnabled !== false ? "#14532D" : "#7F1D1D"}}>
+                Chatbot Assistant Status: {C.chatbotEnabled !== false ? "ACTIVE (Visible Online)" : "INACTIVE (Disabled & Hidden)"}
+              </span>
+              <span style={{
+                background: C.chatbotEnabled !== false ? "#22C55E" : "#EF4444",
+                color: "white",
+                fontSize: ".68rem",
+                fontWeight: 800,
+                padding: "2px 8px",
+                borderRadius: 10,
+                textTransform: "uppercase"
+              }}>
+                {C.chatbotEnabled !== false ? "ONLINE" : "OFFLINE"}
+              </span>
+            </div>
+            <p style={{fontSize:".8rem",color: C.chatbotEnabled !== false ? "#166534" : "#991B1B",margin:"2px 0 0 0"}}>
+              {C.chatbotEnabled !== false 
+                ? "The floating Trust Assistant widget is currently visible to all website visitors on public and portal pages."
+                : "The Chatbot widget is completely hidden from public visitors. Toggle ON anytime to reactivate."}
+            </p>
+          </div>
+        </div>
+
+        {/* Master Toggle Switch Button */}
+        <button
+          type="button"
+          onClick={async () => {
+            const nextState = !(C.chatbotEnabled !== false);
+            const newC = { ...C, chatbotEnabled: nextState };
+            if (setC) setC(newC);
+            try {
+              await fbSave(newC, auth?.idToken);
+            } catch(err) {
+              alert("Failed to save status: " + err.message);
+            }
+          }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            background: C.chatbotEnabled !== false ? "#16A34A" : "#475569",
+            color: "white",
+            border: "none",
+            borderRadius: 30,
+            padding: "8px 18px",
+            fontSize: ".88rem",
+            fontWeight: 800,
+            cursor: "pointer",
+            boxShadow: "0 4px 14px rgba(0,0,0,0.15)",
+            transition: "all 0.2s"
+          }}
+          title={C.chatbotEnabled !== false ? "Click to deactivate/hide chatbot from website" : "Click to activate/show chatbot on website"}
+        >
+          <span>{C.chatbotEnabled !== false ? "🟢 Active (Turn OFF)" : "🔴 Inactive (Turn ON)"}</span>
+          <div style={{
+            width: 38,
+            height: 20,
+            background: "rgba(0,0,0,0.25)",
+            borderRadius: 20,
+            position: "relative",
+            display: "flex",
+            alignItems: "center",
+            padding: 2
+          }}>
+            <div style={{
+              width: 16,
+              height: 16,
+              borderRadius: "50%",
+              background: "white",
+              transform: C.chatbotEnabled !== false ? "translateX(18px)" : "translateX(0px)",
+              transition: "transform 0.2s",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.3)"
+            }} />
+          </div>
+        </button>
+      </div>
+
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:16}}>
         <div>
           <h2 className="sh" style={{fontSize:"1.4rem",color:"var(--dt)",marginBottom:4,display:"flex",alignItems:"center",gap:8}}>
-            <span>🤖</span> Chatbot Management Console
+            <span>⚙️</span> Chatbot Configuration & Access Console
           </h2>
           <p style={{fontSize:".85rem",color:"var(--mu)",margin:0}}>
-            Configure <strong>User Access Levels</strong> and dynamic <strong>Slash Commands (Q&A Answers & Hide/Unhide)</strong> in real-time.
+            Configure <strong>Header Branding</strong>, <strong>User Access Scopes</strong> and dynamic <strong>Slash Commands</strong> in real-time.
           </p>
         </div>
 
@@ -19893,6 +20001,9 @@ function VibhagSummaryCard({ summaryData }) {
 
 // ── Community AI & Registration Chatbot Widget ──────────────────────────────────────────
 function CommunityChatbot({ C, auth, onShowLogin }) {
+  if (C.chatbotEnabled === false) {
+    return null;
+  }
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [userSessionScope, setUserSessionScope] = useState(auth?.idToken ? "all" : "public"); // "all" | "vibhag" | "individual" | "public"
