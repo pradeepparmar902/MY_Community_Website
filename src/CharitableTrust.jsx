@@ -20061,9 +20061,35 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
         }
       }
     } else {
-      botReply = isAnyAdmin ? 
-        `🤖 **How can I assist you?**\n\nType **`/`** to browse all question shortcuts, or try:\n• **/all** — Summary data of all entries\n• **/vibhag 15 RAMDEV NAGAR** — Summary for a specific Vibhag\n• **/check** — Check application status\n• **/events** — Event guidelines` :
-        `🤖 **How can I assist you?**\n\nHere are some things you can try:\n• **/check** — Check your registered application status\n• Enter your **Transaction ID (e.g. VG-7, EDU26-2)** to check application status\n• Type **`/`** for question shortcuts.`;
+      const isGreeting = ['hi', 'hello', 'hey', 'namaste', 'kem cho', 'pranam', 'good morning', 'good afternoon', 'good evening'].some(g => qLower === g || qLower.startsWith(g + ' ') || qLower.startsWith(g + '!'));
+
+      if (isGreeting) {
+        botReply = isAnyAdmin ? 
+          `👋 **Namaste! How can I assist you?**\n\nType **`/`** to browse all question shortcuts, or try:\n• **/all** — Summary data of all entries\n• **/vibhag 15 RAMDEV NAGAR** — Summary for a specific Vibhag\n• **/check** — Check application status\n• **/events** — Event guidelines` :
+          `👋 **Namaste! How can I assist you?**\n\nHere are some things you can try:\n• **/check** — Check your registered application status\n• Enter your **Transaction ID (e.g. VG-7, EDU26-2)** to check application status\n• Type **`/`** for all available question shortcuts.`;
+      } else {
+        const communityKeywords = [
+          'mmp', 'vidya', 'gohil', 'trust', 'community', 'panchayat', 'samiti', 'education', 
+          'felicitation', 'award', 'prize', 'scholarship', 'event', 'program', 'function',
+          'venue', 'date', 'time', 'schedule', 'committee', 'member', 'president', 'secretary', 
+          'trustee', 'office', 'vibhag', 'kalwa', 'mahalaxmi', 'walpakhadi', 'lower parel', 
+          'ramdev', 'pratiksha', 'bhayander', 'donation', '80g', 'receipt', 'tax', 'registration', 
+          'form', 'marksheet', 'document', 'upload', 'student', '10th', '12th', 'degree', 
+          'diploma', 'certificate', 'invite', 'volunteer', 'gallery', 'apply', 'pass', 
+          'fail', 'percentage', 'criteria', 'eligibility', 'contact', 'helpline', 'phone', 
+          'email', 'address', 'rules', 'status', 'entry', 'txn', 'transaction', 'chief guest',
+          'guest', 'hall', 'seat', 'timing', 'parent', 'food', 'snack', 'lunch', 'dinner',
+          'dress', 'dress code', 'mumbai', 'pradeep', 'keshav', 'ashwin', 'samiksha', 'dinesh', 'khushi'
+        ];
+
+        const isCommunityRelated = communityKeywords.some(kw => qLower.includes(kw));
+
+        if (isCommunityRelated) {
+          botReply = `ℹ️ **I do not have answer on this, please connect with committee member.**\n\n• 📞 **Trust Helpline**: +91 9820785209 / +91 9967821964\n• 💬 **Committee Details**: Type **`/edu_committee`** or **`/contact`** to view member contact numbers.`;
+        } else {
+          botReply = `⚠️ **This Question is not relevant to this community.**\n\nI am specifically designed to help with **Mumbai Meghwal Panchayat & Vidya Gohil Trust** community activities, Education Felicitation 2026 event registrations, and application status tracking.\n\n👉 Type **`/`** to view all available community questions & shortcuts.`;
+        }
+      }
     }
 
     setMessages(prev => [...prev, { id: "m_" + Date.now(), sender: "bot", type: botType, text: botReply, cardData }]);
