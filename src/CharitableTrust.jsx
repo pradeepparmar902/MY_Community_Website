@@ -20526,6 +20526,49 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
           botReply = `ℹ️ No approved applications recorded yet${userSessionScope === "vibhag" ? ` in ${sessionVibhag}` : ""}.`;
         }
       }
+    } else if (!qLower.startsWith("/") && cleanQuery.length >= 3 && (() => {
+      const cleanQ = qLower.replace(/[^a-zA-Z0-9 ]/g, " ").trim();
+      const qTokens = cleanQ.split(/\s+/).filter(w => w.length >= 2);
+      if (qTokens.length === 0) return false;
+
+      const matchedApplicants = currentRegs.filter(r => {
+        const rawFullName = String(r["Full Name"] || r["Submitted By"] || r["Participant Name"] || r.name || "");
+        const cleanName = rawFullName.replace(/\|/g, " ").replace(/[^a-zA-Z0-9 ]/g, " ").toLowerCase().trim();
+        if (!cleanName) return false;
+
+        if (cleanName.includes(cleanQ)) return true;
+        const nameParts = cleanName.split(/\s+/);
+        return qTokens.every(qw => nameParts.some(nt => nt.startsWith(qw) || nt === qw || (qw.length >= 3 && nt.includes(qw))));
+      });
+
+      return matchedApplicants.length > 0;
+    })()) {
+      const cleanQ = qLower.replace(/[^a-zA-Z0-9 ]/g, " ").trim();
+      const qTokens = cleanQ.split(/\s+/).filter(w => w.length >= 2);
+
+      const matchedApplicants = currentRegs.filter(r => {
+        const rawFullName = String(r["Full Name"] || r["Submitted By"] || r["Participant Name"] || r.name || "");
+        const cleanName = rawFullName.replace(/\|/g, " ").replace(/[^a-zA-Z0-9 ]/g, " ").toLowerCase().trim();
+        if (!cleanName) return false;
+
+        if (cleanName.includes(cleanQ)) return true;
+        const nameParts = cleanName.split(/\s+/);
+        return qTokens.every(qw => nameParts.some(nt => nt.startsWith(qw) || nt === qw || (qw.length >= 3 && nt.includes(qw))));
+      });
+
+      if (matchedApplicants.length === 1) {
+        const r = matchedApplicants[0];
+        const rName = String(r["Full Name"] || r["Submitted By"] || r["Participant Name"] || r.name || "Applicant").replace(/\|/g, " ").trim();
+        const matchedId = r["Transaction ID"] || r.transactionId || r.id;
+
+        botType = "app_card";
+        botReply = `✅ **Registration Record Found for "${rName}" (${matchedId})**: `;
+        cardData = { app: r };
+      } else {
+        botType = "apps_list";
+        botReply = `🔍 **Found ${matchedApplicants.length} applicants matching "${query.trim()}"**:\n\n👇 Review the matching applicant records below:`;
+        cardData = { apps: matchedApplicants };
+      }
     } else if (qLower.includes("vibhag") || qLower.includes("summary") || qLower.includes("count") || qLower.includes("total") || qLower.includes("report") || qLower.includes("kalwa") || qLower.includes("mahalaxmi") || qLower.includes("pakhadi") || qLower.includes("parel") || qLower.includes("ramdev") || qLower.includes("pratiksha") || qLower === "/all") {
       if (!isAnyAdmin) {
         botReply = `🔒 **Access Restricted**\n\nRegistration summaries, Vibhag counts, and committee metrics are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock your assigned access level.\n\n🔍 Regular applicants can check their individual status by typing their **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.`;
