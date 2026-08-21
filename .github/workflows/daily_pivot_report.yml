@@ -27,8 +27,8 @@ jobs:
 
       - name: Run Daily Pivot Report Generator
         env:
-          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY || 'AIzaSyD8S_dRHVNlmUnRV-AfOXocqR0EoPUh8k4' }}
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID || 'vdiyagohilcharitable' }}
+          FIREBASE_API_KEY: "AIzaSyAGw3g8VS23FfLiOrXdk1QafdxMIlIC9VE"
+          FIREBASE_PROJECT_ID: "mmp-cwc-new"
           FIREBASE_AUTH_EMAIL: ${{ secrets.FIREBASE_AUTH_EMAIL_MMP_CWC_COM || secrets.FIREBASE_AUTH_EMAIL }}
           FIREBASE_AUTH_PASSWORD: ${{ secrets.FIREBASE_AUTH_PASSWORD_MMP_CWC_COM || secrets.FIREBASE_AUTH_PASSWORD }}
           SMTP_USER: ${{ secrets.SMTP_USER || 'pradeepparmar902@gmail.com' }}
