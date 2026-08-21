@@ -19838,11 +19838,18 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
     let botType = "text";
     let cardData = null;
 
+    const qWords = qLower.split(/\s+/);
     const matchedKb = kbList.find(kb => {
-      if (kb.enabled === false) return false;
-      const cLower = kb.cmd.toLowerCase();
-      const tLower = kb.title.toLowerCase();
-      return qLower === cLower || qLower === cLower.replace("/", "") || qLower === tLower || (qLower.length > 3 && (qLower.includes(cLower.replace("/", "")) || tLower.includes(qLower)));
+      if (kb.enabled === false || !kb.answer || !kb.answer.trim()) return false;
+      const cClean = (kb.cmd || "").toLowerCase().replace(/^\//, "").trim();
+      const tClean = (kb.title || "").toLowerCase().trim();
+      const rawCmd = (kb.cmd || "").toLowerCase().trim();
+
+      if (qLower === rawCmd || qLower === cClean || qLower === tClean) return true;
+      if (cClean.length >= 3 && qWords.includes(cClean)) return true;
+      if (tClean.length >= 5 && qLower.includes(tClean)) return true;
+
+      return false;
     });
 
     const txnFound = currentRegs.filter(r => {
