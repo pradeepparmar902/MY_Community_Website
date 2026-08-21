@@ -19350,6 +19350,12 @@ function CommunityChatbot({ C, auth }) {
   const [slashSubmenu, setSlashSubmenu] = useState(null); // null | "vibhags"
   const chatBottomRef = useRef(null);
 
+  // Draggable Floating Position State
+  const [pos, setPos] = useState({ x: null, y: null });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const didDragRef = useRef(false);
+
   const VIBHAG_OPTIONS = [
     "10 MAHALAXMI",
     "15 RAMDEV NAGAR",
@@ -19362,6 +19368,68 @@ function CommunityChatbot({ C, auth }) {
 
   const isAnyAdmin = userSessionScope === "all" || userSessionScope === "vibhag";
 
+  // Drag listeners
+  const startDrag = (e) => {
+    if (e.target.closest("button") || e.target.closest("input") || e.target.closest("a") || e.target.closest("textarea")) {
+      return;
+    }
+    setIsDragging(true);
+    didDragRef.current = false;
+
+    const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0].clientY);
+
+    const widget = document.getElementById("draggable-chatbot-widget");
+    if (widget && clientX !== undefined && clientY !== undefined) {
+      const rect = widget.getBoundingClientRect();
+      dragOffsetRef.current = {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+      };
+    }
+  };
+
+  useEffect(() => {
+    const handleMove = (e) => {
+      if (!isDragging) return;
+      didDragRef.current = true;
+
+      const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0].clientX);
+      const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0].clientY);
+
+      if (clientX === undefined || clientY === undefined) return;
+
+      let nextX = clientX - dragOffsetRef.current.x;
+      let nextY = clientY - dragOffsetRef.current.y;
+
+      const maxX = window.innerWidth - (isOpen ? 380 : 180);
+      const maxY = window.innerHeight - (isOpen ? (isMinimized ? 60 : 500) : 50);
+
+      nextX = Math.max(10, Math.min(nextX, Math.max(10, maxX)));
+      nextY = Math.max(10, Math.min(nextY, Math.max(10, maxY)));
+
+      setPos({ x: nextX, y: nextY });
+    };
+
+    const handleEnd = () => {
+      if (isDragging) setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener("mousemove", handleMove);
+      window.addEventListener("mouseup", handleEnd);
+      window.addEventListener("touchmove", handleMove, { passive: false });
+      window.addEventListener("touchend", handleEnd);
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleEnd);
+      window.removeEventListener("touchmove", handleMove);
+      window.removeEventListener("touchend", handleEnd);
+    };
+  }, [isDragging, isOpen, isMinimized]);
+
   // Dynamic Knowledge Base from C.chatbotKnowledgeBase or Defaults
   const DEFAULT_KB = [
     {
@@ -19369,7 +19437,7 @@ function CommunityChatbot({ C, auth }) {
       cmd: "/events",
       icon: "🎓",
       title: "Upcoming Education Felicitation 2026 events",
-      answer: "🎓 **Education Felicitation 2026 - Mumbai Meghwal Panchayat & Vidya Gohil Trust**\n\n• **Event**: Annual Student Education Felicitation 2026\n• **Eligibility**: Students scoring 50%+ in 10th, 12th, Degree, Diploma & Post-Graduation\n• **Registration Portal**: Online via website Events section\n• **Venue & Date**: Mumbai (To be officially announced soon)\n• **Required Documents**: Marksheet & Passport Photo\n\nFor assistance with registration, contact your Vibhag Head.",
+      answer: "🎓 **Education Felicitation 2026 - Mumbai Meghwal Panchayat & Vidya Gohil Trust**\n\n• **Event**: Annual Student Education Felicitation 2026\n• **Eligibility**: Students scoring 50%+ in 10th, 12th, Degree, Diploma & Post-Graduation\n• **Registration Portal**: Online via website Events section\n• **Date**: 02-10-2026\n• **Venue**: Mumbai (To be officially announced soon)\n• **Required Documents**: Marksheet & Passport Photo\n\n• [Watch Registration Video](https://youtu.be/hg2dxZjDLfo)\n• [Visit Website Portal](https://www.mmp-cwc.com)",
       enabled: true,
       adminOnly: false
     },
@@ -19457,7 +19525,6 @@ function CommunityChatbot({ C, auth }) {
     }
   ];
 
-  // Dynamic items filtered by enabled status
   const DYNAMIC_KB_COMMANDS = kbList.filter(item => item.enabled !== false).map(item => ({
     cmd: item.cmd,
     icon: item.icon || "❓",
@@ -19502,7 +19569,6 @@ function CommunityChatbot({ C, auth }) {
     }
   }, [messages, isOpen]);
 
-  // Load registrations when chatbot is opened or queried
   const ensureRegistrations = async () => {
     if (regsLoaded && regs.length > 0) return regs;
     try {
@@ -19537,10 +19603,8 @@ function CommunityChatbot({ C, auth }) {
     const cleanQuery = query.trim().toUpperCase().replace(/\s+/g, "");
     const cleanHyphen = cleanQuery.replace(/[^A-Z0-9]/g, "");
 
-    // 1. Check for Mobile Number (10 digits)
     const phoneMatch = query.match(/(?:\+91[- ]?)?([6-9]\d{9})/);
 
-    // List of Authorized Committee Mobiles from C.committeeMobiles
     const committeeMobilesList = Array.isArray(C.committeeMobiles) && C.committeeMobiles.length > 0 ? C.committeeMobiles : [
       { name: "Pradeep Parmar (Super Admin)", mobile: "9820785209", scope: "all", vibhag: "All Vibhags", role: "Trustee / Super Admin" },
       { name: "Keshav Wagh", mobile: "9967821964", scope: "individual", vibhag: "Individual Only", role: "Committee Member" },
@@ -19561,7 +19625,6 @@ function CommunityChatbot({ C, auth }) {
     let botType = "text";
     let cardData = null;
 
-    // Check Dynamic Knowledge Base Match
     const matchedKb = kbList.find(kb => {
       if (kb.enabled === false) return false;
       const cLower = kb.cmd.toLowerCase();
@@ -19569,7 +19632,6 @@ function CommunityChatbot({ C, auth }) {
       return qLower === cLower || qLower === cLower.replace("/", "") || qLower === tLower || (qLower.length > 5 && (qLower.includes(cLower.replace("/", "")) || tLower.includes(qLower)));
     });
 
-    // Check if query matches ANY Transaction ID (e.g. VG-7, EDU26-2, EDU26-1, VG-9, etc.)
     const txnFound = currentRegs.filter(r => {
       const tId = String(r["Transaction ID"] || r.transactionId || r.txnId || r.id || "").trim().toUpperCase();
       const cleanTId = tId.replace(/[^A-Z0-9]/g, "");
@@ -19585,7 +19647,6 @@ function CommunityChatbot({ C, auth }) {
     });
 
     if (matchedKb) {
-      // Dynamic Knowledge Base Q&A Response
       if (matchedKb.adminOnly && !isAnyAdmin) {
         botReply = `🔒 **Access Restricted**\n\nThis question/data is restricted to authorized Committee Admins.\n\n👉 Please type your 10-digit Authorized Mobile Number to unlock.`;
       } else {
@@ -19597,7 +19658,6 @@ function CommunityChatbot({ C, auth }) {
         activeCommands.map(c => `• ${c.icon} **${c.cmd}** — ${c.label}`).join("\n") + 
         `\n\n*(You can configure or add new custom shortcuts anytime in the Admin Panel under Chatbot Admins > Slash Commands)*`;
     } else if (txnFound.length > 0) {
-      // Transaction ID Record Found (Supports VG-X, EDU26-X, etc.)
       const r = txnFound[0];
       const rVibhag = String(r["Vibhag"] || "Unspecified");
       const matchedId = r["Transaction ID"] || r.transactionId || r.id;
@@ -19769,30 +19829,59 @@ function CommunityChatbot({ C, auth }) {
     setLoading(false);
   };
 
+  // Position Styling (Supports Free Draggable Movement anywhere on screen)
+  const positionStyle = (pos.x !== null && pos.y !== null) ? {
+    position: "fixed",
+    left: `${pos.x}px`,
+    top: `${pos.y}px`,
+    zIndex: 9999,
+    fontFamily: "inherit"
+  } : {
+    position: "fixed",
+    right: 24,
+    bottom: 24,
+    zIndex: 9999,
+    fontFamily: "inherit"
+  };
+
   return (
-    <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,fontFamily:"inherit"}}>
-      {/* Floating Trigger Pill */}
+    <div 
+      id="draggable-chatbot-widget"
+      style={positionStyle}
+    >
+      {/* Floating Trigger Pill (Movable) */}
       {!isOpen && (
-        <button
-          onClick={() => { setIsOpen(true); setIsMinimized(false); ensureRegistrations(); }}
+        <div
+          onMouseDown={startDrag}
+          onTouchStart={startDrag}
+          onClick={() => {
+            if (!didDragRef.current) {
+              setIsOpen(true);
+              setIsMinimized(false);
+              ensureRegistrations();
+            }
+          }}
           style={{
             background: "linear-gradient(135deg, #1E293B, #0F172A)",
             color: "white",
             border: "2px solid #E2E8F0",
-            padding: "12px 20px",
+            padding: "10px 18px",
             borderRadius: 30,
-            fontSize: ".9rem",
+            fontSize: ".88rem",
             fontWeight: 700,
-            cursor: "pointer",
+            cursor: isDragging ? "grabbing" : "grab",
             boxShadow: "0 8px 24px rgba(15,23,42,0.35)",
             display: "flex",
             alignItems: "center",
-            gap: 10,
-            transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)"
+            gap: 8,
+            userSelect: "none",
+            transition: isDragging ? "none" : "box-shadow 0.2s"
           }}
           className="ch"
+          title="Drag to reposition anywhere on the screen"
         >
-          <span style={{fontSize:"1.3rem"}}>💬</span>
+          <span style={{opacity:0.5,fontSize:"1rem",letterSpacing:-1}}>⠿</span>
+          <span style={{fontSize:"1.2rem"}}>💬</span>
           <span>Trust Assistant</span>
           {isAnyAdmin ? (
             <span style={{background:"#10B981",color:"white",fontSize:".65rem",padding:"2px 7px",borderRadius:10,fontWeight:800}}>
@@ -19801,10 +19890,10 @@ function CommunityChatbot({ C, auth }) {
           ) : (
             <span style={{width:8,height:8,borderRadius:"50%",background:"#10B981",display:"inline-block",boxShadow:"0 0 0 2px rgba(16,185,129,0.3)"}}></span>
           )}
-        </button>
+        </div>
       )}
 
-      {/* Expanded Chat Window */}
+      {/* Expanded Chat Window (Movable from Header) */}
       {isOpen && (
         <div style={{
           width: "min(410px, calc(100vw - 32px))",
@@ -19815,52 +19904,59 @@ function CommunityChatbot({ C, auth }) {
           border: "1px solid #CBD5E1",
           display: "flex",
           flexDirection: "column",
-          overflow: "hidden",
-          transition: "all 0.3s ease"
+          overflow: "hidden"
         }}>
-          {/* Header */}
-          <div style={{
-            background: "linear-gradient(135deg, #0F172A, #1E293B)",
-            color: "white",
-            padding: "13px 16px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)"
-          }}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
+          {/* Header (Drag Handle) */}
+          <div 
+            onMouseDown={startDrag}
+            onTouchStart={startDrag}
+            style={{
+              background: "linear-gradient(135deg, #0F172A, #1E293B)",
+              color: "white",
+              padding: "12px 14px",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              cursor: isDragging ? "grabbing" : "grab",
+              userSelect: "none"
+            }}
+            title="Drag header to move chatbot window"
+          >
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{opacity:0.5,fontSize:"1.1rem",cursor:isDragging?"grabbing":"grab"}}>⠿</span>
               <div style={{
-                width: 34,
-                height: 34,
-                borderRadius: 10,
+                width: 32,
+                height: 32,
+                borderRadius: 9,
                 background: "linear-gradient(135deg, #2563EB, #1D4ED8)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: "1.2rem",
+                fontSize: "1.1rem",
                 boxShadow: "0 2px 6px rgba(37,99,235,0.4)"
               }}>
                 🤖
               </div>
               <div>
-                <div style={{fontSize:".88rem",fontWeight:800,lineHeight:1.2}}>MMP & Vidya Gohil Assistant</div>
-                <div style={{fontSize:".68rem",color:isAnyAdmin?"#86EFAC":"#94A3B8",display:"flex",alignItems:"center",gap:4,marginTop:2}}>
+                <div style={{fontSize:".86rem",fontWeight:800,lineHeight:1.2}}>MMP & Vidya Gohil Assistant</div>
+                <div style={{fontSize:".67rem",color:isAnyAdmin?"#86EFAC":"#94A3B8",display:"flex",alignItems:"center",gap:4,marginTop:2}}>
                   <span style={{width:6,height:6,borderRadius:"50%",background:isAnyAdmin?"#22C55E":"#10B981",display:"inline-block"}}></span>
-                  {userSessionScope === "all" ? "🌐 All Level Admin Mode" : userSessionScope === "vibhag" ? `📍 Vibhag Admin: ${sessionVibhag}` : "🟢 Online | Public Mode"}
+                  {userSessionScope === "all" ? "🌐 All Level Admin" : userSessionScope === "vibhag" ? `📍 ${sessionVibhag}` : "🟢 Online | Public"}
                 </div>
               </div>
             </div>
 
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <div style={{display:"flex",alignItems:"center",gap:4}}>
               <button
-                onClick={() => setIsMinimized(!isMinimized)}
+                onClick={(e) => { e.stopPropagation(); setIsMinimized(!isMinimized); }}
                 style={{background:"none",border:"none",color:"#94A3B8",fontSize:"1rem",cursor:"pointer",padding:4}}
                 title={isMinimized ? "Maximize" : "Minimize"}
               >
                 {isMinimized ? "▲" : "▼"}
               </button>
               <button
-                onClick={() => setIsOpen(false)}
+                onClick={(e) => { e.stopPropagation(); setIsOpen(false); }}
                 style={{background:"none",border:"none",color:"#94A3B8",fontSize:"1.1rem",cursor:"pointer",padding:4}}
                 title="Close"
               >
@@ -19871,7 +19967,7 @@ function CommunityChatbot({ C, auth }) {
 
           {!isMinimized && (
             <>
-              {/* Quick Actions Bar (Role-Aware) */}
+              {/* Quick Actions Bar */}
               <div style={{padding:"8px 12px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",gap:6,overflowX:"auto",whiteSpace:"nowrap"}}>
                 <button
                   onClick={() => { setShowSlashMenu(!showSlashMenu); setSlashSubmenu(null); }}
