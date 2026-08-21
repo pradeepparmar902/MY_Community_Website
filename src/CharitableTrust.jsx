@@ -11047,6 +11047,63 @@ function AdminTeam({ mob, C, setC, auth }) {
   };
 
   // Hierarchy actions
+  const addPlain = () => {
+    const plainList = items.filter(i => i.parentId === "plain" || typeof i.parentId === "undefined");
+    const newOrder = plainList.length > 0 ? Math.max(...plainList.map(i => i.order || 0)) + 1 : 0;
+    const newItem = {
+      id: getNewId(),
+      parentId: "plain",
+      name: "New Member",
+      position: "Role",
+      desc: "",
+      image: "",
+      order: newOrder,
+      committee: targetCommittee
+    };
+    updItems([...items, newItem]);
+  };
+
+  const addSeparator = () => {
+    const plainList = items.filter(i => i.parentId === "plain" || typeof i.parentId === "undefined");
+    const newOrder = plainList.length > 0 ? Math.max(...plainList.map(i => i.order || 0)) + 1 : 0;
+    const newSep = {
+      id: getNewId(),
+      parentId: "plain",
+      isSeparator: true,
+      title: "--- Section Separator ---",
+      desc: "",
+      order: newOrder,
+      committee: targetCommittee
+    };
+    updItems([...items, newSep]);
+  };
+
+  const movePlain = (idx, dir) => {
+    const plainItems = [...filteredAdminItems.filter(i => i.parentId === "plain" || typeof i.parentId === "undefined").sort((a,b)=>(a.order||0)-(b.order||0))];
+    const targetIdx = idx + dir;
+    if (targetIdx < 0 || targetIdx >= plainItems.length) return;
+    const itemA = plainItems[idx];
+    const itemB = plainItems[targetIdx];
+    const orderA = itemA.order !== undefined ? itemA.order : idx;
+    const orderB = itemB.order !== undefined ? itemB.order : targetIdx;
+    
+    const updatedItems = items.map(it => {
+      if (it.id === itemA.id) return { ...it, order: orderB };
+      if (it.id === itemB.id) return { ...it, order: orderA };
+      return it;
+    });
+    updItems(updatedItems);
+  };
+
+  const removePlain = (idx) => {
+    const plainItems = filteredAdminItems.filter(i => i.parentId === "plain" || typeof i.parentId === "undefined").sort((a,b)=>(a.order||0)-(b.order||0));
+    const target = plainItems[idx];
+    if (!target) return;
+    if (window.confirm(`Are you sure you want to delete "${target.name || target.title || 'this item'}"?`)) {
+      updItems(items.filter(i => i.id !== target.id));
+    }
+  };
+
   const addRoot = () => {
     const root = { id: getNewId(), parentId: null, name: "New Member", position: "Role", desc: "", image: "", order: 0, committee: targetCommittee };
     updItems([...items, root]);
