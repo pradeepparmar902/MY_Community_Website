@@ -20152,10 +20152,32 @@ function CommunityChatbot({ C, auth }) {
                     </div>
                   ) : (
                     <div>
-                      <div style={{fontSize:".7rem",fontWeight:800,color:"#64748B",padding:"4px 8px",textTransform:"uppercase",letterSpacing:0.5}}>
-                        Question Shortcuts & Commands:
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 8px",borderBottom:"1px solid #F1F5F9",marginBottom:4}}>
+                        <span style={{fontSize:".7rem",fontWeight:800,color:"#64748B",textTransform:"uppercase",letterSpacing:0.5}}>
+                          {input.trim().startsWith("/") && input.trim().length > 1 ? `Matching Commands for "${input}":` : "Question Shortcuts & Commands:"}
+                        </span>
+                        <span style={{fontSize:".68rem",color:"#94A3B8"}}>Click to select</span>
                       </div>
-                      {ALL_SLASH_COMMANDS.map(sc => {
+                      {(() => {
+                        const filterKeyword = input.trim().startsWith("/") ? input.trim().slice(1).toLowerCase() : "";
+                        const displayedCommands = ALL_SLASH_COMMANDS.filter(sc => {
+                          if (!filterKeyword) return true;
+                          const cmd = sc.cmd.toLowerCase().replace(/^\//, "");
+                          const label = (sc.label || "").toLowerCase();
+                          const desc = (sc.desc || "").toLowerCase();
+                          return cmd.includes(filterKeyword) || label.includes(filterKeyword) || desc.includes(filterKeyword);
+                        });
+
+                        if (displayedCommands.length === 0) {
+                          return (
+                            <div style={{padding:"14px 10px",fontSize:".8rem",color:"#64748B",textAlign:"center"}}>
+                              🔍 No command matching <strong>"{input}"</strong>.<br />
+                              <span style={{fontSize:".72rem",color:"#94A3B8"}}>Press Send to ask directly or type "/" to view all commands.</span>
+                            </div>
+                          );
+                        }
+
+                        return displayedCommands.map(sc => {
                         const isLockedForUser = sc.adminOnly && !isAnyAdmin;
 
                         return (
@@ -20198,7 +20220,8 @@ function CommunityChatbot({ C, auth }) {
                             <span style={{fontSize:".75rem",color:"#94A3B8"}}>↵</span>
                           </div>
                         );
-                      })}
+                        });
+                      })()}
                     </div>
                   )}
                 </div>
