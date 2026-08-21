@@ -19450,55 +19450,84 @@ function FormattedChatText({ text, onQuickClick }) {
 const generateVibhagSummaryWhatsAppText = (summaryData) => {
   if (!summaryData) return "";
   const { total, approved, pending, rejected, vibhagList, scopeTitle } = summaryData;
-  const todayStr = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 
-  let text = `📊 *${scopeTitle || "Education Felicitation 2026 - Registration Summary"}*\n`;
-  text += `📅 *Date:* ${todayStr}\n\n`;
-  text += `📈 *Overall Summary:*\n`;
-  text += `• 📋 *Total Registrations:* ${total}\n`;
-  text += `• 🟢 *Approved:* ${approved}\n`;
-  text += `• ⏳ *Pending:* ${pending}\n`;
-  text += `• ❌ *Rejected:* ${rejected}\n\n`;
+  let text = "═══════════════════════\n";
+  text += "🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n";
+  text += "🏆 *Education Felicitation 2026*\n";
+  text += "═══════════════════════\n\n";
+  text += `📊 *${(scopeTitle || "REGISTRATION SUMMARY REPORT").toUpperCase()}*\n`;
+  text += `📅 *Date:* ${dateStr}  ⏰ *Time:* ${timeStr}\n\n`;
+
+  text += "📈 *OVERALL METRICS*\n";
+  text += "━━━━━━━━━━━━━━━━━━━━━━━\n";
+  text += `▪️ Total Applications  : *${total}*\n`;
+  text += `▪️ Approved Entries    : *${approved}*  🟢\n`;
+  text += `▪️ Pending Verification: *${pending}*  ⏳\n`;
+  text += `▪️ Rejected / Cancelled: *${rejected}*  🔴\n`;
+  text += "━━━━━━━━━━━━━━━━━━━━━━━\n\n";
 
   if (vibhagList && vibhagList.length > 0) {
-    text += `📍 *Vibhag Breakdown:*\n`;
+    text += "📍 *VIBHAG-WISE BREAKDOWN*\n";
+    text += "───────────────────────\n";
     vibhagList.forEach(([vName, vStat], idx) => {
-      text += `${idx + 1}️⃣ *${vName}* ➜ Total: *${vStat.total}*  (⏳ Pending: *${vStat.pending}* | 🟢 Approved: *${vStat.approved}*)\n`;
+      text += `${idx + 1}. *${vName}*\n`;
+      text += `   Total: *${vStat.total}* │ ⏳ Pending: *${vStat.pending}* │ 🟢 Approved: *${vStat.approved}*\n\n`;
     });
-    text += `\n`;
+    text += "───────────────────────\n\n";
   }
 
-  text += `🌐 *Mumbai Meghwal Panchayat Portal*\n`;
-  text += `👉 https://pradeepparmar902.github.io/MY_Community_Website/`;
+  text += "🌐 *Live Community Analytics Portal:*\n";
+  text += "👉 https://pradeepparmar902.github.io/MY_Community_Website/\n";
+  text += "═══════════════════════";
   return text;
 };
 
 const generateApplicationWhatsAppText = (app) => {
   if (!app) return "";
   const rawName = String(app["Full Name"] || app["Submitted By"] || app.name || "Applicant");
-  const displayName = rawName.replace(/\|/g, " ").replace(/\s+/g, " ").trim();
-  const txnId = app["Transaction ID"] || app.transactionId || app.txnId || app.id || "VG-ID";
-  const status = app.Status || app.status || "Pending";
-  const vibhag = app["Vibhag"] || "Unspecified";
-  const stream = app["Stream"] || "General";
-  const marks = (app["% Obtained"] || app["%"]) ? `${app["% Obtained"] || app["%"]}%` : "-";
+  const displayName = rawName.replace(/\|/g, " ").replace(/\s+/g, " ").trim().toUpperCase();
+  const txnId = String(app["Transaction ID"] || app.transactionId || app.txnId || app.id || "VG-ID").trim().toUpperCase();
+  const status = String(app.Status || app.status || "Pending").trim();
+  const vibhag = String(app["Vibhag"] || "Unspecified").trim().toUpperCase();
+  const stream = String(app["Stream"] || "General").trim();
+  const marksVal = app["% Obtained"] || app["%"];
+  const marks = marksVal ? `${marksVal}%` : "-";
   const marksDetail = app["Obtained Marks"] ? ` (${app["Obtained Marks"]}/${app["Out Of Marks"]})` : "";
   const mobile = app["Mobile Number"] || app.submitterMob || app.mobile || "";
 
-  let text = `🎓 *Education Felicitation 2026 - Application Status*\n\n`;
-  text += `• 🆔 *Transaction ID:* ${txnId}\n`;
-  text += `• 👤 *Student Name:* ${displayName}\n`;
-  text += `• 📍 *Vibhag:* ${vibhag}\n`;
-  text += `• 📚 *Class / Stream:* ${stream}\n`;
-  text += `• 📊 *Percentage:* ${marks}${marksDetail}\n`;
-  if (mobile) text += `• 📱 *Mobile:* +91 ${String(mobile).replace(/\D/g, '').slice(-10)}\n`;
-  text += `• 📌 *Current Status:* ${status === "Approved" ? "🟢 Approved" : status === "Needs Info" ? "⚠️ Needs Info / Action Required" : status === "Disapproved" || status === "Rejected" ? "🔴 Rejected" : "⏳ Pending Review"}\n`;
-  
-  if (app.Remarks) {
-    text += `• 💬 *Remarks:* ${app.Remarks}\n`;
+  const statusBadge = status === "Approved" 
+    ? "🟢 APPROVED" 
+    : status === "Needs Info" 
+    ? "⚠️ ACTION REQUIRED (NEEDS INFO)" 
+    : (status === "Disapproved" || status === "Rejected") 
+    ? "🔴 REJECTED" 
+    : "⏳ PENDING REVIEW";
+
+  const remarks = app.Remarks || (status === "Approved" ? "Application verified & approved by Education Committee." : status === "Needs Info" ? "Additional marksheets or information corrections needed." : "Application is under committee review.");
+
+  let text = "═══════════════════════\n";
+  text += "🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n";
+  text += "🏆 *Education Felicitation 2026*\n";
+  text += "═══════════════════════\n\n";
+  text += "📋 *APPLICATION STATUS REPORT*\n\n";
+  text += `🆔 *Txn ID :* ${txnId}\n`;
+  text += `👤 *Student :* ${displayName}\n`;
+  text += `📍 *Vibhag :* ${vibhag}\n`;
+  text += `📚 *Stream :* ${stream}\n`;
+  text += `📊 *Score :* ${marks}${marksDetail}\n`;
+  if (mobile) {
+    text += `📱 *Mobile :* +91 ${String(mobile).replace(/\D/g, "").slice(-10)}\n`;
   }
-  text += `\n🌐 *Mumbai Meghwal Panchayat Portal*\n`;
-  text += `👉 https://pradeepparmar902.github.io/MY_Community_Website/`;
+  text += "\n───────────────────────\n";
+  text += `📌 *STATUS :* ${statusBadge}\n`;
+  text += `💬 *Remarks :* ${remarks}\n`;
+  text += "───────────────────────\n\n";
+  text += "🌐 *Official Community Portal:*\n";
+  text += "👉 https://pradeepparmar902.github.io/MY_Community_Website/\n";
+  text += "═══════════════════════";
   return text;
 };
 
