@@ -18688,6 +18688,7 @@ function FormattedChatText({ text, onQuickClick }) {
 // ── Application Record Card ─────────────────────────────────────────────────────────────
 function ApplicationRecordCard({ app, onAction }) {
   const status = app.Status || app.status || "Pending";
+  const displayName = String(app["Full Name"] || app.name || "Applicant").replace(/\|/g, " ").replace(/\s+/g, " ").trim();
   const isApproved = status === "Approved";
   const isNeedsInfo = status === "Needs Info";
   const isDisapproved = status === "Disapproved" || status === "Rejected";
@@ -18719,7 +18720,7 @@ function ApplicationRecordCard({ app, onAction }) {
           <span style={{background:"#1E293B",color:"white",fontSize:".7rem",padding:"3px 7px",borderRadius:6,fontWeight:800,fontFamily:"monospace"}}>
             {app["Transaction ID"] || app.transactionId || "VG-ID"}
           </span>
-          <span style={{fontSize:".85rem",fontWeight:700,color:"#0F172A"}}>{app["Full Name"] || app.name || "Applicant"}</span>
+          <span style={{fontSize:".85rem",fontWeight:700,color:"#0F172A"}}>{displayName}</span>
         </div>
         <span style={{
           background: badgeBg,
@@ -18900,8 +18901,8 @@ function CommunityChatbot({ C, auth }) {
       cmd: "/check",
       icon: "🔍",
       label: "Check My Application Status",
-      desc: "Look up your application by Transaction ID (e.g. VG-9) or Mobile Number",
-      action: "Check VG-9",
+      desc: "Look up your application by Transaction ID (e.g. VG-7, EDU26-2) or Mobile",
+      action: "Check VG-7",
       adminOnly: false
     },
     {
@@ -18975,7 +18976,7 @@ function CommunityChatbot({ C, auth }) {
       id: "m_welcome",
       sender: "bot",
       type: "welcome",
-      text: "👋 **Namaste & Welcome!**\n\nI am your **MMP & Vidya Gohil Trust Assistant**.\n\n• 🔍 **Check Application Status**: Type your **Transaction ID (e.g. VG-9)** or registered **Mobile Number**.\n• 🛡️ **Committee Admin**: Enter your authorized mobile to unlock live counts & area summaries.\n• 🎓 **FAQs**: Ask about Education Felicitation 2026, events, eligibility, or donations."
+      text: "👋 **Namaste & Welcome!**\n\nI am your **MMP & Vidya Gohil Trust Assistant**.\n\n• 🔍 **Check Application Status**: Type your **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.\n• 🛡️ **Committee Admin**: Enter your authorized mobile to unlock live counts & area summaries.\n• 🎓 **FAQs**: Ask about Education Felicitation 2026, events, eligibility, or donations."
     }
   ]);
 
@@ -19024,10 +19025,11 @@ function CommunityChatbot({ C, auth }) {
 
     const currentRegs = await ensureRegistrations();
     const qLower = query.toLowerCase();
+    const cleanQuery = query.trim().toUpperCase().replace(/\s+/g, "");
+    const cleanHyphen = cleanQuery.replace(/[^A-Z0-9]/g, "");
 
-    // 1. Check for Mobile Number or Txn ID
+    // 1. Check for Mobile Number (10 digits)
     const phoneMatch = query.match(/(?:\+91[- ]?)?([6-9]\d{9})/);
-    const txnMatch = query.match(/(?:VG|vg|txn|TXN)?[-_ #]?(\d{1,4})/i);
 
     // List of Authorized Committee Mobiles from C.committeeMobiles
     const committeeMobilesList = Array.isArray(C.committeeMobiles) && C.committeeMobiles.length > 0 ? C.committeeMobiles : [
@@ -19050,6 +19052,21 @@ function CommunityChatbot({ C, auth }) {
     let botType = "text";
     let cardData = null;
 
+    // Check if query matches ANY Transaction ID (e.g. VG-7, EDU26-2, EDU26-1, VG-9, etc.)
+    const txnFound = currentRegs.filter(r => {
+      const tId = String(r["Transaction ID"] || r.transactionId || r.txnId || r.id || "").trim().toUpperCase();
+      const cleanTId = tId.replace(/[^A-Z0-9]/g, "");
+
+      if (tId === cleanQuery || cleanTId === cleanHyphen) return true;
+      if (cleanQuery.length > 2 && (cleanTId.endsWith(cleanHyphen) || cleanTId === cleanHyphen)) return true;
+
+      const numOnly = query.replace(/\D/g, "");
+      if (numOnly && (tId === "VG-" + numOnly || tId === "EDU26-" + numOnly || cleanTId === "VG" + numOnly || cleanTId === "EDU26" + numOnly)) {
+        return true;
+      }
+      return false;
+    });
+
     if (qLower === "/help" || qLower === "help" || qLower === "/commands" || qLower.includes("what can you do") || qLower.includes("capabilities")) {
       if (isAnyAdmin) {
         botReply = `🤖 **Chatbot Capabilities & Question Guide (Admin Mode)**:
@@ -19060,7 +19077,7 @@ Here are all the questions and slash commands available for Committee Admins:
 • 📍 **/vibhag [name]** — Summary data of a specific Vibhag (e.g. *15 RAMDEV NAGAR*, *10 MAHALAXMI*, *65 KALWA*)
 • ⏳ **/pending** — List registrations currently pending review
 • 🟢 **/approved** — List verified & approved registrations
-• 🔍 **/check [VG-ID / Mobile]** — Search any applicant by ID or Mobile
+• 🔍 **/check [VG-ID / Mobile]** — Search any applicant by ID (e.g. *VG-7*, *EDU26-2*) or Mobile
 • 🎓 **/events** — Education Felicitation 2026 event details
 • 💰 **/donate** — 80G tax benefit details & donation links
 • 📞 **/contact** — Trust office, helpline & committee contacts`;
@@ -19069,11 +19086,24 @@ Here are all the questions and slash commands available for Committee Admins:
 
 Here are the questions you can ask:
 
-• 🔍 **Check Application Status**: Enter your **Transaction ID (e.g. VG-9)** or registered **10-Digit Mobile Number**
+• 🔍 **Check Application Status**: Enter your **Transaction ID (e.g. VG-7, EDU26-2)** or registered **10-Digit Mobile Number**
 • 🎓 **/events** — Education Felicitation 2026 event schedule & venue
 • 💰 **/donate** — 80G tax benefit donation guide & receipts
 • 📞 **/contact** — Trust helpline & office address
 • 🛡️ **Committee Member Access**: Enter your authorized 10-digit mobile number to unlock committee admin tools.`;
+      }
+    } else if (txnFound.length > 0) {
+      // Transaction ID Record Found (Supports VG-X, EDU26-X, etc.)
+      const r = txnFound[0];
+      const rVibhag = String(r["Vibhag"] || "Unspecified");
+      const matchedId = r["Transaction ID"] || r.transactionId || r.id;
+
+      if (userSessionScope === "vibhag" && sessionVibhag && !rVibhag.toLowerCase().includes(sessionVibhag.toLowerCase())) {
+        botReply = `🔒 **Vibhag Restricted**: Transaction ID **${matchedId}** belongs to **${rVibhag}**. Your access is assigned to **${sessionVibhag}**.`;
+      } else {
+        botType = "app_card";
+        botReply = `✅ **Registration Record Found (${matchedId})**: `;
+        cardData = { app: r };
       }
     } else if (phoneMatch) {
       const rawDigits = phoneMatch[1].slice(-10);
@@ -19090,7 +19120,7 @@ Here are the questions you can ask:
 
         botType = "admin_verified";
         if (scope === "all") {
-          botReply = `🛡️ **Super Admin Access Activated: ${memberName}** (+91 ${rawDigits})\n\n✨ **Scope: All Vibhags Unlocked**\nYou can use:\n• 📊 **/all** — Full registration summary across all Vibhags\n• ⏳ **/pending** — All pending applications\n• 🔍 **/check [ID]** — Search any applicant`;
+          botReply = `🛡️ **Super Admin Access Activated: ${memberName}** (+91 ${rawDigits})\n\n✨ **Scope: All Vibhags Unlocked**\nYou can use:\n• 📊 **/all** — Full registration summary across all Vibhags\n• ⏳ **/pending** — All pending applications\n• 🔍 **/check [ID]** — Search any applicant (e.g. *VG-7*, *EDU26-2*)`;
         } else {
           botReply = `📍 **Vibhag Admin Access Activated: ${memberName}** (+91 ${rawDigits})\n\n✨ **Scope: ${vibhag}**\nYou can use:\n• 📊 **/vibhag** — Summary count for ${vibhag}\n• ⏳ **/pending** — Pending applications in ${vibhag}\n• 🔍 **/check [ID]** — Search applicants in ${vibhag}`;
         }
@@ -19120,32 +19150,8 @@ Here are the questions you can ask:
           botReply = `✅ **Found ${found.length} Application(s) for Mobile +91 ${rawDigits}**: `;
           cardData = { apps: found };
         } else {
-          botReply = `🔍 No registration was found for mobile number **+91 ${rawDigits}**.\n\nPlease check the 10-digit mobile number used during registration, or try looking up by **Transaction ID** (e.g. *VG-9*).`;
+          botReply = `🔍 No registration was found for mobile number **+91 ${rawDigits}**.\n\nPlease check the 10-digit mobile number used during registration, or try looking up by **Transaction ID** (e.g. *VG-7*, *EDU26-2*).`;
         }
-      }
-    } else if (qLower.includes("vg") || qLower.includes("txn") || (txnMatch && (qLower.includes("status") || qLower.includes("check") || qLower.startsWith("vg") || /^[0-9]+$/.test(query.trim())))) {
-      // Transaction ID Search
-      const rawNum = txnMatch ? txnMatch[1] : query.replace(/\D/g, "");
-      const searchId = "VG-" + rawNum;
-
-      const found = currentRegs.filter(r => {
-        const tId = String(r["Transaction ID"] || r.transactionId || "").toUpperCase();
-        return tId === searchId || tId === ("VG" + rawNum) || tId === String(rawNum);
-      });
-
-      if (found.length > 0) {
-        const r = found[0];
-        const rVibhag = String(r["Vibhag"] || "Unspecified");
-
-        if (userSessionScope === "vibhag" && sessionVibhag && !rVibhag.toLowerCase().includes(sessionVibhag.toLowerCase())) {
-          botReply = `🔒 **Vibhag Restricted**: Transaction ID **${searchId}** belongs to **${rVibhag}**. Your access is assigned to **${sessionVibhag}**.`;
-        } else {
-          botType = "app_card";
-          botReply = `✅ **Registration Record Found (${r["Transaction ID"] || searchId})**: `;
-          cardData = { app: r };
-        }
-      } else {
-        botReply = `🔍 No record found for Transaction ID **${searchId}**.\n\nPlease check the ID received on your submission screen or SMS.`;
       }
     } else if (qLower.includes("pending")) {
       // STRICT ADMIN GUARD FOR PENDING LIST
@@ -19196,7 +19202,7 @@ Here are the questions you can ask:
     } else if (qLower.includes("vibhag") || qLower.includes("summary") || qLower.includes("count") || qLower.includes("total") || qLower.includes("report") || qLower.includes("kalwa") || qLower.includes("mahalaxmi") || qLower.includes("pakhadi") || qLower.includes("parel") || qLower.includes("ramdev") || qLower.includes("pratiksha") || qLower === "/all") {
       // STRICT ADMIN GUARD FOR SUMMARY & VIBHAG COUNTS
       if (!isAnyAdmin) {
-        botReply = `🔒 **Access Restricted**\n\nRegistration summaries, Vibhag counts, and committee metrics are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock your assigned access level.\n\n🔍 Regular applicants can check their individual status by typing their **Transaction ID (e.g. VG-9)** or registered **Mobile Number**.`;
+        botReply = `🔒 **Access Restricted**\n\nRegistration summaries, Vibhag counts, and committee metrics are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock your assigned access level.\n\n🔍 Regular applicants can check their individual status by typing their **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.`;
       } else {
         // Check if specific Vibhag requested in query
         const matchedVibhag = VIBHAG_OPTIONS.find(v => qLower.includes(v.toLowerCase()) || qLower.includes(v.split(" ")[1]?.toLowerCase()));
@@ -19279,8 +19285,8 @@ Here are the questions you can ask:
 • **Helpline**: ${contact.phone || "+91 9820785209"}`;
     } else {
       botReply = isAnyAdmin ? 
-        `🤖 **How can I assist you?**\n\nType **`/`** to browse all question shortcuts, or try:\n• **/all** — Summary data of all entries\n• **/vibhag 15 RAMDEV NAGAR** — Summary for a specific Vibhag\n• **/check VG-9** — Check application status\n• **/pending** — List pending registrations` :
-        `🤖 **How can I assist you?**\n\nHere are some things you can try:\n• Enter your **Transaction ID (e.g. VG-9)** to check application status\n• Enter your **10-digit Mobile Number** to check your submissions\n• Ask about **Education Felicitation 2026**, **Events**, or **Donations**.`;
+        `🤖 **How can I assist you?**\n\nType **`/`** to browse all question shortcuts, or try:\n• **/all** — Summary data of all entries\n• **/vibhag 15 RAMDEV NAGAR** — Summary for a specific Vibhag\n• **/check VG-7** — Check application status\n• **/pending** — List pending registrations` :
+        `🤖 **How can I assist you?**\n\nHere are some things you can try:\n• Enter your **Transaction ID (e.g. VG-7, EDU26-2)** to check application status\n• Enter your **10-digit Mobile Number** to check your submissions\n• Ask about **Education Felicitation 2026**, **Events**, or **Donations**.`;
     }
 
     setMessages(prev => [...prev, { id: "m_" + Date.now(), sender: "bot", type: botType, text: botReply, cardData }]);
@@ -19422,22 +19428,22 @@ Here are the questions you can ask:
                 ) : (
                   <>
                     <button
-                      onClick={() => handleSendMessage("Check VG-9")}
+                      onClick={() => handleSendMessage("Check VG-7")}
                       style={{fontSize:".72rem",background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:12,padding:"4px 10px",color:"#1D4ED8",cursor:"pointer",fontWeight:700}}
                     >
-                      🔍 Sample: VG-9
+                      🔍 Sample: VG-7
+                    </button>
+                    <button
+                      onClick={() => handleSendMessage("Check EDU26-2")}
+                      style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
+                    >
+                      🔍 Sample: EDU26-2
                     </button>
                     <button
                       onClick={() => handleSendMessage("Education Felicitation 2026 events")}
                       style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
                     >
                       🎓 Education 2026
-                    </button>
-                    <button
-                      onClick={() => handleSendMessage("Donation 80G Tax Exemption")}
-                      style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
-                    >
-                      💰 Donate (80G)
                     </button>
                   </>
                 )}
