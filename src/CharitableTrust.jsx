@@ -14355,6 +14355,130 @@ function AdminAccess({ C, setC, master, auth }) {
       <div style={{marginTop:20,background:"#FFF4EC",padding:16,borderRadius:8,fontSize:".8rem",color:"var(--sf)"}}>
         <strong>Super Admins:</strong> <code>admin@vidyagohiltrust.org</code> and <code>pradeepparmar902@yahoo.com</code> automatically have full access to all tabs.
       </div>
+
+      {/* ── Chatbot Committee Admin Mobile Access Section ── */}
+      <div style={{marginTop:32,paddingTop:24,borderTop:"2px dashed #E2E8F0"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,flexWrap:"wrap",gap:12}}>
+          <div>
+            <h3 style={{fontSize:"1.2rem",color:"#0F172A",margin:0,display:"flex",alignItems:"center",gap:8}}>
+              <span>🤖</span> Chatbot Committee Admin Mobile Numbers
+            </h3>
+            <p style={{fontSize:".82rem",color:"#64748B",margin:"4px 0 0 0"}}>
+              Authorize Committee Members and Vibhag Heads to access Chatbot Summary Analytics using their mobile number.
+            </p>
+          </div>
+        </div>
+
+        {/* Add Committee Member Box */}
+        <div style={{background:"#F8FAFC",border:"1px solid #CBD5E1",borderRadius:12,padding:"16px 20px",marginBottom:20}}>
+          <div style={{fontSize:".85rem",fontWeight:700,color:"#1E293B",marginBottom:10}}>➕ Authorize New Committee Member:</div>
+          <form 
+            onSubmit={e => {
+              e.preventDefault();
+              const form = e.target;
+              const name = form.cName.value.trim();
+              const mobile = form.cMobile.value.trim().replace(/\D/g, "").slice(-10);
+              const role = form.cRole.value.trim();
+              if (!mobile || mobile.length !== 10) return alert("Please enter a valid 10-digit mobile number.");
+              
+              const currentList = Array.isArray(C.committeeMobiles) ? C.committeeMobiles : [];
+              const exists = currentList.find(m => (typeof m === "string" ? m : m.mobile) === mobile);
+              if (exists) return alert("This mobile number is already authorized as a Committee Admin.");
+
+              const newEntry = { name: name || "Committee Member", mobile, role: role || "Committee Admin", addedAt: new Date().toLocaleDateString("en-IN") };
+              const newC = { ...C, committeeMobiles: [...currentList, newEntry] };
+              setC(newC);
+              saveToFirebase(newC);
+              form.reset();
+              alert(`Mobile number ${mobile} (${newEntry.name}) has been authorized for Chatbot Admin Access!`);
+            }}
+            style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr)) 120px",gap:10,alignItems:"end"}}
+          >
+            <div>
+              <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Member Name:</label>
+              <input name="cName" type="text" placeholder="e.g. Keshav Wagh" required style={{width:"100%",padding:"8px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
+            </div>
+            <div>
+              <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>10-Digit Mobile Number:</label>
+              <input name="cMobile" type="tel" placeholder="e.g. 9967821964" required style={{width:"100%",padding:"8px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
+            </div>
+            <div>
+              <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Vibhag / Designation:</label>
+              <input name="cRole" type="text" placeholder="e.g. Lower Parel / Trustee" style={{width:"100%",padding:"8px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
+            </div>
+            <div>
+              <button 
+                type="submit" 
+                style={{
+                  width:"100%",
+                  padding:"9px 14px",
+                  background:"linear-gradient(135deg, #2563EB, #1D4ED8)",
+                  color:"white",
+                  border:"none",
+                  borderRadius:6,
+                  fontWeight:700,
+                  fontSize:".82rem",
+                  cursor:"pointer",
+                  boxShadow:"0 2px 6px rgba(37,99,235,0.25)"
+                }}
+              >
+                + Add Member
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Committee Members Table */}
+        <div style={{background:"white",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:".85rem"}}>
+            <thead>
+              <tr style={{background:"#1E293B",color:"white"}}>
+                <th style={{padding:"10px 14px",textAlign:"left"}}>Member Name</th>
+                <th style={{padding:"10px 14px",textAlign:"left"}}>Authorized Mobile Number</th>
+                <th style={{padding:"10px 14px",textAlign:"left"}}>Role / Vibhag</th>
+                <th style={{padding:"10px 14px",textAlign:"center"}}>Access Level</th>
+                <th style={{padding:"10px 14px",textAlign:"right"}}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(Array.isArray(C.committeeMobiles) && C.committeeMobiles.length > 0 ? C.committeeMobiles : [
+                { name: "Pradeep Parmar (Super Admin)", mobile: "9820785209", role: "Trustee / Super Admin", addedAt: "System Default" },
+                { name: "Keshav Wagh", mobile: "9967821964", role: "Committee Member", addedAt: "System Default" },
+                { name: "Ashwin Kataria", mobile: "8082234187", role: "Ramdev Nagar Head", addedAt: "System Default" }
+              ]).map((m, idx) => {
+                const item = typeof m === "string" ? { name: "Committee Member", mobile: m, role: "Committee Admin", addedAt: "-" } : m;
+                return (
+                  <tr key={idx} style={{borderBottom:"1px solid #F1F5F9",background:idx%2===1?"#F8FAFC":"white"}}>
+                    <td style={{padding:"10px 14px",fontWeight:700,color:"#0F172A"}}>{item.name}</td>
+                    <td style={{padding:"10px 14px",fontWeight:600,color:"#2563EB",fontFamily:"monospace"}}>+91 {item.mobile}</td>
+                    <td style={{padding:"10px 14px",color:"#475569"}}>{item.role}</td>
+                    <td style={{padding:"10px 14px",textAlign:"center"}}>
+                      <span style={{background:"#DCFCE7",color:"#15803D",padding:"3px 8px",borderRadius:10,fontSize:".72rem",fontWeight:800}}>
+                        🛡️ Chatbot Admin
+                      </span>
+                    </td>
+                    <td style={{padding:"10px 14px",textAlign:"right"}}>
+                      <button 
+                        onClick={() => {
+                          if (!confirm(`Revoke Chatbot Admin access for ${item.name} (+91 ${item.mobile})?`)) return;
+                          const current = Array.isArray(C.committeeMobiles) ? C.committeeMobiles : [];
+                          const updated = current.filter(x => (typeof x === "string" ? x : x.mobile) !== item.mobile);
+                          const newC = { ...C, committeeMobiles: updated };
+                          setC(newC);
+                          saveToFirebase(newC);
+                        }}
+                        style={{background:"#FEE2E2",color:"#DC2626",border:"1px solid #FCA5A5",padding:"4px 10px",borderRadius:6,fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
+                      >
+                        Revoke Access
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -18063,9 +18187,21 @@ function CommunityChatbot({ C, auth }) {
     const txnMatch = query.match(/(?:VG|vg|txn|TXN)?[-_ #]?(\d{1,4})/i);
 
     // List of Authorized Committee Mobiles
-    const committeeMobiles = (C.committeeMobiles || [
-      "9820785209", "9967821964", "8082234187", "7977561920", "8779227886", "8591563577", "9820000000"
-    ]).map(m => String(m).replace(/\D/g, "").slice(-10));
+    const committeeMobilesList = Array.isArray(C.committeeMobiles) && C.committeeMobiles.length > 0 ? C.committeeMobiles : [
+      { name: "Pradeep Parmar", mobile: "9820785209", role: "Super Admin" },
+      { name: "Keshav Wagh", mobile: "9967821964", role: "Committee Member" },
+      { name: "Ashwin Kataria", mobile: "8082234187", role: "Ramdev Nagar Head" },
+      { name: "Samiksha Chudasama", mobile: "7977561920", role: "Committee Member" },
+      { name: "Dinesh Sondarva", mobile: "8779227886", role: "Mahalaxmi Head" },
+      { name: "Khushi Jogadiya", mobile: "8591563577", role: "Pratiksha Nagar Head" }
+    ];
+    const committeeMobileMap = {};
+    committeeMobilesList.forEach(m => {
+      const mob = typeof m === "string" ? m : m.mobile;
+      const clean = String(mob).replace(/\D/g, "").slice(-10);
+      committeeMobileMap[clean] = typeof m === "string" ? { name: "Committee Member", role: "Admin" } : m;
+    });
+    const committeeMobiles = Object.keys(committeeMobileMap);
 
     let botReply = "";
     let botData = null;
