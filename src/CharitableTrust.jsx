@@ -10613,6 +10613,64 @@ function AdminTeam({ mob, C, setC, auth }) {
     saveToFb(newC);
   };
 
+  // Helper to compute node hierarchy level
+  const getNodeLevel = (node, allItems) => {
+    let level = 1;
+    let curr = node;
+    const visited = new Set();
+    while (curr && curr.parentId && curr.parentId !== "plain" && !visited.has(curr.id)) {
+      visited.add(curr.id);
+      const parent = allItems.find(p => p.id === curr.parentId);
+      if (parent) {
+        level++;
+        curr = parent;
+      } else {
+        break;
+      }
+    }
+    return level;
+  };
+
+  // Export Committee-wise or All Committees Excel
+  const handleExportCommitteeExcel = (targetComm = activeCommittee, e) => {
+    if (e) e.stopPropagation();
+    const commFilter = targetComm || activeCommittee;
+    const isAll = commFilter === "All";
+
+    const exportItems = isAll
+      ? items.filter(i => !i.isSeparator)
+      : items.filter(i => !i.isSeparator && (i.committee || "Central Working Committee (CWC)") === commFilter);
+
+    if (exportItems.length === 0) {
+      alert(`No team members found in "${commFilter}" to export. You can download the "Sample Excel Template" to create new members.`);
+      return;
+    }
+
+    const exportData = exportItems.map((item, idx) => ({
+      "Level": getNodeLevel(item, items),
+      "ID": String(item.id || "").replace(/^team_/, ""),
+      "Display Order Index": item.order !== undefined ? item.order : idx + 1,
+      "Name": item.name || "",
+      "Position": item.position || "",
+      "Parent Leader Name": items.find(p => p.id === item.parentId)?.name || "",
+      "Committee": item.committee || (commFilter !== "All" ? commFilter : "Central Working Committee (CWC)"),
+      "Mobile": item.mobile || "",
+      "Profession": item.profession || "",
+      "Qualification": item.qualification || "",
+      "Address": item.address || "",
+      "Photo URL": item.image || "",
+      "Description": item.desc || ""
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    const sheetTitle = (commFilter.length > 28 ? commFilter.slice(0, 28) : commFilter).replace(/[^a-zA-Z0-9 ]/g, "");
+    XLSX.utils.book_append_sheet(wb, ws, sheetTitle || "Team");
+
+    const cleanFileName = commFilter.replace(/[^a-zA-Z0-9_-]/g, "_");
+    XLSX.writeFile(wb, `Team_${cleanFileName}_${new Date().toISOString().split("T")[0]}.xlsx`);
+  };
+
   // Download Sample Excel Template for Team Hierarchy
   const handleDownloadTemplate = () => {
     const templateData = [
@@ -10896,21 +10954,28 @@ function AdminTeam({ mob, C, setC, auth }) {
         const importedCommittees = Array.from(new Set(newNodes.map(n => n.committee).filter(Boolean)));
         const newCommitteesList = Array.from(new Set([...allCommitteesList, ...importedCommittees]));
 
+        const targetCommNames = importedCommittees.join(", ") || activeCommittee;
+        
         setCustomModal({
-          title: "Import Team Hierarchy",
-          message: `Found ${newNodes.length} team members from Excel spreadsheet.\n\nDo you want to append these members to your team structure?`,
-          confirmText: "Import Members",
+          title: "Import & Update Team Hierarchy",
+          message: `Found ${newNodes.length} team member(s) for committee(s):\n👉 ${targetCommNames}\n\nChoose how you would like to apply this spreadsheet:\n\n• Click 'Replace & Update' to overwrite and correct existing members in "${targetCommNames}" (preserving all other committees).\n• Or click 'Cancel' to abort.`,
+          confirmText: "🔄 Replace & Update",
           confirmStyle: "primary",
           onConfirm: () => {
-            const finalItems = [...items, ...newNodes];
+            // Overwrite members of the imported committees
+            const remainingOtherCommItems = items.filter(i => {
+              const itemComm = i.committee || "Central Working Committee (CWC)";
+              return !importedCommittees.includes(itemComm);
+            });
+            const finalItems = [...remainingOtherCommItems, ...newNodes];
             const newC = { ...C, teamItems: finalItems, committees: newCommitteesList };
             setItems(finalItems);
             setC(newC);
             saveToFb(newC);
             setCustomModal({
-              title: "Import Successful",
-              message: `Successfully imported ${newNodes.length} team members into your hierarchy!`,
-              confirmText: "Awesome!",
+              title: "Update Successful",
+              message: `Successfully updated ${newNodes.length} team members in "${targetCommNames}"!`,
+              confirmText: "Done",
               onConfirm: () => {}
             });
           }
@@ -11663,15 +11728,27 @@ function AdminTeam({ mob, C, setC, auth }) {
           </div>
           <div style={{display:"flex", gap:10, flexWrap:"wrap", alignItems:"center"}}>
             <button
+              onClick={() => handleExportCommitteeExcel(activeCommittee)}
+              style={{
+                padding:"9px 16px", borderRadius:12, border:"1px solid #3B82F6",
+                background:"#EFF6FF", color:"#1D4ED8", fontWeight:700, fontSize:".85rem",
+                cursor:"pointer", display:"flex", alignItems:"center", gap:6, boxShadow:"0 2px 8px rgba(37,99,235,0.12)"
+              }}
+              title={`Export team members of ${activeCommittee} to Excel for editing/corrections`}
+            >
+              <span>📥</span> Export {activeCommittee !== "All" ? activeCommittee : "All"} (Excel)
+            </button>
+
+            <button
               onClick={handleDownloadTemplate}
               style={{
                 padding:"9px 16px", borderRadius:12, border:"1px solid var(--bd)",
                 background:"white", color:"var(--dt)", fontWeight:700, fontSize:".85rem",
                 cursor:"pointer", display:"flex", alignItems:"center", gap:6, boxShadow:"0 2px 8px rgba(0,0,0,0.04)"
               }}
-              title="Download sample Excel template to fill hierarchy in bulk"
+              title="Download sample blank Excel template"
             >
-              <span>📥</span> Sample Excel Template
+              <span>📄</span> Blank Template
             </button>
 
             <label
@@ -11680,9 +11757,9 @@ function AdminTeam({ mob, C, setC, auth }) {
                 background:"#107C41", color:"white", fontWeight:700, fontSize:".85rem",
                 cursor:"pointer", display:"flex", alignItems:"center", gap:6, boxShadow:"0 4px 12px rgba(16,124,65,0.25)"
               }}
-              title="Upload Excel or CSV spreadsheet to import team hierarchy in bulk"
+              title="Upload corrected Excel or CSV spreadsheet to update team hierarchy"
             >
-              <span>📤</span> Import Excel/CSV
+              <span>📤</span> Re-upload / Import Excel
               <input type="file" accept=".xlsx, .xls, .csv" onChange={handleImportExcel} style={{display:"none"}}/>
             </label>
 
@@ -11768,6 +11845,18 @@ function AdminTeam({ mob, C, setC, auth }) {
                       Active
                     </span>
                   )}
+
+                  <button
+                    onClick={(e) => handleExportCommitteeExcel(comm, e)}
+                    style={{
+                      width:24, height:24, borderRadius:"50%", background:"#EFF6FF", border:"1px solid #BFDBFE",
+                      color:"#1D4ED8", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize:".7rem", transition:"all 0.2s"
+                    }}
+                    title={`Export "${comm}" to Excel for corrections`}
+                  >
+                    📥
+                  </button>
 
                   {comm !== "All" && (
                     <button
