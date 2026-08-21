@@ -14509,22 +14509,22 @@ function ChatbotAccessManager({ C, setC, auth }) {
         </div>
 
         {/* Sub-Tabs Switcher */}
-        <div style={{display:"flex",background:"#E2E8F0",padding:3,borderRadius:10,gap:3}}>
+        <div style={{display:"flex",background:"#E2E8F0",padding:3,borderRadius:10,gap:3,flexWrap:"wrap"}}>
           <button
-            onClick={() => setActiveTab("users")}
+            onClick={() => setActiveTab("branding")}
             style={{
               padding: "8px 16px",
               borderRadius: 8,
               fontSize: ".82rem",
               fontWeight: 700,
-              background: activeTab === "users" ? "white" : "transparent",
-              color: activeTab === "users" ? "#1E293B" : "#64748B",
+              background: activeTab === "branding" ? "white" : "transparent",
+              color: activeTab === "branding" ? "#1E293B" : "#64748B",
               border: "none",
               cursor: "pointer",
-              boxShadow: activeTab === "users" ? "0 2px 6px rgba(0,0,0,0.08)" : "none"
+              boxShadow: activeTab === "branding" ? "0 2px 6px rgba(0,0,0,0.08)" : "none"
             }}
           >
-            👥 User Access & Scopes ({allRegisteredUsers.length})
+            🎨 Header Name & Branding
           </button>
           <button
             onClick={() => setActiveTab("kb")}
@@ -14542,8 +14542,143 @@ function ChatbotAccessManager({ C, setC, auth }) {
           >
             ❓ Slash Commands & Q&A ({kbList.length})
           </button>
+          <button
+            onClick={() => setActiveTab("users")}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              fontSize: ".82rem",
+              fontWeight: 700,
+              background: activeTab === "users" ? "white" : "transparent",
+              color: activeTab === "users" ? "#1E293B" : "#64748B",
+              border: "none",
+              cursor: "pointer",
+              boxShadow: activeTab === "users" ? "0 2px 6px rgba(0,0,0,0.08)" : "none"
+            }}
+          >
+            👥 User Access & Scopes ({allRegisteredUsers.length})
+          </button>
         </div>
       </div>
+
+      {activeTab === "branding" && (
+        <div style={{animation:"fadeIn .2s ease"}}>
+          <div style={{background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"24px 26px",marginBottom:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+            <div style={{fontSize:"1.05rem",fontWeight:800,color:"#0F172A",marginBottom:16,display:"flex",alignItems:"center",gap:8}}>
+              <span>🎨</span> Custom Chatbot Header, Titles & Greeting Configuration:
+            </div>
+            
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))",gap:18,marginBottom:18}}>
+              <div>
+                <label style={{fontSize:".8rem",fontWeight:700,color:"#334155",display:"block",marginBottom:6}}>
+                  Chatbot Header Title (Displayed at top of Chat Window):
+                </label>
+                <input
+                  type="text"
+                  value={C.chatbotTitle !== undefined ? C.chatbotTitle : (C.trust?.name ? `${C.trust.name} Assistant` : "MMP & Vidya Gohil Assistant")}
+                  onChange={e => {
+                    const newC = { ...C, chatbotTitle: e.target.value };
+                    if (setC) setC(newC);
+                  }}
+                  placeholder="e.g. Mumbai Meghwal Panchayat Assistant"
+                  style={{width:"100%",padding:"11px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".9rem",fontWeight:700,boxSizing:"border-box"}}
+                />
+                <span style={{fontSize:".72rem",color:"#64748B",display:"block",marginTop:4}}>
+                  Appears prominently in the dark top header bar of the chatbot window.
+                </span>
+              </div>
+
+              <div>
+                <label style={{fontSize:".8rem",fontWeight:700,color:"#334155",display:"block",marginBottom:6}}>
+                  Launcher Pill Label (Floating Button on Screen):
+                </label>
+                <input
+                  type="text"
+                  value={C.chatbotPillLabel !== undefined ? C.chatbotPillLabel : "Trust Assistant"}
+                  onChange={e => {
+                    const newC = { ...C, chatbotPillLabel: e.target.value };
+                    if (setC) setC(newC);
+                  }}
+                  placeholder="e.g. Trust Assistant or Ask Help"
+                  style={{width:"100%",padding:"11px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".9rem",fontWeight:700,boxSizing:"border-box"}}
+                />
+                <span style={{fontSize:".72rem",color:"#64748B",display:"block",marginTop:4}}>
+                  Appears on the floating pill launcher button at the bottom of the screen.
+                </span>
+              </div>
+            </div>
+
+            <div style={{marginBottom:18}}>
+              <label style={{fontSize:".8rem",fontWeight:700,color:"#334155",display:"block",marginBottom:6}}>
+                Chatbot Welcome Greeting Message (Supports **bold**, bullet points, and links):
+              </label>
+              <textarea
+                value={C.chatbotWelcomeText !== undefined ? C.chatbotWelcomeText : "👋 **Namaste & Welcome!**\n\nI am your **MMP & Vidya Gohil Trust Assistant**.\n\n• 🔍 **Check Application Status**: Type your **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.\n• ⚡ **Question Shortcuts**: Type **`/`** to see all FAQ shortcuts (Education Committee, CWC, Events, Vibhag Summary).\n• 🛡️ **Committee Admin**: Enter your authorized mobile to unlock live analytics."}
+                onChange={e => {
+                  const newC = { ...C, chatbotWelcomeText: e.target.value };
+                  if (setC) setC(newC);
+                }}
+                rows={6}
+                style={{width:"100%",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",lineHeight:1.6,fontFamily:"inherit",boxSizing:"border-box"}}
+              />
+            </div>
+
+            {/* Live Preview Box */}
+            <div style={{background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:16,marginBottom:20}}>
+              <div style={{fontSize:".75rem",fontWeight:800,color:"#64748B",textTransform:"uppercase",marginBottom:8}}>
+                👁️ Live Header Preview:
+              </div>
+              <div style={{
+                background:"linear-gradient(135deg, #0F172A, #1E293B)",
+                color:"white",
+                padding:"10px 14px",
+                borderRadius:10,
+                display:"inline-flex",
+                alignItems:"center",
+                gap:10,
+                boxShadow:"0 2px 8px rgba(0,0,0,0.15)"
+              }}>
+                <div style={{width:28,height:28,borderRadius:7,background:"#2563EB",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1rem"}}>
+                  🤖
+                </div>
+                <div>
+                  <div style={{fontSize:".86rem",fontWeight:800,lineHeight:1.2}}>
+                    {C.chatbotTitle || (C.trust?.name ? `${C.trust.name} Assistant` : "MMP & Vidya Gohil Assistant")}
+                  </div>
+                  <div style={{fontSize:".68rem",color:"#94A3B8"}}>🟢 Online | Public</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{display:"flex",justifyContent:"flex-end"}}>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await fbSave(C, auth?.idToken);
+                    alert("Chatbot Header Title & Welcome Branding saved successfully!");
+                  } catch(err) {
+                    alert("Failed to save: " + err.message);
+                  }
+                }}
+                style={{
+                  padding:"10px 24px",
+                  background:"linear-gradient(135deg, #10B981, #059669)",
+                  color:"white",
+                  border:"none",
+                  borderRadius:8,
+                  fontWeight:800,
+                  fontSize:".88rem",
+                  cursor:"pointer",
+                  boxShadow:"0 2px 6px rgba(16,185,129,0.25)"
+                }}
+              >
+                💾 Save Header Title & Branding Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {activeTab === "users" && (
         <>
