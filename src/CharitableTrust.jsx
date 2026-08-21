@@ -14212,15 +14212,32 @@ function LoginScreen({ C, onLogin, onSkip }) {
 
 // ── ADMIN REGISTRATIONS ────────────────────────────────────────────────────────
 
+
 // ── Dedicated Chatbot Committee Admin Access Manager Component ───────────────────────────
 function ChatbotAccessManager({ C, setC, auth }) {
+  const [accessScope, setAccessScope] = useState("all"); // "all" | "vibhag" | "individual"
+  const [selectedVibhag, setSelectedVibhag] = useState("10 MAHALAXMI");
+
+  const VIBHAG_LIST = [
+    "10 MAHALAXMI",
+    "15 RAMDEV NAGAR",
+    "2 WALPAKHADI",
+    "22 LOWER PAREL",
+    "30 PRATKISHA NAGAR",
+    "55 BHAYANDER",
+    "65 KALWA",
+    "14-MMP",
+    "17-MMP",
+    "71-MMP"
+  ];
+
   const currentList = Array.isArray(C.committeeMobiles) && C.committeeMobiles.length > 0 ? C.committeeMobiles : [
-    { name: "Pradeep Parmar (Super Admin)", mobile: "9820785209", role: "Trustee / Super Admin", addedAt: "System Default" },
-    { name: "Keshav Wagh", mobile: "9967821964", role: "Committee Member", addedAt: "System Default" },
-    { name: "Ashwin Kataria", mobile: "8082234187", role: "Ramdev Nagar Head", addedAt: "System Default" },
-    { name: "Samiksha Chudasama", mobile: "7977561920", role: "Committee Member", addedAt: "System Default" },
-    { name: "Dinesh Sondarva", mobile: "8779227886", role: "Mahalaxmi Head", addedAt: "System Default" },
-    { name: "Khushi Jogadiya", mobile: "8591563577", role: "Pratiksha Nagar Head", addedAt: "System Default" }
+    { name: "Pradeep Parmar (Super Admin)", mobile: "9820785209", scope: "all", vibhag: "All Vibhags", role: "Trustee / Super Admin", addedAt: "System Default" },
+    { name: "Keshav Wagh", mobile: "9967821964", scope: "vibhag", vibhag: "22 LOWER PAREL", role: "Lower Parel Head", addedAt: "System Default" },
+    { name: "Ashwin Kataria", mobile: "8082234187", scope: "vibhag", vibhag: "15 RAMDEV NAGAR", role: "Ramdev Nagar Head", addedAt: "System Default" },
+    { name: "Samiksha Chudasama", mobile: "7977561920", scope: "vibhag", vibhag: "15 RAMDEV NAGAR", role: "Committee Member", addedAt: "System Default" },
+    { name: "Dinesh Sondarva", mobile: "8779227886", scope: "vibhag", vibhag: "10 MAHALAXMI", role: "Mahalaxmi Head", addedAt: "System Default" },
+    { name: "Khushi Jogadiya", mobile: "8591563577", scope: "vibhag", vibhag: "30 PRATKISHA NAGAR", role: "Pratiksha Nagar Head", addedAt: "System Default" }
   ];
 
   const saveMobilesToFirebase = async (updatedList) => {
@@ -14228,7 +14245,7 @@ function ChatbotAccessManager({ C, setC, auth }) {
     if (setC) setC(newC);
     try {
       await fbSave(newC, auth?.idToken);
-      alert("Chatbot Committee Admin numbers saved successfully!");
+      alert("Chatbot Access permissions saved to database successfully!");
     } catch(e) {
       alert("Failed to save to database: " + e.message);
     }
@@ -14239,17 +14256,17 @@ function ChatbotAccessManager({ C, setC, auth }) {
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:16}}>
         <div>
           <h2 className="sh" style={{fontSize:"1.4rem",color:"var(--dt)",marginBottom:4,display:"flex",alignItems:"center",gap:8}}>
-            <span>🤖</span> Chatbot Committee Admin Mobile Numbers
+            <span>🤖</span> Chatbot Access Management (Multi-Level)
           </h2>
           <p style={{fontSize:".85rem",color:"var(--mu)",margin:0}}>
-            Authorize Committee Members & Vibhag Heads to access Chatbot Summary Analytics by entering their 10-digit mobile number in the Chatbot.
+            Configure granular access for Chatbot users: <strong>All Level (Full Access)</strong>, <strong>Vibhag Level (Specific Area)</strong>, or <strong>Individual User Level (Own Mobile/Txn ID)</strong>.
           </p>
         </div>
       </div>
 
-      {/* Add New Committee Member Form */}
+      {/* Add New Member Form with Scope Selector */}
       <div style={{background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"20px 24px",marginBottom:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-        <div style={{fontSize:".9rem",fontWeight:800,color:"#0F172A",marginBottom:12}}>➕ Authorize New Committee Member:</div>
+        <div style={{fontSize:".9rem",fontWeight:800,color:"#0F172A",marginBottom:12}}>➕ Authorize Member & Assign Access Level:</div>
         <form 
           onSubmit={e => {
             e.preventDefault();
@@ -14260,17 +14277,24 @@ function ChatbotAccessManager({ C, setC, auth }) {
             if (!mobile || mobile.length !== 10) return alert("Please enter a valid 10-digit mobile number.");
 
             const exists = currentList.find(m => (typeof m === "string" ? m : m.mobile) === mobile);
-            if (exists) return alert("This mobile number is already authorized as a Committee Admin.");
+            if (exists) return alert("This mobile number is already authorized.");
 
-            const newEntry = { name: name || "Committee Member", mobile, role: role || "Committee Admin", addedAt: new Date().toLocaleDateString("en-IN") };
+            const newEntry = { 
+              name: name || "Committee Member", 
+              mobile, 
+              scope: accessScope,
+              vibhag: accessScope === "vibhag" ? selectedVibhag : accessScope === "all" ? "All Vibhags" : "Individual Only",
+              role: role || (accessScope === "all" ? "Super Committee Admin" : accessScope === "vibhag" ? `${selectedVibhag} Head` : "Individual Applicant"), 
+              addedAt: new Date().toLocaleDateString("en-IN") 
+            };
             const updated = [...currentList, newEntry];
             saveMobilesToFirebase(updated);
             form.reset();
           }}
-          style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr)) 140px",gap:14,alignItems:"end"}}
+          style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",gap:14,alignItems:"end"}}
         >
           <div>
-            <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Member Name:</label>
+            <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Member / User Name:</label>
             <input name="cName" type="text" placeholder="e.g. Keshav Wagh" required style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
           </div>
           <div>
@@ -14278,9 +14302,36 @@ function ChatbotAccessManager({ C, setC, auth }) {
             <input name="cMobile" type="tel" placeholder="e.g. 9967821964" required style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
           </div>
           <div>
-            <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Vibhag / Designation:</label>
-            <input name="cRole" type="text" placeholder="e.g. Lower Parel / Trustee" style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
+            <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Access Level Scope:</label>
+            <select 
+              value={accessScope} 
+              onChange={e=>setAccessScope(e.target.value)}
+              style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box",fontWeight:600}}
+            >
+              <option value="all">🌐 All Level (Full Analytics & All Lookups)</option>
+              <option value="vibhag">📍 Vibhag Level (Specific Vibhag Count & Lookups)</option>
+              <option value="individual">👤 Individual Level (Own Mobile / Txn ID Only)</option>
+            </select>
           </div>
+
+          {accessScope === "vibhag" && (
+            <div>
+              <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Select Assigned Vibhag:</label>
+              <select 
+                value={selectedVibhag} 
+                onChange={e=>setSelectedVibhag(e.target.value)}
+                style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box",fontWeight:600}}
+              >
+                {VIBHAG_LIST.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Designation / Role:</label>
+            <input name="cRole" type="text" placeholder="e.g. Vibhag Head / Core Committee" style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
+          </div>
+
           <div>
             <button 
               type="submit" 
@@ -14297,7 +14348,7 @@ function ChatbotAccessManager({ C, setC, auth }) {
                 boxShadow:"0 2px 6px rgba(37,99,235,0.25)"
               }}
             >
-              + Add Member
+              + Authorize Access
             </button>
           </div>
         </form>
@@ -14306,43 +14357,53 @@ function ChatbotAccessManager({ C, setC, auth }) {
       {/* Authorized Numbers Table */}
       <div style={{background:"white",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
         <div style={{padding:"14px 18px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",fontWeight:700,fontSize:".88rem",color:"#0F172A",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span>Authorized Committee Members ({currentList.length})</span>
-          <span style={{fontSize:".75rem",color:"#64748B"}}>These numbers unlock Committee Admin Mode in Chatbot</span>
+          <span>Authorized Users & Committee Scope ({currentList.length})</span>
+          <span style={{fontSize:".75rem",color:"#64748B"}}>Granular access enforced by Chatbot in real-time</span>
         </div>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:".85rem"}}>
             <thead>
               <tr style={{background:"#1E293B",color:"white"}}>
-                <th style={{padding:"11px 16px",textAlign:"left"}}>Member Name</th>
+                <th style={{padding:"11px 16px",textAlign:"left"}}>User / Member Name</th>
                 <th style={{padding:"11px 16px",textAlign:"left"}}>Authorized Mobile Number</th>
-                <th style={{padding:"11px 16px",textAlign:"left"}}>Role / Vibhag</th>
-                <th style={{padding:"11px 16px",textAlign:"center"}}>Chatbot Access Status</th>
+                <th style={{padding:"11px 16px",textAlign:"left"}}>Access Level Scope</th>
+                <th style={{padding:"11px 16px",textAlign:"left"}}>Assigned Vibhag / Role</th>
+                <th style={{padding:"11px 16px",textAlign:"center"}}>Chatbot Status</th>
                 <th style={{padding:"11px 16px",textAlign:"right"}}>Action</th>
               </tr>
             </thead>
             <tbody>
               {currentList.map((m, idx) => {
-                const item = typeof m === "string" ? { name: "Committee Member", mobile: m, role: "Committee Admin", addedAt: "-" } : m;
+                const item = typeof m === "string" ? { name: "Committee Member", mobile: m, scope: "all", vibhag: "All Vibhags", role: "Admin", addedAt: "-" } : m;
+                const scopeBadge = item.scope === "all" ? (
+                  <span style={{background:"#EFF6FF",color:"#1D4ED8",padding:"3px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700}}>🌐 All Level</span>
+                ) : item.scope === "vibhag" ? (
+                  <span style={{background:"#FEF3C7",color:"#B45309",padding:"3px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700}}>📍 Vibhag: {item.vibhag}</span>
+                ) : (
+                  <span style={{background:"#F1F5F9",color:"#475569",padding:"3px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700}}>👤 Individual Only</span>
+                );
+
                 return (
                   <tr key={idx} style={{borderBottom:"1px solid #F1F5F9",background:idx%2===1?"#F8FAFC":"white"}}>
                     <td style={{padding:"12px 16px",fontWeight:700,color:"#0F172A"}}>{item.name}</td>
                     <td style={{padding:"12px 16px",fontWeight:700,color:"#2563EB",fontFamily:"monospace",fontSize:".9rem"}}>+91 {item.mobile}</td>
-                    <td style={{padding:"12px 16px",color:"#475569"}}>{item.role}</td>
+                    <td style={{padding:"12px 16px"}}>{scopeBadge}</td>
+                    <td style={{padding:"12px 16px",color:"#475569"}}>{item.vibhag || item.role} ({item.role})</td>
                     <td style={{padding:"12px 16px",textAlign:"center"}}>
                       <span style={{background:"#DCFCE7",color:"#15803D",padding:"4px 10px",borderRadius:12,fontSize:".75rem",fontWeight:800}}>
-                        🛡️ Active Admin
+                        🛡️ Active
                       </span>
                     </td>
                     <td style={{padding:"12px 16px",textAlign:"right"}}>
                       <button 
                         onClick={() => {
-                          if (!confirm(`Revoke Chatbot Admin access for ${item.name} (+91 ${item.mobile})?`)) return;
+                          if (!confirm(`Revoke Chatbot access for ${item.name} (+91 ${item.mobile})?`)) return;
                           const updated = currentList.filter(x => (typeof x === "string" ? x : x.mobile) !== item.mobile);
                           saveMobilesToFirebase(updated);
                         }}
                         style={{background:"#FEE2E2",color:"#DC2626",border:"1px solid #FCA5A5",padding:"5px 12px",borderRadius:6,fontSize:".78rem",fontWeight:700,cursor:"pointer"}}
                       >
-                        Revoke Access
+                        Revoke
                       </button>
                     </td>
                   </tr>
@@ -14353,13 +14414,15 @@ function ChatbotAccessManager({ C, setC, auth }) {
         </div>
       </div>
 
-      <div style={{marginTop:16,background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:8,padding:"12px 16px",fontSize:".8rem",color:"#1E40AF",lineHeight:1.5}}>
-        💡 <strong>How it works:</strong> When any member listed above visits the website and types their 10-digit phone number in the <strong>Trust Assistant Chatbot (💬)</strong>, they are automatically verified and can query live Vibhag counts, pending registrations, and individual applicant details.
+      <div style={{marginTop:16,background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:8,padding:"14px 18px",fontSize:".82rem",color:"#1E40AF",lineHeight:1.6}}>
+        📌 <strong>Access Levels Explained:</strong>
+        <br/>• <strong>🌐 All Level</strong>: Can ask for complete registration summaries across all Vibhags, export counts, and search any applicant across the database.
+        <br/>• <strong>📍 Vibhag Level</strong>: Can ask for summary counts, pending lists, and search applicants specifically within their assigned Vibhag.
+        <br/>• <strong>👤 Individual Level</strong>: Can only query their own mobile number or specific Transaction ID (e.g. VG-9).
       </div>
     </div>
   );
 }
-
 
 function AdminAccess({ C, setC, master, auth }) {
   if (!master) return <div style={{padding:40,textAlign:"center"}}>Access Denied.</div>;
