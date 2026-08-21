@@ -18986,20 +18986,16 @@ function AdminProfile({ auth, mob, adminProfile, setAdminProfile }) {
 function FormattedChatText({ text, onQuickClick }) {
   if (!text) return null;
 
-  // Split text by newlines
   const lines = text.split("\n");
 
   const renderInlineContent = (contentStr) => {
-    // Regex for:
-    // 1. Markdown Links: [label](url)
-    // 2. Bold: **text**
-    // 3. Raw URLs: https://... or http://... or youtu.be/... or www....
-    const regex = /([([^]]+)]((https?:\/\/[^\s)]+)))|(**([^*]+)**)|((https?:\/\/|www\.)[^\s<]+[^\s.,;:!?)<])/gi;
+    // Robust, safe regex for [text](url), **bold**, and raw URLs
+    const combinedRegex = /(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\))|(\*{2}([^*]+)\*{2})|(https?:\/\/[^\s<]+[^\s.,;:!?)<])/gi;
     let match;
     let cursor = 0;
     const parts = [];
 
-    while ((match = regex.exec(contentStr)) !== null) {
+    while ((match = combinedRegex.exec(contentStr)) !== null) {
       if (match.index > cursor) {
         parts.push(contentStr.substring(cursor, match.index));
       }
@@ -19046,9 +19042,9 @@ function FormattedChatText({ text, onQuickClick }) {
         );
       } else if (match[6]) {
         // Raw URL
-        const rawUrl = match[6].startsWith("http") ? match[6] : "https://" + match[6];
+        const rawUrl = match[6];
         const isYt = rawUrl.includes("youtube.com") || rawUrl.includes("youtu.be");
-        const displayLabel = isYt ? "Watch on YouTube" : rawUrl.replace(/^https?:\/\//i, "").slice(0, 30);
+        const displayLabel = isYt ? "Watch on YouTube" : rawUrl.replace(/^https?:\/\//i, "").slice(0, 32);
 
         parts.push(
           <a
@@ -19079,7 +19075,7 @@ function FormattedChatText({ text, onQuickClick }) {
         );
       }
 
-      cursor = regex.lastIndex;
+      cursor = combinedRegex.lastIndex;
     }
 
     if (cursor < contentStr.length) {
@@ -19095,7 +19091,6 @@ function FormattedChatText({ text, onQuickClick }) {
         const trimmed = line.trim();
         if (!trimmed) return <div key={lIdx} style={{height:4}} />;
 
-        // Bullet line
         const isBullet = trimmed.startsWith("•") || trimmed.startsWith("-") || trimmed.startsWith("* ");
         const contentStr = isBullet ? trimmed.replace(/^[•\-*]\s*/, "") : trimmed;
 
