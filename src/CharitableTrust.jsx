@@ -14907,9 +14907,42 @@ function ChatbotAccessManager({ C, setC, auth }) {
               </div>
 
               <div>
-                <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>
-                  Answer / Response Text (Supports bold **text**, bullet • points, names, phones, links):
-                </label>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,flexWrap:"wrap",gap:6}}>
+                  <label style={{fontSize:".75rem",fontWeight:700,color:"#475569"}}>
+                    Answer / Response Text (Click helper buttons to insert clickable links & formatting):
+                  </label>
+                  <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sample = "\n• ▶️ **[Watch on YouTube](https://youtube.com/@mmp)**";
+                        setKbForm(prev => ({ ...prev, answer: prev.answer + sample }));
+                      }}
+                      style={{background:"#FEE2E2",color:"#DC2626",border:"1px solid #FCA5A5",padding:"2px 8px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                    >
+                      + 🎥 YouTube Link
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sample = "\n• 🔗 **[Visit Website Portal](https://example.com)**";
+                        setKbForm(prev => ({ ...prev, answer: prev.answer + sample }));
+                      }}
+                      style={{background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #BFDBFE",padding:"2px 8px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                    >
+                      + 🔗 Web Link
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setKbForm(prev => ({ ...prev, answer: prev.answer + "\n• **Name** — Designation (+91 9820785209)" }));
+                      }}
+                      style={{background:"#F1F5F9",color:"#334155",border:"1px solid #CBD5E1",padding:"2px 8px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                    >
+                      + 👤 Member
+                    </button>
+                  </div>
+                </div>
                 <textarea
                   value={kbForm.answer}
                   onChange={e=>setKbForm({...kbForm, answer: e.target.value})}
@@ -18953,62 +18986,129 @@ function AdminProfile({ auth, mob, adminProfile, setAdminProfile }) {
 function FormattedChatText({ text, onQuickClick }) {
   if (!text) return null;
 
-  // Render markdown-like bold, links, bullets, and line breaks cleanly
+  // Split text by newlines
   const lines = text.split("\n");
 
+  const renderInlineContent = (contentStr) => {
+    // Regex for:
+    // 1. Markdown Links: [label](url)
+    // 2. Bold: **text**
+    // 3. Raw URLs: https://... or http://... or youtu.be/... or www....
+    const regex = /([([^]]+)]((https?:\/\/[^\s)]+)))|(**([^*]+)**)|((https?:\/\/|www\.)[^\s<]+[^\s.,;:!?)<])/gi;
+    let match;
+    let cursor = 0;
+    const parts = [];
+
+    while ((match = regex.exec(contentStr)) !== null) {
+      if (match.index > cursor) {
+        parts.push(contentStr.substring(cursor, match.index));
+      }
+
+      if (match[1]) {
+        // Markdown Link [Label](URL)
+        const label = match[2];
+        const url = match[3];
+        const isYt = url.includes("youtube.com") || url.includes("youtu.be");
+
+        parts.push(
+          <a
+            key={match.index}
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              color: isYt ? "#DC2626" : "#2563EB",
+              background: isYt ? "#FEE2E2" : "#EFF6FF",
+              border: `1px solid ${isYt ? "#FCA5A5" : "#BFDBFE"}`,
+              padding: "2px 8px",
+              borderRadius: 6,
+              fontWeight: 700,
+              textDecoration: "none",
+              fontSize: ".8rem",
+              margin: "2px 2px"
+            }}
+            className="ch"
+          >
+            <span>{isYt ? "▶️" : "🔗"}</span>
+            <span>{label}</span>
+            <span style={{fontSize:".7rem"}}>↗</span>
+          </a>
+        );
+      } else if (match[4]) {
+        // Bold **text**
+        parts.push(
+          <strong key={match.index} style={{fontWeight:800,color:"#0F172A"}}>
+            {match[5]}
+          </strong>
+        );
+      } else if (match[6]) {
+        // Raw URL
+        const rawUrl = match[6].startsWith("http") ? match[6] : "https://" + match[6];
+        const isYt = rawUrl.includes("youtube.com") || rawUrl.includes("youtu.be");
+        const displayLabel = isYt ? "Watch on YouTube" : rawUrl.replace(/^https?:\/\//i, "").slice(0, 30);
+
+        parts.push(
+          <a
+            key={match.index}
+            href={rawUrl}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              color: isYt ? "#DC2626" : "#2563EB",
+              background: isYt ? "#FEE2E2" : "#EFF6FF",
+              border: `1px solid ${isYt ? "#FCA5A5" : "#BFDBFE"}`,
+              padding: "2px 8px",
+              borderRadius: 6,
+              fontWeight: 700,
+              textDecoration: "none",
+              fontSize: ".8rem",
+              margin: "2px 2px"
+            }}
+            className="ch"
+          >
+            <span>{isYt ? "▶️" : "🔗"}</span>
+            <span>{displayLabel}</span>
+            <span style={{fontSize:".7rem"}}>↗</span>
+          </a>
+        );
+      }
+
+      cursor = regex.lastIndex;
+    }
+
+    if (cursor < contentStr.length) {
+      parts.push(contentStr.substring(cursor));
+    }
+
+    return parts;
+  };
+
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:6,lineHeight:1.55,fontSize:".84rem"}}>
+    <div style={{display:"flex",flexDirection:"column",gap:6,lineHeight:1.6,fontSize:".84rem"}}>
       {lines.map((line, lIdx) => {
         const trimmed = line.trim();
         if (!trimmed) return <div key={lIdx} style={{height:4}} />;
 
-        // Check if line is a bullet item
+        // Bullet line
         const isBullet = trimmed.startsWith("•") || trimmed.startsWith("-") || trimmed.startsWith("* ");
         const contentStr = isBullet ? trimmed.replace(/^[•\-*]\s*/, "") : trimmed;
-
-        // Parse bold **text** and [link](url)
-        const parts = [];
-        let cursor = 0;
-        const regex = /(\*\*([^*]+)\*\*)|(\[([^\]]+)\]\(([^)]+)\))/g;
-        let match;
-
-        while ((match = regex.exec(contentStr)) !== null) {
-          if (match.index > cursor) {
-            parts.push(contentStr.substring(cursor, match.index));
-          }
-          if (match[1]) {
-            // Bold
-            parts.push(<strong key={match.index} style={{fontWeight:700,color:"#0F172A"}}>{match[2]}</strong>);
-          } else if (match[3]) {
-            // Link
-            parts.push(
-              <a 
-                key={match.index} 
-                href={match[5]} 
-                target="_blank" 
-                rel="noreferrer"
-                style={{color:"#2563EB",textDecoration:"underline",fontWeight:600}}
-              >
-                {match[4]}
-              </a>
-            );
-          }
-          cursor = regex.lastIndex;
-        }
-        if (cursor < contentStr.length) {
-          parts.push(contentStr.substring(cursor));
-        }
 
         if (isBullet) {
           return (
             <div key={lIdx} style={{display:"flex",alignItems:"flex-start",gap:8,paddingLeft:4}}>
-              <span style={{color:"#3B82F6",fontSize:".9rem",lineHeight:1.2}}>•</span>
-              <div style={{flex:1}}>{parts}</div>
+              <span style={{color:"#3B82F6",fontSize:".9rem",lineHeight:1.3}}>•</span>
+              <div style={{flex:1}}>{renderInlineContent(contentStr)}</div>
             </div>
           );
         }
 
-        return <div key={lIdx}>{parts}</div>;
+        return <div key={lIdx}>{renderInlineContent(contentStr)}</div>;
       })}
     </div>
   );
