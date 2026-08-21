@@ -19350,7 +19350,7 @@ function CommunityChatbot({ C, auth }) {
   const [slashSubmenu, setSlashSubmenu] = useState(null); // null | "vibhags"
   const chatBottomRef = useRef(null);
 
-  // Draggable Floating Position State
+  // Draggable Floating Position State (Null = Default Bottom-Right Anchor)
   const [pos, setPos] = useState({ x: null, y: null });
   const [isDragging, setIsDragging] = useState(false);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
@@ -19367,6 +19367,28 @@ function CommunityChatbot({ C, auth }) {
   ];
 
   const isAnyAdmin = userSessionScope === "all" || userSessionScope === "vibhag";
+
+  // When Chatbot opens, ensure it expands upwards and never overflows below the bottom edge
+  const openChatbot = () => {
+    setIsOpen(true);
+    setIsMinimized(false);
+    ensureRegistrations();
+
+    // If widget was dragged down near bottom, shift it up so the full 590px window is in view
+    setPos(prev => {
+      if (prev.x === null || prev.y === null) return prev;
+      const chatHeight = Math.min(590, window.innerHeight - 80);
+      const chatWidth = Math.min(410, window.innerWidth - 32);
+      
+      const maxY = window.innerHeight - chatHeight - 20;
+      const maxX = window.innerWidth - chatWidth - 20;
+
+      return {
+        x: Math.max(10, Math.min(prev.x, Math.max(10, maxX))),
+        y: Math.max(10, Math.min(prev.y, Math.max(10, maxY)))
+      };
+    });
+  };
 
   // Drag listeners
   const startDrag = (e) => {
@@ -19402,8 +19424,11 @@ function CommunityChatbot({ C, auth }) {
       let nextX = clientX - dragOffsetRef.current.x;
       let nextY = clientY - dragOffsetRef.current.y;
 
-      const maxX = window.innerWidth - (isOpen ? 380 : 180);
-      const maxY = window.innerHeight - (isOpen ? (isMinimized ? 60 : 500) : 50);
+      const chatHeight = isOpen ? (isMinimized ? 60 : Math.min(590, window.innerHeight - 80)) : 50;
+      const chatWidth = isOpen ? Math.min(410, window.innerWidth - 32) : 200;
+
+      const maxX = window.innerWidth - chatWidth - 10;
+      const maxY = window.innerHeight - chatHeight - 10;
 
       nextX = Math.max(10, Math.min(nextX, Math.max(10, maxX)));
       nextY = Math.max(10, Math.min(nextY, Math.max(10, maxY)));
@@ -19829,7 +19854,7 @@ function CommunityChatbot({ C, auth }) {
     setLoading(false);
   };
 
-  // Position Styling (Supports Free Draggable Movement anywhere on screen)
+  // Position Styling (Supports Free Draggable Movement anywhere on screen & default bottom-right anchor)
   const positionStyle = (pos.x !== null && pos.y !== null) ? {
     position: "fixed",
     left: `${pos.x}px`,
@@ -19856,9 +19881,7 @@ function CommunityChatbot({ C, auth }) {
           onTouchStart={startDrag}
           onClick={() => {
             if (!didDragRef.current) {
-              setIsOpen(true);
-              setIsMinimized(false);
-              ensureRegistrations();
+              openChatbot();
             }
           }}
           style={{
@@ -19878,7 +19901,7 @@ function CommunityChatbot({ C, auth }) {
             transition: isDragging ? "none" : "box-shadow 0.2s"
           }}
           className="ch"
-          title="Drag to reposition anywhere on the screen"
+          title="Click to open or drag to reposition"
         >
           <span style={{opacity:0.5,fontSize:"1rem",letterSpacing:-1}}>⠿</span>
           <span style={{fontSize:"1.2rem"}}>💬</span>
@@ -20230,7 +20253,6 @@ function CommunityChatbot({ C, auth }) {
     </div>
   );
 }
-
 
 
 export default function App() {
