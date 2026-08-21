@@ -14915,22 +14915,28 @@ function ChatbotAccessManager({ C, setC, auth }) {
                     <button
                       type="button"
                       onClick={() => {
-                        const sample = "\n• ▶️ **[Watch on YouTube](https://youtube.com/@mmp)**";
-                        setKbForm(prev => ({ ...prev, answer: prev.answer + sample }));
+                        const url = prompt("Enter YouTube URL (e.g. https://youtu.be/hg2dxZjDLfo):", "https://youtu.be/hg2dxZjDLfo");
+                        if (!url) return;
+                        const label = prompt("Enter Button Label:", "Watch Video on YouTube") || "Watch Video on YouTube";
+                        const linkStr = `\n• [${label}](${url.trim()})`;
+                        setKbForm(prev => ({ ...prev, answer: prev.answer + linkStr }));
                       }}
-                      style={{background:"#FEE2E2",color:"#DC2626",border:"1px solid #FCA5A5",padding:"2px 8px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                      style={{background:"#FEE2E2",color:"#DC2626",border:"1px solid #FCA5A5",padding:"4px 10px",borderRadius:6,fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
                     >
-                      + 🎥 YouTube Link
+                      + 🎥 Insert YouTube Link
                     </button>
                     <button
                       type="button"
                       onClick={() => {
-                        const sample = "\n• 🔗 **[Visit Website Portal](https://example.com)**";
-                        setKbForm(prev => ({ ...prev, answer: prev.answer + sample }));
+                        const url = prompt("Enter Website URL (e.g. www.mmp-cwc.com or https://...):", "www.mmp-cwc.com");
+                        if (!url) return;
+                        const label = prompt("Enter Button Label:", "Visit Website Portal") || "Visit Website Portal";
+                        const linkStr = `\n• [${label}](${url.trim()})`;
+                        setKbForm(prev => ({ ...prev, answer: prev.answer + linkStr }));
                       }}
-                      style={{background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #BFDBFE",padding:"2px 8px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                      style={{background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #BFDBFE",padding:"4px 10px",borderRadius:6,fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
                     >
-                      + 🔗 Web Link
+                      + 🔗 Insert Web Link
                     </button>
                     <button
                       type="button"
@@ -18989,8 +18995,11 @@ function FormattedChatText({ text, onQuickClick }) {
   const lines = text.split("\n");
 
   const renderInlineContent = (contentStr) => {
-    // Robust, safe regex for [text](url), **bold**, and raw URLs
-    const combinedRegex = /(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\))|(\*{2}([^*]+)\*{2})|(https?:\/\/[^\s<]+[^\s.,;:!?)<])/gi;
+    // Regex for:
+    // 1. [Label](URL) - matches any URL inside parens including www.
+    // 2. **bold**
+    // 3. Raw URLs: https://... or http://... or www....
+    const combinedRegex = /(\[([^\]]+)\]\(([^)\s]+)\))|(\*{2}([^*]+)\*{2})|((https?:\/\/|www\.)[^\s<]+[^\s.,;:!?)<])/gi;
     let match;
     let cursor = 0;
     const parts = [];
@@ -19002,8 +19011,11 @@ function FormattedChatText({ text, onQuickClick }) {
 
       if (match[1]) {
         // Markdown Link [Label](URL)
-        const label = match[2];
-        const url = match[3];
+        const label = match[2].trim();
+        let url = match[3].trim();
+        if (url.startsWith("www.")) url = "https://" + url;
+        else if (!url.startsWith("http://") && !url.startsWith("https://")) url = "https://" + url;
+
         const isYt = url.includes("youtube.com") || url.includes("youtu.be");
 
         parts.push(
@@ -19011,26 +19023,28 @@ function FormattedChatText({ text, onQuickClick }) {
             key={match.index}
             href={url}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: 4,
-              color: isYt ? "#DC2626" : "#2563EB",
+              gap: 5,
+              color: isYt ? "#DC2626" : "#1D4ED8",
               background: isYt ? "#FEE2E2" : "#EFF6FF",
-              border: `1px solid ${isYt ? "#FCA5A5" : "#BFDBFE"}`,
-              padding: "2px 8px",
-              borderRadius: 6,
+              border: `1px solid ${isYt ? "#FCA5A5" : "#93C5FD"}`,
+              padding: "3px 10px",
+              borderRadius: 8,
               fontWeight: 700,
               textDecoration: "none",
-              fontSize: ".8rem",
-              margin: "2px 2px"
+              fontSize: ".82rem",
+              margin: "2px 3px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+              cursor: "pointer"
             }}
             className="ch"
           >
             <span>{isYt ? "▶️" : "🔗"}</span>
             <span>{label}</span>
-            <span style={{fontSize:".7rem"}}>↗</span>
+            <span style={{fontSize:".7rem",opacity:0.8}}>↗</span>
           </a>
         );
       } else if (match[4]) {
@@ -19042,35 +19056,38 @@ function FormattedChatText({ text, onQuickClick }) {
         );
       } else if (match[6]) {
         // Raw URL
-        const rawUrl = match[6];
+        let rawUrl = match[6].trim();
+        if (rawUrl.startsWith("www.")) rawUrl = "https://" + rawUrl;
         const isYt = rawUrl.includes("youtube.com") || rawUrl.includes("youtu.be");
-        const displayLabel = isYt ? "Watch on YouTube" : rawUrl.replace(/^https?:\/\//i, "").slice(0, 32);
+        const displayLabel = isYt ? "Watch Video on YouTube" : rawUrl.replace(/^https?:\/\//i, "").slice(0, 32);
 
         parts.push(
           <a
             key={match.index}
             href={rawUrl}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: 4,
-              color: isYt ? "#DC2626" : "#2563EB",
+              gap: 5,
+              color: isYt ? "#DC2626" : "#1D4ED8",
               background: isYt ? "#FEE2E2" : "#EFF6FF",
-              border: `1px solid ${isYt ? "#FCA5A5" : "#BFDBFE"}`,
-              padding: "2px 8px",
-              borderRadius: 6,
+              border: `1px solid ${isYt ? "#FCA5A5" : "#93C5FD"}`,
+              padding: "3px 10px",
+              borderRadius: 8,
               fontWeight: 700,
               textDecoration: "none",
-              fontSize: ".8rem",
-              margin: "2px 2px"
+              fontSize: ".82rem",
+              margin: "2px 3px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+              cursor: "pointer"
             }}
             className="ch"
           >
             <span>{isYt ? "▶️" : "🔗"}</span>
             <span>{displayLabel}</span>
-            <span style={{fontSize:".7rem"}}>↗</span>
+            <span style={{fontSize:".7rem",opacity:0.8}}>↗</span>
           </a>
         );
       }
