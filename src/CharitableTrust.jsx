@@ -152,15 +152,40 @@ const fbSave = async (content, idToken) => {
   return true;
 };
 
-const generateNextTxnId = async (idToken) => {
+const generateNextTxnId = async (idToken, preferredPrefix = null) => {
   try {
     const rawExisting = await fbFetchRegistrations(idToken);
     // Ignore trashed/deleted registrations
     const existing = (Array.isArray(rawExisting) ? rawExisting : []).filter(r => !r.deleted);
+    
+    let activePrefix = preferredPrefix ? preferredPrefix.trim().toUpperCase().replace(/[-_]$/, "") : null;
+
+    // Detect prefix from existing registrations
+    if (!activePrefix && existing.length > 0) {
+      // Look for EDU26 or most recently used prefix pattern
+      const sorted = [...existing].sort((a, b) => new Date(b._submittedAt || 0) - new Date(a._submittedAt || 0));
+      for (const r of sorted) {
+        const idStr = String(r["Transaction ID"] || r["transactionId"] || r.id || "").trim();
+        const match = idStr.match(/^([A-Za-z0-9_]+)[-_](\d+)$/);
+        if (match && match[1]) {
+          const p = match[1].toUpperCase();
+          if (p === "EDU26" || p === "EDU" || p === "MMP") {
+            activePrefix = p;
+            break;
+          }
+          if (!activePrefix) activePrefix = p;
+        }
+      }
+    }
+
+    if (!activePrefix) {
+      activePrefix = "EDU26";
+    }
+
     let maxNum = 0;
     if (existing.length > 0) {
       existing.forEach(r => {
-        const idStr = r["Transaction ID"] || r["transactionId"] || r.id || "";
+        const idStr = String(r["Transaction ID"] || r["transactionId"] || r.id || "").trim();
         const match = idStr.match(/[-_]?(\d+)$/);
         if (match) {
           const num = parseInt(match[1], 10);
@@ -172,9 +197,9 @@ const generateNextTxnId = async (idToken) => {
       }
     }
     const nextNum = maxNum + 1;
-    return `VG-${nextNum}`;
+    return `${activePrefix}-${nextNum}`;
   } catch (err) {
-    return `VG-${1001 + Math.floor(Math.random() * 100)}`;
+    return `EDU26-${1001 + Math.floor(Math.random() * 100)}`;
   }
 };
 
@@ -1878,7 +1903,8 @@ function Events({ C, lang, globalAuthToken, globalProfile, onPublicLogin, forceS
     // 2. Generate clean Sequential Transaction ID before saving (e.g. VG-1001, VG-1002...)
     let txId = formData["Transaction ID"] || formData["transactionId"] || formData["Tx ID"];
     if (!txId) {
-      txId = await generateNextTxnId(activeToken);
+      const preferredPrefix = selectedEvent?.event?.txnPrefix || C?.txnPrefix || "EDU26";
+      txId = await generateNextTxnId(activeToken, preferredPrefix);
     }
     
     // 3. MANDATORY DATABASE SUBMISSION (DO NOT PROCEED IF THIS FAILS!)
@@ -16910,7 +16936,8 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                     return;
                   }
 
-                  const prefix = prompt("Enter Serial Txn ID Prefix (e.g. VG or REG):", "VG");
+                  const currentFirstPrefix = (targetRegs.find(r => r["Transaction ID"])?.["Transaction ID"]?.split("-")[0]) || "EDU26";
+                  const prefix = prompt("Enter Serial Txn ID Prefix (e.g. EDU26 or VG):", currentFirstPrefix);
                   if (prefix === null) return;
                   const startNumInput = prompt("Enter Starting Serial Number (e.g. 1 or 1001):", "1");
                   if (startNumInput === null) return;
