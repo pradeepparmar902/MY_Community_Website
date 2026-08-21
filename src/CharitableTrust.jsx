@@ -19446,7 +19446,64 @@ function FormattedChatText({ text, onQuickClick }) {
 }
 
 // ── Application Record Card ─────────────────────────────────────────────────────────────
+// ── WhatsApp Message Formatter Helpers ───────────────────────────────────────────
+const generateVibhagSummaryWhatsAppText = (summaryData) => {
+  if (!summaryData) return "";
+  const { total, approved, pending, rejected, vibhagList, scopeTitle } = summaryData;
+  const todayStr = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+
+  let text = `📊 *${scopeTitle || "Education Felicitation 2026 - Registration Summary"}*\n`;
+  text += `📅 *Date:* ${todayStr}\n\n`;
+  text += `📈 *Overall Summary:*\n`;
+  text += `• 📋 *Total Registrations:* ${total}\n`;
+  text += `• 🟢 *Approved:* ${approved}\n`;
+  text += `• ⏳ *Pending:* ${pending}\n`;
+  text += `• ❌ *Rejected:* ${rejected}\n\n`;
+
+  if (vibhagList && vibhagList.length > 0) {
+    text += `📍 *Vibhag Breakdown:*\n`;
+    vibhagList.forEach(([vName, vStat], idx) => {
+      text += `${idx + 1}️⃣ *${vName}* ➜ Total: *${vStat.total}*  (⏳ Pending: *${vStat.pending}* | 🟢 Approved: *${vStat.approved}*)\n`;
+    });
+    text += `\n`;
+  }
+
+  text += `🌐 *Mumbai Meghwal Panchayat Portal*\n`;
+  text += `👉 https://pradeepparmar902.github.io/MY_Community_Website/`;
+  return text;
+};
+
+const generateApplicationWhatsAppText = (app) => {
+  if (!app) return "";
+  const rawName = String(app["Full Name"] || app["Submitted By"] || app.name || "Applicant");
+  const displayName = rawName.replace(/\|/g, " ").replace(/\s+/g, " ").trim();
+  const txnId = app["Transaction ID"] || app.transactionId || app.txnId || app.id || "VG-ID";
+  const status = app.Status || app.status || "Pending";
+  const vibhag = app["Vibhag"] || "Unspecified";
+  const stream = app["Stream"] || "General";
+  const marks = (app["% Obtained"] || app["%"]) ? `${app["% Obtained"] || app["%"]}%` : "-";
+  const marksDetail = app["Obtained Marks"] ? ` (${app["Obtained Marks"]}/${app["Out Of Marks"]})` : "";
+  const mobile = app["Mobile Number"] || app.submitterMob || app.mobile || "";
+
+  let text = `🎓 *Education Felicitation 2026 - Application Status*\n\n`;
+  text += `• 🆔 *Transaction ID:* ${txnId}\n`;
+  text += `• 👤 *Student Name:* ${displayName}\n`;
+  text += `• 📍 *Vibhag:* ${vibhag}\n`;
+  text += `• 📚 *Class / Stream:* ${stream}\n`;
+  text += `• 📊 *Percentage:* ${marks}${marksDetail}\n`;
+  if (mobile) text += `• 📱 *Mobile:* +91 ${String(mobile).replace(/\D/g, '').slice(-10)}\n`;
+  text += `• 📌 *Current Status:* ${status === "Approved" ? "🟢 Approved" : status === "Needs Info" ? "⚠️ Needs Info / Action Required" : status === "Disapproved" || status === "Rejected" ? "🔴 Rejected" : "⏳ Pending Review"}\n`;
+  
+  if (app.Remarks) {
+    text += `• 💬 *Remarks:* ${app.Remarks}\n`;
+  }
+  text += `\n🌐 *Mumbai Meghwal Panchayat Portal*\n`;
+  text += `👉 https://pradeepparmar902.github.io/MY_Community_Website/`;
+  return text;
+};
+
 function ApplicationRecordCard({ app, onAction }) {
+  const [copied, setCopied] = useState(false);
   const status = app.Status || app.status || "Pending";
   const isApproved = status === "Approved";
   const isNeedsInfo = status === "Needs Info";
@@ -19459,6 +19516,22 @@ function ApplicationRecordCard({ app, onAction }) {
   const badgeBg = isApproved ? "#DCFCE7" : isNeedsInfo ? "#FEF3C7" : isDisapproved ? "#FEE2E2" : "#EFF6FF";
   const badgeColor = isApproved ? "#15803D" : isNeedsInfo ? "#B45309" : isDisapproved ? "#DC2626" : "#1D4ED8";
   const badgeIcon = isApproved ? "🟢" : isNeedsInfo ? "⚠️" : isDisapproved ? "🔴" : "⏳";
+
+  const handleCopyWhatsApp = () => {
+    const text = generateApplicationWhatsAppText(app);
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      prompt("Copy formatted WhatsApp text:", text);
+    });
+  };
+
+  const handleShareWhatsApp = () => {
+    const text = generateApplicationWhatsAppText(app);
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank");
+  };
 
   return (
     <div style={{
@@ -19537,15 +19610,69 @@ function ApplicationRecordCard({ app, onAction }) {
         💬 <strong>Remarks:</strong> {app.Remarks || (isApproved ? "Application verified & approved by Committee." : isNeedsInfo ? "Additional information or document re-upload required." : "Application is under committee review.")}
       </div>
 
-      {/* Card Footer Actions */}
-      {app["Supporting Document"] && (
-        <div style={{padding:"8px 14px",background:"#F8FAFC",borderTop:"1px solid #E2E8F0",display:"flex",justifyContent:"flex-end"}}>
+      {/* Card Footer Actions (WhatsApp & Document) */}
+      <div style={{
+        padding: "8px 14px",
+        background: "#F8FAFC",
+        borderTop: "1px solid #E2E8F0",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 6
+      }}>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <button
+            onClick={handleCopyWhatsApp}
+            style={{
+              padding: "4px 9px",
+              background: copied ? "#DCFCE7" : "white",
+              color: copied ? "#15803D" : "#475569",
+              border: `1px solid ${copied ? "#86EFAC" : "#CBD5E1"}`,
+              borderRadius: 6,
+              fontSize: ".72rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 4
+            }}
+            title="Copy formatted status for WhatsApp"
+          >
+            <span>{copied ? "✅" : "📋"}</span>
+            <span>{copied ? "Copied!" : "Copy for WhatsApp"}</span>
+          </button>
+
+          <button
+            onClick={handleShareWhatsApp}
+            style={{
+              padding: "4px 9px",
+              background: "#25D366",
+              color: "white",
+              border: "none",
+              borderRadius: 6,
+              fontSize: ".72rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              boxShadow: "0 2px 5px rgba(37,211,102,0.25)"
+            }}
+            title="Share directly to WhatsApp"
+          >
+            <span>🟢</span>
+            <span>Share</span>
+          </button>
+        </div>
+
+        {app["Supporting Document"] && (
           <a
             href={app["Supporting Document"]}
             target="_blank"
             rel="noreferrer"
             style={{
-              fontSize: ".75rem",
+              fontSize: ".74rem",
               fontWeight: 700,
               color: "#2563EB",
               textDecoration: "none",
@@ -19554,18 +19681,35 @@ function ApplicationRecordCard({ app, onAction }) {
               gap: 4
             }}
           >
-            📄 View Marksheet / Document ↗
+            📄 Marksheet ↗
           </a>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
 
 // ── Vibhag Analytics Dashboard Card ─────────────────────────────────────────────────────
 function VibhagSummaryCard({ summaryData }) {
+  const [copied, setCopied] = useState(false);
   if (!summaryData) return null;
   const { total, approved, pending, rejected, vibhagList, scopeTitle } = summaryData;
+
+  const handleCopyWhatsApp = () => {
+    const text = generateVibhagSummaryWhatsAppText(summaryData);
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      prompt("Copy formatted WhatsApp summary:", text);
+    });
+  };
+
+  const handleShareWhatsApp = () => {
+    const text = generateVibhagSummaryWhatsAppText(summaryData);
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank");
+  };
 
   return (
     <div style={{
@@ -19628,6 +19772,65 @@ function VibhagSummaryCard({ summaryData }) {
           </div>
         </div>
       )}
+
+      {/* WhatsApp Sharing Bar */}
+      <div style={{
+        padding: "8px 14px",
+        background: "#F8FAFC",
+        borderTop: "1px solid #E2E8F0",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 6
+      }}>
+        <div style={{display:"flex",gap:6,alignItems:"center",width:"100%"}}>
+          <button
+            onClick={handleCopyWhatsApp}
+            style={{
+              flex: 1,
+              padding: "6px 10px",
+              background: copied ? "#DCFCE7" : "white",
+              color: copied ? "#15803D" : "#475569",
+              border: `1px solid ${copied ? "#86EFAC" : "#CBD5E1"}`,
+              borderRadius: 6,
+              fontSize: ".75rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4
+            }}
+            title="Copy formatted summary text for WhatsApp"
+          >
+            <span>{copied ? "✅" : "📋"}</span>
+            <span>{copied ? "Copied to Clipboard!" : "Copy for WhatsApp"}</span>
+          </button>
+
+          <button
+            onClick={handleShareWhatsApp}
+            style={{
+              padding: "6px 12px",
+              background: "#25D366",
+              color: "white",
+              border: "none",
+              borderRadius: 6,
+              fontSize: ".75rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              boxShadow: "0 2px 6px rgba(37,211,102,0.25)"
+            }}
+            title="Share summary directly to WhatsApp"
+          >
+            <span>🟢</span>
+            <span>Share on WhatsApp</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
