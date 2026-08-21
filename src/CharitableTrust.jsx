@@ -18879,14 +18879,92 @@ function CommunityChatbot({ C, auth }) {
   const [loading, setLoading] = useState(false);
   const [regs, setRegs] = useState([]);
   const [regsLoaded, setRegsLoaded] = useState(false);
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [slashSubmenu, setSlashSubmenu] = useState(null); // null | "vibhags"
   const chatBottomRef = useRef(null);
+
+  const VIBHAG_OPTIONS = [
+    "10 MAHALAXMI",
+    "15 RAMDEV NAGAR",
+    "2 WALPAKHADI",
+    "22 LOWER PAREL",
+    "30 PRATKISHA NAGAR",
+    "55 BHAYANDER",
+    "65 KALWA"
+  ];
+
+  const SLASH_COMMANDS = [
+    {
+      cmd: "/all",
+      icon: "📊",
+      label: "Summary of ALL Entries",
+      desc: "Complete registration counts & metrics across ALL Vibhags",
+      action: "Summary data of all entry ALL"
+    },
+    {
+      cmd: "/vibhag",
+      icon: "📍",
+      label: "Summary by Vibhag",
+      desc: "Choose a specific Vibhag (e.g. 15 RAMDEV NAGAR, 10 MAHALAXMI)",
+      hasSubmenu: true
+    },
+    {
+      cmd: "/pending",
+      icon: "⏳",
+      label: "Pending Review List",
+      desc: "Show registrations currently awaiting committee approval",
+      action: "Show all pending registrations"
+    },
+    {
+      cmd: "/approved",
+      icon: "🟢",
+      label: "Approved List",
+      desc: "Show registrations verified & approved by committee",
+      action: "Show approved registrations"
+    },
+    {
+      cmd: "/check",
+      icon: "🔍",
+      label: "Check Status (VG-ID / Mobile)",
+      desc: "Check application by Transaction ID (e.g. VG-9) or Mobile Number",
+      action: "Check VG-9"
+    },
+    {
+      cmd: "/events",
+      icon: "🎓",
+      label: "Upcoming Events & Felicitation",
+      desc: "Event dates, venues, guidelines, and registration forms",
+      action: "Education Felicitation 2026 events"
+    },
+    {
+      cmd: "/donate",
+      icon: "💰",
+      label: "80G Tax Donations",
+      desc: "Donation options, 80G tax benefit certificate & receipts",
+      action: "Donation 80G Tax Exemption"
+    },
+    {
+      cmd: "/contact",
+      icon: "📞",
+      label: "Helpline & Office Contacts",
+      desc: "Trust office address, committee contacts & support helpline",
+      action: "Trust contact numbers"
+    },
+    {
+      cmd: "/help",
+      icon: "❓",
+      label: "Commands & Capabilities Guide",
+      desc: "View full list of questions this chatbot is capable of answering",
+      action: "/help"
+    }
+  ];
 
   const [messages, setMessages] = useState([
     {
       id: "m_welcome",
       sender: "bot",
       type: "welcome",
-      text: "👋 **Namaste & Welcome!**\n\nI am your **MMP & Vidya Gohil Trust Assistant**.\n\n• 🔍 **Check Application Status**: Type your **Transaction ID (e.g. VG-9)** or registered **Mobile Number**.\n• 🛡️ **Committee / Vibhag Admin**: Enter your authorized mobile to unlock live counts & area summaries.\n• 🎓 **FAQs**: Ask about Education Felicitation 2026, events, eligibility, or donations."
+      text: "👋 **Namaste & Welcome!**\n\nI am your **MMP & Vidya Gohil Trust Assistant**.\n\n⚡ **Tip**: Type **`/`** in the chat box or click **`⚡ Commands`** to view all question shortcuts!\n\n• 🔍 **Check Status**: Type your **Transaction ID (e.g. VG-9)** or **Mobile Number**.\n• 🛡️ **Committee Admin**: Type your authorized mobile for Vibhag analytics.\n• 🎓 **FAQs**: Ask about Education Felicitation 2026, events, eligibility, or donations."
     }
   ]);
 
@@ -18925,6 +19003,8 @@ function CommunityChatbot({ C, auth }) {
     const query = (userText || input).trim();
     if (!query) return;
     setInput("");
+    setShowSlashMenu(false);
+    setSlashSubmenu(null);
 
     const newMsgId = "m_" + Date.now();
     const userMsg = { id: newMsgId, sender: "user", text: query };
@@ -18959,7 +19039,20 @@ function CommunityChatbot({ C, auth }) {
     let botType = "text";
     let cardData = null;
 
-    if (phoneMatch) {
+    if (qLower === "/help" || qLower === "help" || qLower === "/commands" || qLower.includes("what can you do") || qLower.includes("capabilities")) {
+      botReply = `🤖 **Chatbot Capabilities & Question Guide**:
+
+Here are all the questions and slash commands I can answer:
+
+• 📊 **/all** — Summary data of ALL entries across all Vibhags
+• 📍 **/vibhag [name]** — Summary data of a specific Vibhag (e.g. *15 RAMDEV NAGAR*, *10 MAHALAXMI*, *65 KALWA*)
+• ⏳ **/pending** — List registrations pending committee review
+• 🟢 **/approved** — List registrations verified & approved
+• 🔍 **/check [VG-ID / Mobile]** — Lookup application status (e.g. *VG-9* or *9987516889*)
+• 🎓 **/events** — Education Felicitation 2026 dates & guidelines
+• 💰 **/donate** — 80G tax benefit details & donation links
+• 📞 **/contact** — Trust office, helpline & committee contacts`;
+    } else if (phoneMatch) {
       const rawDigits = phoneMatch[1].slice(-10);
       const authRecord = committeeMobileMap[rawDigits];
 
@@ -18974,9 +19067,9 @@ function CommunityChatbot({ C, auth }) {
 
         botType = "admin_verified";
         if (scope === "all") {
-          botReply = `🛡️ **Super Admin Access Activated: ${memberName}** (+91 ${rawDigits})\n\n✨ **Scope: All Vibhags Unlocked**\nYou can ask for:\n• 📊 **Complete Vibhag Summary** (type *"Vibhag Summary"*)\n• ⏳ **Full Pending Review List** (type *"Pending"*)\n• 🔍 **Search Any Applicant** by Txn ID or Mobile Number.`;
+          botReply = `🛡️ **Super Admin Access Activated: ${memberName}** (+91 ${rawDigits})\n\n✨ **Scope: All Vibhags Unlocked**\nYou can use:\n• 📊 **/all** — Full registration summary across all Vibhags\n• ⏳ **/pending** — All pending applications\n• 🔍 **/check [ID]** — Search any applicant`;
         } else {
-          botReply = `📍 **Vibhag Admin Access Activated: ${memberName}** (+91 ${rawDigits})\n\n✨ **Scope: ${vibhag}**\nYou can ask for:\n• 📊 **${vibhag} Summary & Counts** (type *"${vibhag} Count"*)\n• ⏳ **${vibhag} Pending List** (type *"Pending"*)\n• 🔍 **Search applicants** within ${vibhag}.`;
+          botReply = `📍 **Vibhag Admin Access Activated: ${memberName}** (+91 ${rawDigits})\n\n✨ **Scope: ${vibhag}**\nYou can use:\n• 📊 **/vibhag** — Summary count for ${vibhag}\n• ⏳ **/pending** — Pending applications in ${vibhag}\n• 🔍 **/check [ID]** — Search applicants in ${vibhag}`;
         }
 
         // Check for personal registrations of this member
@@ -19031,63 +19124,115 @@ function CommunityChatbot({ C, auth }) {
       } else {
         botReply = `🔍 No record found for Transaction ID **${searchId}**.\n\nPlease check the ID received on your submission screen or SMS.`;
       }
-    } else if (qLower.includes("vibhag") || qLower.includes("summary") || qLower.includes("count") || qLower.includes("total") || qLower.includes("report") || qLower.includes("pending") || qLower.includes("kalwa") || qLower.includes("mahalaxmi") || qLower.includes("pakhadi") || qLower.includes("parel") || qLower.includes("ramdev") || qLower.includes("pratiksha")) {
+    } else if (qLower.includes("pending")) {
+      // Pending Registrations Filter
+      if (userSessionScope === "public" || userSessionScope === "individual") {
+        botReply = `🔒 **Admin Verification Required**\n\nPending review lists are restricted to committee admins.\n\n👉 Please enter your **10-digit Authorized Mobile Number** to unlock.`;
+      } else {
+        let pendingList = currentRegs.filter(r => {
+          const s = String(r.Status || r.status || "Pending").trim();
+          return s !== "Approved" && s !== "Disapproved" && s !== "Rejected";
+        });
+
+        if (userSessionScope === "vibhag" && sessionVibhag) {
+          pendingList = pendingList.filter(r => {
+            const v = String(r["Vibhag"] || r["vibhag"] || "").toLowerCase();
+            return v.includes(sessionVibhag.toLowerCase()) || sessionVibhag.toLowerCase().includes(v);
+          });
+        }
+
+        if (pendingList.length > 0) {
+          botType = "apps_list";
+          botReply = `⏳ **Found ${pendingList.length} Pending Review Applications${userSessionScope === "vibhag" ? ` (${sessionVibhag})` : ""}:**`;
+          cardData = { apps: pendingList };
+        } else {
+          botReply = `🎉 No pending applications found${userSessionScope === "vibhag" ? ` in ${sessionVibhag}` : ""}! All applications have been reviewed.`;
+        }
+      }
+    } else if (qLower.includes("approved")) {
+      // Approved Registrations Filter
+      if (userSessionScope === "public" || userSessionScope === "individual") {
+        botReply = `🔒 **Admin Verification Required**\n\nApproved lists are restricted to committee admins.\n\n👉 Please enter your **10-digit Authorized Mobile Number** to unlock.`;
+      } else {
+        let approvedList = currentRegs.filter(r => String(r.Status || r.status || "").trim() === "Approved");
+        if (userSessionScope === "vibhag" && sessionVibhag) {
+          approvedList = approvedList.filter(r => {
+            const v = String(r["Vibhag"] || r["vibhag"] || "").toLowerCase();
+            return v.includes(sessionVibhag.toLowerCase()) || sessionVibhag.toLowerCase().includes(v);
+          });
+        }
+
+        if (approvedList.length > 0) {
+          botType = "apps_list";
+          botReply = `🟢 **Found ${approvedList.length} Approved Applications${userSessionScope === "vibhag" ? ` (${sessionVibhag})` : ""}:**`;
+          cardData = { apps: approvedList };
+        } else {
+          botReply = `ℹ️ No approved applications recorded yet${userSessionScope === "vibhag" ? ` in ${sessionVibhag}` : ""}.`;
+        }
+      }
+    } else if (qLower.includes("vibhag") || qLower.includes("summary") || qLower.includes("count") || qLower.includes("total") || qLower.includes("report") || qLower.includes("kalwa") || qLower.includes("mahalaxmi") || qLower.includes("pakhadi") || qLower.includes("parel") || qLower.includes("ramdev") || qLower.includes("pratiksha") || qLower === "/all") {
       // Summary / Analytics Query
       if (userSessionScope === "public" || userSessionScope === "individual") {
         botReply = `🔒 **Admin Verification Required**\n\nSummary count reports and committee analytics are restricted.\n\n👉 Please enter your **10-digit Authorized Mobile Number** (or log in as Admin on the website) to unlock your assigned access level.`;
-      } else if (userSessionScope === "vibhag") {
-        // Vibhag Level Analytics
-        const vibhagRegs = currentRegs.filter(r => {
-          const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "").toLowerCase();
-          return v.includes(sessionVibhag.toLowerCase()) || sessionVibhag.toLowerCase().includes(v);
-        });
-
-        let approved = 0, pending = 0, rejected = 0;
-        vibhagRegs.forEach(r => {
-          const s = String(r.Status || r.status || "Pending").trim();
-          if (s === "Approved") approved++;
-          else if (s === "Disapproved" || s === "Rejected") rejected++;
-          else pending++;
-        });
-
-        botType = "summary_card";
-        botReply = `📍 **Live Analytics for ${sessionVibhag}**: `;
-        cardData = {
-          total: vibhagRegs.length,
-          approved,
-          pending,
-          rejected,
-          scopeTitle: `${sessionVibhag} - Analytics`,
-          vibhagList: [[`${sessionVibhag}`, { total: vibhagRegs.length, approved, pending, rejected }]],
-          apps: vibhagRegs
-        };
       } else {
-        // All Level Analytics
-        const vibhagMap = {};
-        let totalApproved = 0, totalPending = 0, totalRejected = 0, totalAll = 0;
+        // Check if specific Vibhag requested in query
+        const matchedVibhag = VIBHAG_OPTIONS.find(v => qLower.includes(v.toLowerCase()) || qLower.includes(v.split(" ")[1]?.toLowerCase()));
+        const targetVibhag = matchedVibhag || (userSessionScope === "vibhag" ? sessionVibhag : null);
 
-        currentRegs.forEach(r => {
-          const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "Unspecified").trim();
-          if (!vibhagMap[v]) vibhagMap[v] = { approved: 0, pending: 0, rejected: 0, total: 0 };
-          const s = String(r.Status || r.status || "Pending").trim();
-          if (s === "Approved") { vibhagMap[v].approved++; totalApproved++; }
-          else if (s === "Disapproved" || s === "Rejected") { vibhagMap[v].rejected++; totalRejected++; }
-          else { vibhagMap[v].pending++; totalPending++; }
-          vibhagMap[v].total++; totalAll++;
-        });
+        if (targetVibhag) {
+          // Single Vibhag Analytics
+          const vibhagRegs = currentRegs.filter(r => {
+            const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "").toLowerCase();
+            return v.includes(targetVibhag.toLowerCase()) || targetVibhag.toLowerCase().includes(v);
+          });
 
-        const sortedVibhags = Object.entries(vibhagMap).sort((a, b) => a[0].localeCompare(b[0]));
+          let approved = 0, pending = 0, rejected = 0;
+          vibhagRegs.forEach(r => {
+            const s = String(r.Status || r.status || "Pending").trim();
+            if (s === "Approved") approved++;
+            else if (s === "Disapproved" || s === "Rejected") rejected++;
+            else pending++;
+          });
 
-        botType = "summary_card";
-        botReply = `📊 **Live Registration Summary (Education Felicitation 2026 - All Vibhags)**: `;
-        cardData = {
-          total: totalAll,
-          approved: totalApproved,
-          pending: totalPending,
-          rejected: totalRejected,
-          scopeTitle: "Education Felicitation 2026 Summary",
-          vibhagList: sortedVibhags
-        };
+          botType = "summary_card";
+          botReply = `📍 **Live Analytics for ${targetVibhag}**: `;
+          cardData = {
+            total: vibhagRegs.length,
+            approved,
+            pending,
+            rejected,
+            scopeTitle: `${targetVibhag} Summary`,
+            vibhagList: [[`${targetVibhag}`, { total: vibhagRegs.length, approved, pending, rejected }]],
+            apps: vibhagRegs
+          };
+        } else {
+          // All Level Analytics
+          const vibhagMap = {};
+          let totalApproved = 0, totalPending = 0, totalRejected = 0, totalAll = 0;
+
+          currentRegs.forEach(r => {
+            const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "Unspecified").trim();
+            if (!vibhagMap[v]) vibhagMap[v] = { approved: 0, pending: 0, rejected: 0, total: 0 };
+            const s = String(r.Status || r.status || "Pending").trim();
+            if (s === "Approved") { vibhagMap[v].approved++; totalApproved++; }
+            else if (s === "Disapproved" || s === "Rejected") { vibhagMap[v].rejected++; totalRejected++; }
+            else { vibhagMap[v].pending++; totalPending++; }
+            vibhagMap[v].total++; totalAll++;
+          });
+
+          const sortedVibhags = Object.entries(vibhagMap).sort((a, b) => a[0].localeCompare(b[0]));
+
+          botType = "summary_card";
+          botReply = `📊 **Live Registration Summary (Education Felicitation 2026 - ALL Vibhags)**: `;
+          cardData = {
+            total: totalAll,
+            approved: totalApproved,
+            pending: totalPending,
+            rejected: totalRejected,
+            scopeTitle: "Education Felicitation 2026 (All Vibhags)",
+            vibhagList: sortedVibhags
+          };
+        }
       }
     } else if (qLower.includes("event") || qLower.includes("felicitation") || qLower.includes("date") || qLower.includes("venue") || qLower.includes("when")) {
       const evs = C.events || [];
@@ -19110,7 +19255,7 @@ function CommunityChatbot({ C, auth }) {
 • **Email**: ${contact.email || "info@mmp-cwc-new.com"}
 • **Helpline**: ${contact.phone || "+91 9820785209"}`;
     } else {
-      botReply = `🤖 **How can I assist you?**\n\nHere are some things you can try:\n• Enter your **Transaction ID (e.g. VG-9)** to check application status\n• Enter your **10-digit Mobile Number** to check your submissions\n• Type your **Authorized Mobile Number** for assigned Vibhag summary counts\n• Ask about **Education Felicitation 2026**, **Events**, or **Donations**.`;
+      botReply = `🤖 **How can I assist you?**\n\nType **`/`** to browse all question shortcuts, or try:\n• **/all** — Summary data of all entries\n• **/vibhag 15 RAMDEV NAGAR** — Summary for a specific Vibhag\n• **/check VG-9** — Check application status\n• **/pending** — List pending registrations`;
     }
 
     setMessages(prev => [...prev, { id: "m_" + Date.now(), sender: "bot", type: botType, text: botReply, cardData }]);
@@ -19158,7 +19303,7 @@ function CommunityChatbot({ C, auth }) {
       {isOpen && (
         <div style={{
           width: "min(410px, calc(100vw - 32px))",
-          height: isMinimized ? "58px" : "min(580px, calc(100vh - 90px))",
+          height: isMinimized ? "58px" : "min(590px, calc(100vh - 80px))",
           background: "white",
           borderRadius: 18,
           boxShadow: "0 14px 40px rgba(0,0,0,0.22)",
@@ -19224,22 +19369,34 @@ function CommunityChatbot({ C, auth }) {
               {/* Quick Actions Bar */}
               <div style={{padding:"8px 12px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",gap:6,overflowX:"auto",whiteSpace:"nowrap"}}>
                 <button
+                  onClick={() => { setShowSlashMenu(!showSlashMenu); setSlashSubmenu(null); }}
+                  style={{fontSize:".72rem",background:"#1E293B",border:"none",borderRadius:12,padding:"4px 10px",color:"white",cursor:"pointer",fontWeight:700,boxShadow:"0 1px 3px rgba(0,0,0,0.15)",display:"flex",alignItems:"center",gap:4}}
+                >
+                  <span>⚡</span> Commands (/)
+                </button>
+                <button
+                  onClick={() => handleSendMessage("Summary data of all entry ALL")}
+                  style={{fontSize:".72rem",background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:12,padding:"4px 10px",color:"#1D4ED8",cursor:"pointer",fontWeight:700}}
+                >
+                  📊 All Entries
+                </button>
+                <button
+                  onClick={() => { setShowSlashMenu(true); setSlashSubmenu("vibhags"); }}
+                  style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
+                >
+                  📍 Vibhag #
+                </button>
+                <button
+                  onClick={() => handleSendMessage("Show all pending registrations")}
+                  style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
+                >
+                  ⏳ Pending
+                </button>
+                <button
                   onClick={() => handleSendMessage("Check VG-9")}
-                  style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600,boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}
+                  style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
                 >
                   🔍 Sample: VG-9
-                </button>
-                <button
-                  onClick={() => handleSendMessage(userSessionScope === "vibhag" ? `${sessionVibhag} count` : "Vibhag Summary Count")}
-                  style={{fontSize:".72rem",background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:12,padding:"4px 10px",color:"#1D4ED8",cursor:"pointer",fontWeight:700,boxShadow:"0 1px 2px rgba(37,99,235,0.08)"}}
-                >
-                  📊 {userSessionScope === "vibhag" ? "My Vibhag Count" : "Vibhag Counts"}
-                </button>
-                <button
-                  onClick={() => handleSendMessage("Education Felicitation 2026")}
-                  style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600,boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}
-                >
-                  🎓 Education 2026
                 </button>
               </div>
 
@@ -19309,6 +19466,90 @@ function CommunityChatbot({ C, auth }) {
                 <div ref={chatBottomRef} />
               </div>
 
+              {/* Slash Command Autocomplete Menu */}
+              {(showSlashMenu || input.startsWith("/")) && (
+                <div style={{
+                  background: "white",
+                  borderTop: "1px solid #CBD5E1",
+                  borderBottom: "1px solid #CBD5E1",
+                  maxHeight: 220,
+                  overflowY: "auto",
+                  padding: "6px 8px",
+                  boxShadow: "0 -6px 16px rgba(0,0,0,0.08)",
+                  animation: "fadeIn .2s ease"
+                }}>
+                  {slashSubmenu === "vibhags" ? (
+                    <div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 8px",borderBottom:"1px solid #F1F5F9",marginBottom:4}}>
+                        <span style={{fontSize:".75rem",fontWeight:800,color:"#2563EB"}}>Select a Vibhag for Summary:</span>
+                        <button onClick={()=>setSlashSubmenu(null)} style={{background:"none",border:"none",color:"#64748B",fontSize:".75rem",cursor:"pointer",fontWeight:700}}>← Back</button>
+                      </div>
+                      {VIBHAG_OPTIONS.map(v => (
+                        <div
+                          key={v}
+                          onClick={() => handleSendMessage(`Summary data of vibhag ${v}`)}
+                          style={{
+                            padding: "8px 10px",
+                            borderRadius: 6,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            fontSize: ".8rem",
+                            transition: "background 0.15s"
+                          }}
+                          onMouseEnter={e=>e.currentTarget.style.background="#EFF6FF"}
+                          onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+                        >
+                          <span style={{fontWeight:700,color:"#0F172A"}}>📍 {v}</span>
+                          <span style={{fontSize:".7rem",color:"#2563EB",fontWeight:600}}>Get Count →</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{fontSize:".7rem",fontWeight:800,color:"#64748B",padding:"4px 8px",textTransform:"uppercase",letterSpacing:0.5}}>
+                        Question Shortcuts & Slash Commands:
+                      </div>
+                      {SLASH_COMMANDS.map(sc => (
+                        <div
+                          key={sc.cmd}
+                          onClick={() => {
+                            if (sc.hasSubmenu) {
+                              setSlashSubmenu("vibhags");
+                            } else {
+                              handleSendMessage(sc.action);
+                            }
+                          }}
+                          style={{
+                            padding: "8px 10px",
+                            borderRadius: 8,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            fontSize: ".8rem",
+                            transition: "background 0.15s"
+                          }}
+                          onMouseEnter={e=>e.currentTarget.style.background="#F1F5F9"}
+                          onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+                        >
+                          <span style={{fontSize:"1.1rem"}}>{sc.icon}</span>
+                          <div style={{flex:1}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <span style={{fontWeight:800,color:"#2563EB",fontFamily:"monospace"}}>{sc.cmd}</span>
+                              <span style={{fontWeight:700,color:"#0F172A"}}>{sc.label}</span>
+                            </div>
+                            <div style={{fontSize:".7rem",color:"#64748B"}}>{sc.desc}</div>
+                          </div>
+                          <span style={{fontSize:".75rem",color:"#94A3B8"}}>↵</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Input Footer */}
               <form
                 onSubmit={e => { e.preventDefault(); handleSendMessage(); }}
@@ -19317,8 +19558,12 @@ function CommunityChatbot({ C, auth }) {
                 <input
                   type="text"
                   value={input}
-                  onChange={e => setInput(e.target.value)}
-                  placeholder={isAnyAdmin ? "Ask count, search Txn ID / Mobile..." : "Enter Txn ID (VG-9) or Mobile..."}
+                  onChange={e => {
+                    setInput(e.target.value);
+                    if (e.target.value.startsWith("/")) setShowSlashMenu(true);
+                    else if (showSlashMenu && !e.target.value) setShowSlashMenu(false);
+                  }}
+                  placeholder={isAnyAdmin ? "Type '/' for commands or ask anything..." : "Type '/' or enter Txn ID / Mobile..."}
                   style={{
                     flex: 1,
                     padding: "10px 14px",
@@ -19354,7 +19599,6 @@ function CommunityChatbot({ C, auth }) {
     </div>
   );
 }
-
 
 
 export default function App() {
