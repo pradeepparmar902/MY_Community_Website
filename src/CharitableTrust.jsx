@@ -14216,13 +14216,77 @@ function LoginScreen({ C, onLogin, onSkip }) {
 
 
 
-// ── Dedicated Chatbot Committee Admin Access Manager Component ───────────────────────────
+
+// ── Dedicated Chatbot Committee Admin Access & Knowledge Base Manager ───────────────────
 function ChatbotAccessManager({ C, setC, auth }) {
+  const [activeTab, setActiveTab] = useState("users"); // "users" | "kb"
   const [accessScope, setAccessScope] = useState("individual"); // Default to "individual" (Mobile/Txn only)
   const [selectedVibhag, setSelectedVibhag] = useState("10 MAHALAXMI");
   const [allRegisteredUsers, setAllRegisteredUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [searchFilter, setSearchFilter] = useState("");
+
+  // Default Knowledge Base entries
+  const DEFAULT_KB = [
+    {
+      id: "kb_events",
+      cmd: "/events",
+      icon: "🎓",
+      title: "Upcoming Education Felicitation 2026 events",
+      answer: "🎓 **Education Felicitation 2026 - Mumbai Meghwal Panchayat & Vidya Gohil Trust**\n\n• **Event**: Annual Student Education Felicitation 2026\n• **Eligibility**: Students scoring 50%+ in 10th, 12th, Degree, Diploma & Post-Graduation\n• **Registration Portal**: Online via website Events section\n• **Venue & Date**: Mumbai (To be officially announced soon)\n• **Required Documents**: Marksheet & Passport Photo\n\nFor assistance with registration, contact your Vibhag Head.",
+      enabled: true,
+      adminOnly: false
+    },
+    {
+      id: "kb_edu_committee",
+      cmd: "/edu_committee",
+      icon: "👥",
+      title: "Education Committee Members",
+      answer: "👥 **Education Felicitation 2026 Committee Members**:\n\n• **Pradeep Parmar** — Trustee / Lead Coordinator (+91 9820785209)\n• **Keshav Wagh** — Lower Parel Head (+91 9967821964)\n• **Ashwin Kataria** — Ramdev Nagar Head (+91 8082234187)\n• **Samiksha Chudasama** — Committee Member (+91 7977561920)\n• **Dinesh Sondarva** — Mahalaxmi Head (+91 8779227886)\n• **Khushi Jogadiya** — Pratiksha Nagar Head (+91 8591563577)",
+      enabled: true,
+      adminOnly: false
+    },
+    {
+      id: "kb_cwc_committee",
+      cmd: "/cwc_committee",
+      icon: "🏛️",
+      title: "CWC Committee Members",
+      answer: "🏛️ **Central Working Committee (CWC) Members**:\n\n• **President**: MMP Central Leadership\n• **General Secretary**: CWC Executive\n• **Treasurer / Financial Head**: Trust Executive\n• **Coordination Team**: Central Vibhag Team\n\n*(You can edit full member details & phone numbers in Admin Panel)*",
+      enabled: true,
+      adminOnly: false
+    },
+    {
+      id: "kb_donate",
+      cmd: "/donate",
+      icon: "💰",
+      title: "80G Tax Donations & Bank Details",
+      answer: "💰 **Donations & 80G Tax Exemption**:\n\n• Vidya Gohil Charitable Trust offers **80G Tax Benefits** for all eligible donations under Indian Income Tax regulations.\n• You can donate online securely via Razorpay (UPI, Google Pay, PhonePe, Cards, NetBanking) on our **Donate** page.\n• Automated 80G tax receipts and 10BE acknowledgement certificates are provided.",
+      enabled: false, // Default hidden as per user request for MMP
+      adminOnly: false
+    },
+    {
+      id: "kb_contact",
+      cmd: "/contact",
+      icon: "📞",
+      title: "Trust Helpline & Office Contacts",
+      answer: "📞 **Trust Office & Helpline Contacts**:\n\n• **Office**: Mumbai, Maharashtra\n• **Email**: info@mmp-cwc-new.com\n• **Helpline Mobile**: +91 9820785209 / +91 9967821964\n• **Timings**: 10:00 AM – 7:00 PM (Mon – Sat)",
+      enabled: true,
+      adminOnly: false
+    }
+  ];
+
+  const kbList = Array.isArray(C.chatbotKnowledgeBase) && C.chatbotKnowledgeBase.length > 0 ? C.chatbotKnowledgeBase : DEFAULT_KB;
+
+  // New Q&A Form State
+  const [editingKbId, setEditingKbId] = useState(null);
+  const [kbForm, setKbForm] = useState({
+    cmd: "",
+    icon: "❓",
+    title: "",
+    answer: "",
+    enabled: true,
+    adminOnly: false
+  });
 
   const VIBHAG_LIST = [
     "10 MAHALAXMI",
@@ -14241,7 +14305,6 @@ function ChatbotAccessManager({ C, setC, auth }) {
     const fetchAll = async () => {
       setLoadingUsers(true);
       try {
-        // Fetch from both /users (Auth accounts) and /registrations (Event submissions)
         const [usersList, regsList] = await Promise.all([
           fbFetchAllUsers(auth?.idToken).catch(() => []),
           fbFetchRegistrations(auth?.idToken).catch(() => [])
@@ -14249,7 +14312,6 @@ function ChatbotAccessManager({ C, setC, auth }) {
 
         const map = new Map();
 
-        // 1. Saved Custom Configuration in C.committeeMobiles
         const savedList = Array.isArray(C.committeeMobiles) ? C.committeeMobiles : [];
         savedList.forEach(m => {
           const item = typeof m === "string" ? { name: "Committee Member", mobile: m, scope: "individual", vibhag: "Individual Only", role: "Applicant" } : m;
@@ -14259,7 +14321,6 @@ function ChatbotAccessManager({ C, setC, auth }) {
           }
         });
 
-        // 2. Ensure Super Admin is always present with "all"
         if (!map.has("9820785209")) {
           map.set("9820785209", {
             name: "Pradeep Parmar (Super Admin)",
@@ -14272,7 +14333,6 @@ function ChatbotAccessManager({ C, setC, auth }) {
           });
         }
 
-        // 3. Automatically aggregate EVERY Firebase Auth User from /users collection
         (usersList || []).forEach(u => {
           const mobMatch = String(u.mobile || u.phone || u.phoneNumber || "").match(/([6-9]\d{9})/);
           const cleanMob = mobMatch ? mobMatch[1] : (u.id && u.id.match(/([6-9]\d{9})/) ? u.id.match(/([6-9]\d{9})/)[1] : "");
@@ -14290,7 +14350,6 @@ function ChatbotAccessManager({ C, setC, auth }) {
                 source: "auth_user"
               });
             } else {
-              // Enhance existing entry with name/email if missing
               const existing = map.get(cleanMob);
               if ((!existing.name || existing.name === "Registered Applicant") && u.name) {
                 existing.name = u.name;
@@ -14300,7 +14359,6 @@ function ChatbotAccessManager({ C, setC, auth }) {
           }
         });
 
-        // 4. Automatically aggregate EVERY applicant from /registrations collection
         (regsList || []).forEach(r => {
           if (r.deleted) return;
           const mobs = [
@@ -14354,6 +14412,17 @@ function ChatbotAccessManager({ C, setC, auth }) {
     }
   };
 
+  const saveKnowledgeBaseToFirebase = async (updatedKb) => {
+    const newC = { ...C, chatbotKnowledgeBase: updatedKb };
+    if (setC) setC(newC);
+    try {
+      await fbSave(newC, auth?.idToken);
+      alert("Chatbot Knowledge Base saved successfully!");
+    } catch(e) {
+      alert("Failed to save to database: " + e.message);
+    }
+  };
+
   const updateMemberScope = (targetMobile, newScope, newVibhag) => {
     const cleanTarget = String(targetMobile).replace(/\D/g, "").slice(-10);
     const existingConfig = Array.isArray(C.committeeMobiles) ? [...C.committeeMobiles] : [];
@@ -14377,9 +14446,42 @@ function ChatbotAccessManager({ C, setC, auth }) {
       existingConfig.push(updatedEntry);
     }
 
-    // Update local state immediately for instant UI response
     setAllRegisteredUsers(prev => prev.map(u => u.mobile === cleanTarget ? updatedEntry : u));
     saveMobilesToFirebase(existingConfig);
+  };
+
+  const toggleKbEnabled = (kbId) => {
+    const updated = kbList.map(item => item.id === kbId ? { ...item, enabled: !item.enabled } : item);
+    saveKnowledgeBaseToFirebase(updated);
+  };
+
+  const deleteKbItem = (kbId) => {
+    if (!confirm("Are you sure you want to delete this Q&A shortcut?")) return;
+    const updated = kbList.filter(item => item.id !== kbId);
+    saveKnowledgeBaseToFirebase(updated);
+  };
+
+  const handleSaveKbForm = (e) => {
+    e.preventDefault();
+    let cleanCmd = kbForm.cmd.trim();
+    if (!cleanCmd.startsWith("/")) cleanCmd = "/" + cleanCmd;
+    if (!kbForm.title.trim() || !kbForm.answer.trim()) return alert("Please fill Title and Answer.");
+
+    let updated = [];
+    if (editingKbId) {
+      updated = kbList.map(item => item.id === editingKbId ? { ...kbForm, id: editingKbId, cmd: cleanCmd } : item);
+    } else {
+      const newEntry = {
+        ...kbForm,
+        id: "kb_" + Date.now(),
+        cmd: cleanCmd
+      };
+      updated = [...kbList, newEntry];
+    }
+
+    saveKnowledgeBaseToFirebase(updated);
+    setEditingKbId(null);
+    setKbForm({ cmd: "", icon: "❓", title: "", answer: "", enabled: true, adminOnly: false });
   };
 
   const filteredUsers = allRegisteredUsers.filter(u => {
@@ -14399,308 +14501,535 @@ function ChatbotAccessManager({ C, setC, auth }) {
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:16}}>
         <div>
           <h2 className="sh" style={{fontSize:"1.4rem",color:"var(--dt)",marginBottom:4,display:"flex",alignItems:"center",gap:8}}>
-            <span>🤖</span> Chatbot Access Management (All Firebase & Registered Users)
+            <span>🤖</span> Chatbot Management Console
           </h2>
           <p style={{fontSize:".85rem",color:"var(--mu)",margin:0}}>
-            Full list of all <strong>{allRegisteredUsers.length} Users</strong> (from Firebase Authentication & event registrations). Default access is <strong>📱 Mobile/Txn</strong>; Super Admin can toggle access to <strong>Vibhag</strong> or <strong>ALL</strong> at any time.
+            Configure <strong>User Access Levels</strong> and dynamic <strong>Slash Commands (Q&A Answers & Hide/Unhide)</strong> in real-time.
           </p>
         </div>
-      </div>
 
-      {/* Add / Authorize Member Form */}
-      <div style={{background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"20px 24px",marginBottom:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-        <div style={{fontSize:".9rem",fontWeight:800,color:"#0F172A",marginBottom:12}}>➕ Authorize Custom User / Committee Member:</div>
-        <form 
-          onSubmit={e => {
-            e.preventDefault();
-            const form = e.target;
-            const name = form.cName.value.trim();
-            const mobile = form.cMobile.value.trim().replace(/\D/g, "").slice(-10);
-            const role = form.cRole.value.trim();
-            if (!mobile || mobile.length !== 10) return alert("Please enter a valid 10-digit mobile number.");
-
-            const newEntry = { 
-              name: name || "Member", 
-              mobile, 
-              scope: accessScope,
-              vibhag: accessScope === "vibhag" ? selectedVibhag : accessScope === "all" ? "All Vibhags" : "Individual Only",
-              role: role || (accessScope === "all" ? "Super Admin" : accessScope === "vibhag" ? `${selectedVibhag} Head` : "Applicant"), 
-              addedAt: new Date().toLocaleDateString("en-IN") 
-            };
-            
-            const existingConfig = Array.isArray(C.committeeMobiles) ? [...C.committeeMobiles] : [];
-            const idx = existingConfig.findIndex(m => (typeof m === "string" ? m : m.mobile) === mobile);
-            if (idx !== -1) existingConfig[idx] = newEntry;
-            else existingConfig.push(newEntry);
-
-            setAllRegisteredUsers(prev => {
-              const f = prev.filter(x => x.mobile !== mobile);
-              return [newEntry, ...f];
-            });
-            saveMobilesToFirebase(existingConfig);
-            form.reset();
-            alert(`${name} (+91 ${mobile}) has been added with ${accessScope.toUpperCase()} access!`);
-          }}
-          style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",gap:14,alignItems:"end"}}
-        >
-          <div>
-            <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Member / User Name:</label>
-            <input name="cName" type="text" placeholder="e.g. Keshav Wagh" required style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
-          </div>
-          <div>
-            <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>10-Digit Mobile Number:</label>
-            <input name="cMobile" type="tel" placeholder="e.g. 9967821964" required style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
-          </div>
-          <div>
-            <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Access Level (Default: Mobile/Txn):</label>
-            <div style={{display:"flex",background:"#F1F5F9",padding:3,borderRadius:8,border:"1px solid #CBD5E1",gap:2}}>
-              <label style={{flex:1,textAlign:"center",padding:"7px 4px",borderRadius:6,fontSize:".73rem",fontWeight:accessScope==="individual"?800:600,background:accessScope==="individual"?"#475569":"transparent",color:accessScope==="individual"?"white":"#475569",cursor:"pointer",userSelect:"none"}}>
-                <input type="radio" name="newScope" value="individual" checked={accessScope==="individual"} onChange={()=>setAccessScope("individual")} style={{display:"none"}}/>
-                📱 Mobile/Txn
-              </label>
-              <label style={{flex:1,textAlign:"center",padding:"7px 4px",borderRadius:6,fontSize:".73rem",fontWeight:accessScope==="vibhag"?800:600,background:accessScope==="vibhag"?"#D97706":"transparent",color:accessScope==="vibhag"?"white":"#78350F",cursor:"pointer",userSelect:"none"}}>
-                <input type="radio" name="newScope" value="vibhag" checked={accessScope==="vibhag"} onChange={()=>setAccessScope("vibhag")} style={{display:"none"}}/>
-                📍 Vibhag
-              </label>
-              <label style={{flex:1,textAlign:"center",padding:"7px 4px",borderRadius:6,fontSize:".73rem",fontWeight:accessScope==="all"?800:600,background:accessScope==="all"?"#2563EB":"transparent",color:accessScope==="all"?"white":"#1E40AF",cursor:"pointer",userSelect:"none"}}>
-                <input type="radio" name="newScope" value="all" checked={accessScope==="all"} onChange={()=>setAccessScope("all")} style={{display:"none"}}/>
-                🌐 ALL
-              </label>
-            </div>
-          </div>
-
-          {accessScope === "vibhag" && (
-            <div>
-              <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Select Assigned Vibhag:</label>
-              <select 
-                value={selectedVibhag} 
-                onChange={e=>setSelectedVibhag(e.target.value)}
-                style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box",fontWeight:600}}
-              >
-                {VIBHAG_LIST.map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </div>
-          )}
-
-          <div>
-            <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Designation / Role:</label>
-            <input name="cRole" type="text" placeholder="e.g. Core Committee / Volunteer" style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
-          </div>
-
-          <div>
-            <button 
-              type="submit" 
-              style={{
-                width:"100%",
-                padding:"10px 14px",
-                background:"linear-gradient(135deg, #2563EB, #1D4ED8)",
-                color:"white",
-                border:"none",
-                borderRadius:6,
-                fontWeight:700,
-                fontSize:".85rem",
-                cursor:"pointer",
-                boxShadow:"0 2px 6px rgba(37,99,235,0.25)"
-              }}
-            >
-              + Authorize Access
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Registered Users Table */}
-      <div style={{background:"white",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-        <div style={{padding:"14px 18px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-          <div style={{fontWeight:700,fontSize:".88rem",color:"#0F172A"}}>
-            All Registered & Auth Users ({filteredUsers.length})
-            <span style={{fontSize:".75rem",color:"#64748B",fontWeight:500,marginLeft:8}}>
-              (Merged from Firebase Auth Users & Event Registrations)
-            </span>
-          </div>
-          <div>
-            <input 
-              type="text" 
-              value={searchFilter} 
-              onChange={e=>setSearchFilter(e.target.value)} 
-              placeholder="🔍 Search user, mobile, vibhag..." 
-              style={{padding:"6px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".8rem",width:220}}
-            />
-          </div>
+        {/* Sub-Tabs Switcher */}
+        <div style={{display:"flex",background:"#E2E8F0",padding:3,borderRadius:10,gap:3}}>
+          <button
+            onClick={() => setActiveTab("users")}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              fontSize: ".82rem",
+              fontWeight: 700,
+              background: activeTab === "users" ? "white" : "transparent",
+              color: activeTab === "users" ? "#1E293B" : "#64748B",
+              border: "none",
+              cursor: "pointer",
+              boxShadow: activeTab === "users" ? "0 2px 6px rgba(0,0,0,0.08)" : "none"
+            }}
+          >
+            👥 User Access & Scopes ({allRegisteredUsers.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("kb")}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              fontSize: ".82rem",
+              fontWeight: 700,
+              background: activeTab === "kb" ? "white" : "transparent",
+              color: activeTab === "kb" ? "#1E293B" : "#64748B",
+              border: "none",
+              cursor: "pointer",
+              boxShadow: activeTab === "kb" ? "0 2px 6px rgba(0,0,0,0.08)" : "none"
+            }}
+          >
+            ❓ Slash Commands & Q&A ({kbList.length})
+          </button>
         </div>
+      </div>
 
-        <div style={{overflowX:"auto"}}>
-          {loadingUsers ? (
-            <div style={{padding:30,textAlign:"center",color:"#64748B",fontSize:".85rem"}}>⏳ Loading all Firebase Auth & registered users...</div>
-          ) : (
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:".85rem"}}>
-              <thead>
-                <tr style={{background:"#1E293B",color:"white"}}>
-                  <th style={{padding:"11px 16px",textAlign:"left"}}>User / Applicant Name</th>
-                  <th style={{padding:"11px 16px",textAlign:"left"}}>Registered Mobile Number</th>
-                  <th style={{padding:"11px 16px",textAlign:"left",minWidth:280}}>Chatbot Access Scope (Dynamic)</th>
-                  <th style={{padding:"11px 16px",textAlign:"left"}}>Details / Vibhag</th>
-                  <th style={{padding:"11px 16px",textAlign:"center"}}>Chatbot Status</th>
-                  <th style={{padding:"11px 16px",textAlign:"right"}}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((item, idx) => {
-                  const currentScope = item.scope || "individual";
+      {activeTab === "users" && (
+        <>
+          {/* Add / Authorize Member Form */}
+          <div style={{background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"20px 24px",marginBottom:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+            <div style={{fontSize:".9rem",fontWeight:800,color:"#0F172A",marginBottom:12}}>➕ Authorize Custom User / Committee Member:</div>
+            <form 
+              onSubmit={e => {
+                e.preventDefault();
+                const form = e.target;
+                const name = form.cName.value.trim();
+                const mobile = form.cMobile.value.trim().replace(/\D/g, "").slice(-10);
+                const role = form.cRole.value.trim();
+                if (!mobile || mobile.length !== 10) return alert("Please enter a valid 10-digit mobile number.");
 
-                  return (
-                    <tr key={item.mobile + "_" + idx} style={{borderBottom:"1px solid #F1F5F9",background:idx%2===1?"#F8FAFC":"white"}}>
-                      <td style={{padding:"12px 16px",fontWeight:700,color:"#0F172A"}}>
-                        {item.name}
-                        {item.email && <div style={{fontSize:".72rem",color:"#64748B",fontWeight:400}}>{item.email}</div>}
-                      </td>
-                      <td style={{padding:"12px 16px",fontWeight:700,color:"#2563EB",fontFamily:"monospace",fontSize:".9rem"}}>+91 {item.mobile}</td>
-                      
-                      {/* Interactive Radio Scope Selector */}
-                      <td style={{padding:"10px 16px"}}>
-                        <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                          <div style={{display:"inline-flex",background:"#F1F5F9",padding:3,borderRadius:8,border:"1px solid #CBD5E1",gap:2,width:"fit-content"}}>
-                            <label style={{
-                              padding: "4px 8px",
-                              borderRadius: 6,
-                              fontSize: ".72rem",
-                              fontWeight: currentScope === "individual" ? 800 : 600,
-                              background: currentScope === "individual" ? "#475569" : "transparent",
-                              color: currentScope === "individual" ? "white" : "#475569",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 4,
-                              userSelect: "none"
-                            }}>
-                              <input 
-                                type="radio" 
-                                name={`scope_row_${idx}`} 
-                                value="individual" 
-                                checked={currentScope === "individual"} 
-                                onChange={() => updateMemberScope(item.mobile, "individual", item.vibhag)}
-                                style={{display:"none"}}
-                              />
-                              📱 Mobile/Txn
-                            </label>
+                const newEntry = { 
+                  name: name || "Member", 
+                  mobile, 
+                  scope: accessScope,
+                  vibhag: accessScope === "vibhag" ? selectedVibhag : accessScope === "all" ? "All Vibhags" : "Individual Only",
+                  role: role || (accessScope === "all" ? "Super Admin" : accessScope === "vibhag" ? `${selectedVibhag} Head` : "Applicant"), 
+                  addedAt: new Date().toLocaleDateString("en-IN") 
+                };
+                
+                const existingConfig = Array.isArray(C.committeeMobiles) ? [...C.committeeMobiles] : [];
+                const idx = existingConfig.findIndex(m => (typeof m === "string" ? m : m.mobile) === mobile);
+                if (idx !== -1) existingConfig[idx] = newEntry;
+                else existingConfig.push(newEntry);
 
-                            <label style={{
-                              padding: "4px 8px",
-                              borderRadius: 6,
-                              fontSize: ".72rem",
-                              fontWeight: currentScope === "vibhag" ? 800 : 600,
-                              background: currentScope === "vibhag" ? "#D97706" : "transparent",
-                              color: currentScope === "vibhag" ? "white" : "#78350F",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 4,
-                              userSelect: "none"
-                            }}>
-                              <input 
-                                type="radio" 
-                                name={`scope_row_${idx}`} 
-                                value="vibhag" 
-                                checked={currentScope === "vibhag"} 
-                                onChange={() => updateMemberScope(item.mobile, "vibhag", item.vibhag !== "Individual Only" ? item.vibhag : "10 MAHALAXMI")}
-                                style={{display:"none"}}
-                              />
-                              📍 Vibhag
-                            </label>
+                setAllRegisteredUsers(prev => {
+                  const f = prev.filter(x => x.mobile !== mobile);
+                  return [newEntry, ...f];
+                });
+                saveMobilesToFirebase(existingConfig);
+                form.reset();
+                alert(`${name} (+91 ${mobile}) has been added with ${accessScope.toUpperCase()} access!`);
+              }}
+              style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",gap:14,alignItems:"end"}}
+            >
+              <div>
+                <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Member / User Name:</label>
+                <input name="cName" type="text" placeholder="e.g. Keshav Wagh" required style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
+              </div>
+              <div>
+                <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>10-Digit Mobile Number:</label>
+                <input name="cMobile" type="tel" placeholder="e.g. 9967821964" required style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
+              </div>
+              <div>
+                <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Access Level (Default: Mobile/Txn):</label>
+                <div style={{display:"flex",background:"#F1F5F9",padding:3,borderRadius:8,border:"1px solid #CBD5E1",gap:2}}>
+                  <label style={{flex:1,textAlign:"center",padding:"7px 4px",borderRadius:6,fontSize:".73rem",fontWeight:accessScope==="individual"?800:600,background:accessScope==="individual"?"#475569":"transparent",color:accessScope==="individual"?"white":"#475569",cursor:"pointer",userSelect:"none"}}>
+                    <input type="radio" name="newScope" value="individual" checked={accessScope==="individual"} onChange={()=>setAccessScope("individual")} style={{display:"none"}}/>
+                    📱 Mobile/Txn
+                  </label>
+                  <label style={{flex:1,textAlign:"center",padding:"7px 4px",borderRadius:6,fontSize:".73rem",fontWeight:accessScope==="vibhag"?800:600,background:accessScope==="vibhag"?"#D97706":"transparent",color:accessScope==="vibhag"?"white":"#78350F",cursor:"pointer",userSelect:"none"}}>
+                    <input type="radio" name="newScope" value="vibhag" checked={accessScope==="vibhag"} onChange={()=>setAccessScope("vibhag")} style={{display:"none"}}/>
+                    📍 Vibhag
+                  </label>
+                  <label style={{flex:1,textAlign:"center",padding:"7px 4px",borderRadius:6,fontSize:".73rem",fontWeight:accessScope==="all"?800:600,background:accessScope==="all"?"#2563EB":"transparent",color:accessScope==="all"?"white":"#1E40AF",cursor:"pointer",userSelect:"none"}}>
+                    <input type="radio" name="newScope" value="all" checked={accessScope==="all"} onChange={()=>setAccessScope("all")} style={{display:"none"}}/>
+                    🌐 ALL
+                  </label>
+                </div>
+              </div>
 
-                            <label style={{
-                              padding: "4px 8px",
-                              borderRadius: 6,
-                              fontSize: ".72rem",
-                              fontWeight: currentScope === "all" ? 800 : 600,
-                              background: currentScope === "all" ? "#2563EB" : "transparent",
-                              color: currentScope === "all" ? "white" : "#1E40AF",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 4,
-                              userSelect: "none"
-                            }}>
-                              <input 
-                                type="radio" 
-                                name={`scope_row_${idx}`} 
-                                value="all" 
-                                checked={currentScope === "all"} 
-                                onChange={() => updateMemberScope(item.mobile, "all", "All Vibhags")}
-                                style={{display:"none"}}
-                              />
-                              🌐 ALL
-                            </label>
-                          </div>
+              {accessScope === "vibhag" && (
+                <div>
+                  <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Select Assigned Vibhag:</label>
+                  <select 
+                    value={selectedVibhag} 
+                    onChange={e=>setSelectedVibhag(e.target.value)}
+                    style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box",fontWeight:600}}
+                  >
+                    {VIBHAG_LIST.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </div>
+              )}
 
-                          {/* Inline Vibhag Dropdown when Vibhag radio is chosen */}
-                          {currentScope === "vibhag" && (
-                            <div style={{display:"flex",alignItems:"center",gap:6}}>
-                              <span style={{fontSize:".7rem",color:"#B45309",fontWeight:700}}>Assigned:</span>
-                              <select 
-                                value={item.vibhag && item.vibhag !== "Individual Only" ? item.vibhag : "10 MAHALAXMI"}
-                                onChange={e => updateMemberScope(item.mobile, "vibhag", e.target.value)}
-                                style={{
+              <div>
+                <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Designation / Role:</label>
+                <input name="cRole" type="text" placeholder="e.g. Core Committee / Volunteer" style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
+              </div>
+
+              <div>
+                <button 
+                  type="submit" 
+                  style={{
+                    width:"100%",
+                    padding:"10px 14px",
+                    background:"linear-gradient(135deg, #2563EB, #1D4ED8)",
+                    color:"white",
+                    border:"none",
+                    borderRadius:6,
+                    fontWeight:700,
+                    fontSize:".85rem",
+                    cursor:"pointer",
+                    boxShadow:"0 2px 6px rgba(37,99,235,0.25)"
+                  }}
+                >
+                  + Authorize Access
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Registered Users Table */}
+          <div style={{background:"white",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+            <div style={{padding:"14px 18px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+              <div style={{fontWeight:700,fontSize:".88rem",color:"#0F172A"}}>
+                All Registered & Auth Users ({filteredUsers.length})
+                <span style={{fontSize:".75rem",color:"#64748B",fontWeight:500,marginLeft:8}}>
+                  (Merged from Firebase Auth Users & Event Registrations)
+                </span>
+              </div>
+              <div>
+                <input 
+                  type="text" 
+                  value={searchFilter} 
+                  onChange={e=>setSearchFilter(e.target.value)} 
+                  placeholder="🔍 Search user, mobile, vibhag..." 
+                  style={{padding:"6px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".8rem",width:220}}
+                />
+              </div>
+            </div>
+
+            <div style={{overflowX:"auto"}}>
+              {loadingUsers ? (
+                <div style={{padding:30,textAlign:"center",color:"#64748B",fontSize:".85rem"}}>⏳ Loading all Firebase Auth & registered users...</div>
+              ) : (
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:".85rem"}}>
+                  <thead>
+                    <tr style={{background:"#1E293B",color:"white"}}>
+                      <th style={{padding:"11px 16px",textAlign:"left"}}>User / Applicant Name</th>
+                      <th style={{padding:"11px 16px",textAlign:"left"}}>Registered Mobile Number</th>
+                      <th style={{padding:"11px 16px",textAlign:"left",minWidth:280}}>Chatbot Access Scope (Dynamic)</th>
+                      <th style={{padding:"11px 16px",textAlign:"left"}}>Details / Vibhag</th>
+                      <th style={{padding:"11px 16px",textAlign:"center"}}>Chatbot Status</th>
+                      <th style={{padding:"11px 16px",textAlign:"right"}}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map((item, idx) => {
+                      const currentScope = item.scope || "individual";
+
+                      return (
+                        <tr key={item.mobile + "_" + idx} style={{borderBottom:"1px solid #F1F5F9",background:idx%2===1?"#F8FAFC":"white"}}>
+                          <td style={{padding:"12px 16px",fontWeight:700,color:"#0F172A"}}>
+                            {item.name}
+                            {item.email && <div style={{fontSize:".72rem",color:"#64748B",fontWeight:400}}>{item.email}</div>}
+                          </td>
+                          <td style={{padding:"12px 16px",fontWeight:700,color:"#2563EB",fontFamily:"monospace",fontSize:".9rem"}}>+91 {item.mobile}</td>
+                          
+                          {/* Interactive Radio Scope Selector */}
+                          <td style={{padding:"10px 16px"}}>
+                            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                              <div style={{display:"inline-flex",background:"#F1F5F9",padding:3,borderRadius:8,border:"1px solid #CBD5E1",gap:2,width:"fit-content"}}>
+                                <label style={{
                                   padding: "4px 8px",
                                   borderRadius: 6,
-                                  border: "1px solid #FCD34D",
-                                  background: "#FFFBEB",
-                                  fontSize: ".74rem",
-                                  fontWeight: 700,
-                                  color: "#92400E",
-                                  outline: "none",
-                                  cursor: "pointer"
-                                }}
-                              >
-                                {VIBHAG_LIST.map(v => <option key={v} value={v}>{v}</option>)}
-                              </select>
-                            </div>
-                          )}
-                        </div>
-                      </td>
+                                  fontSize: ".72rem",
+                                  fontWeight: currentScope === "individual" ? 800 : 600,
+                                  background: currentScope === "individual" ? "#475569" : "transparent",
+                                  color: currentScope === "individual" ? "white" : "#475569",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  userSelect: "none"
+                                }}>
+                                  <input 
+                                    type="radio" 
+                                    name={`scope_row_${idx}`} 
+                                    value="individual" 
+                                    checked={currentScope === "individual"} 
+                                    onChange={() => updateMemberScope(item.mobile, "individual", item.vibhag)}
+                                    style={{display:"none"}}
+                                  />
+                                  📱 Mobile/Txn
+                                </label>
 
-                      <td style={{padding:"12px 16px",color:"#475569"}}>
-                        {item.role || item.vibhag || "Registered User"}
+                                <label style={{
+                                  padding: "4px 8px",
+                                  borderRadius: 6,
+                                  fontSize: ".72rem",
+                                  fontWeight: currentScope === "vibhag" ? 800 : 600,
+                                  background: currentScope === "vibhag" ? "#D97706" : "transparent",
+                                  color: currentScope === "vibhag" ? "white" : "#78350F",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  userSelect: "none"
+                                }}>
+                                  <input 
+                                    type="radio" 
+                                    name={`scope_row_${idx}`} 
+                                    value="vibhag" 
+                                    checked={currentScope === "vibhag"} 
+                                    onChange={() => updateMemberScope(item.mobile, "vibhag", item.vibhag !== "Individual Only" ? item.vibhag : "10 MAHALAXMI")}
+                                    style={{display:"none"}}
+                                  />
+                                  📍 Vibhag
+                                </label>
+
+                                <label style={{
+                                  padding: "4px 8px",
+                                  borderRadius: 6,
+                                  fontSize: ".72rem",
+                                  fontWeight: currentScope === "all" ? 800 : 600,
+                                  background: currentScope === "all" ? "#2563EB" : "transparent",
+                                  color: currentScope === "all" ? "white" : "#1E40AF",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  userSelect: "none"
+                                }}>
+                                  <input 
+                                    type="radio" 
+                                    name={`scope_row_${idx}`} 
+                                    value="all" 
+                                    checked={currentScope === "all"} 
+                                    onChange={() => updateMemberScope(item.mobile, "all", "All Vibhags")}
+                                    style={{display:"none"}}
+                                  />
+                                  🌐 ALL
+                                </label>
+                              </div>
+
+                              {/* Inline Vibhag Dropdown when Vibhag radio is chosen */}
+                              {currentScope === "vibhag" && (
+                                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                  <span style={{fontSize:".7rem",color:"#B45309",fontWeight:700}}>Assigned:</span>
+                                  <select 
+                                    value={item.vibhag && item.vibhag !== "Individual Only" ? item.vibhag : "10 MAHALAXMI"}
+                                    onChange={e => updateMemberScope(item.mobile, "vibhag", e.target.value)}
+                                    style={{
+                                      padding: "4px 8px",
+                                      borderRadius: 6,
+                                      border: "1px solid #FCD34D",
+                                      background: "#FFFBEB",
+                                      fontSize: ".74rem",
+                                      fontWeight: 700,
+                                      color: "#92400E",
+                                      outline: "none",
+                                      cursor: "pointer"
+                                    }}
+                                  >
+                                    {VIBHAG_LIST.map(v => <option key={v} value={v}>{v}</option>)}
+                                  </select>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
+                          <td style={{padding:"12px 16px",color:"#475569"}}>
+                            {item.role || item.vibhag || "Registered User"}
+                          </td>
+                          <td style={{padding:"12px 16px",textAlign:"center"}}>
+                            <span style={{
+                              background: currentScope === "all" ? "#DBEAFE" : currentScope === "vibhag" ? "#FEF3C7" : "#F1F5F9",
+                              color: currentScope === "all" ? "#1E40AF" : currentScope === "vibhag" ? "#92400E" : "#475569",
+                              padding:"4px 10px",
+                              borderRadius:12,
+                              fontSize:".75rem",
+                              fontWeight:800
+                            }}>
+                              {currentScope === "all" ? "🌐 Super Admin" : currentScope === "vibhag" ? "📍 Vibhag Admin" : "📱 User (Own Txn)"}
+                            </span>
+                          </td>
+                          <td style={{padding:"12px 16px",textAlign:"right"}}>
+                            {item.mobile === "9820785209" ? (
+                              <span style={{fontSize:".75rem",color:"#64748B",fontWeight:600}}>Master Admin</span>
+                            ) : (
+                              <button 
+                                onClick={() => updateMemberScope(item.mobile, "individual", "Individual Only")}
+                                style={{background:"#F1F5F9",color:"#475569",border:"1px solid #CBD5E1",padding:"4px 10px",borderRadius:6,fontSize:".74rem",fontWeight:600,cursor:"pointer"}}
+                                title="Reset back to default Mobile/Txn"
+                              >
+                                Reset
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeTab === "kb" && (
+        <div>
+          {/* Add / Edit Q&A Form */}
+          <div style={{background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"20px 24px",marginBottom:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <div style={{fontSize:".95rem",fontWeight:800,color:"#0F172A"}}>
+                {editingKbId ? "✏️ Edit Slash Command & Custom Answer:" : "➕ Add New Slash Command & Answer:"}
+              </div>
+              {editingKbId && (
+                <button
+                  onClick={() => {
+                    setEditingKbId(null);
+                    setKbForm({ cmd: "", icon: "❓", title: "", answer: "", enabled: true, adminOnly: false });
+                  }}
+                  style={{background:"#F1F5F9",border:"none",padding:"4px 10px",borderRadius:6,fontSize:".75rem",cursor:"pointer",fontWeight:600}}
+                >
+                  Cancel Edit
+                </button>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveKbForm} style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div style={{display:"grid",gridTemplateColumns:"100px 160px 1fr 140px",gap:12}}>
+                <div>
+                  <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Icon:</label>
+                  <input
+                    type="text"
+                    value={kbForm.icon}
+                    onChange={e=>setKbForm({...kbForm, icon: e.target.value})}
+                    placeholder="🎓"
+                    style={{width:"100%",padding:"9px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".9rem",textAlign:"center",boxSizing:"border-box"}}
+                  />
+                </div>
+                <div>
+                  <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Command Shortcut:</label>
+                  <input
+                    type="text"
+                    value={kbForm.cmd}
+                    onChange={e=>setKbForm({...kbForm, cmd: e.target.value})}
+                    placeholder="/edu_committee"
+                    required
+                    style={{width:"100%",padding:"9px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",fontFamily:"monospace",fontWeight:700,boxSizing:"border-box"}}
+                  />
+                </div>
+                <div>
+                  <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Question / Title Label:</label>
+                  <input
+                    type="text"
+                    value={kbForm.title}
+                    onChange={e=>setKbForm({...kbForm, title: e.target.value})}
+                    placeholder="e.g. Education Committee Members"
+                    required
+                    style={{width:"100%",padding:"9px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",boxSizing:"border-box"}}
+                  />
+                </div>
+                <div>
+                  <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Visibility / Hide:</label>
+                  <select
+                    value={kbForm.enabled ? "enabled" : "hidden"}
+                    onChange={e=>setKbForm({...kbForm, enabled: e.target.value === "enabled"})}
+                    style={{width:"100%",padding:"9px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",fontWeight:700,boxSizing:"border-box"}}
+                  >
+                    <option value="enabled">👁️ Enabled (Visible)</option>
+                    <option value="hidden">🙈 Hidden (Disabled)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>
+                  Answer / Response Text (Supports bold **text**, bullet • points, names, phones, links):
+                </label>
+                <textarea
+                  value={kbForm.answer}
+                  onChange={e=>setKbForm({...kbForm, answer: e.target.value})}
+                  placeholder="Enter detailed answer, committee member list with mobile numbers, event guidelines, or instructions..."
+                  rows={5}
+                  required
+                  style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",lineHeight:1.5,fontFamily:"inherit",boxSizing:"border-box"}}
+                />
+              </div>
+
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:4}}>
+                <label style={{display:"flex",alignItems:"center",gap:8,fontSize:".8rem",color:"#475569",cursor:"pointer",fontWeight:600}}>
+                  <input
+                    type="checkbox"
+                    checked={kbForm.adminOnly}
+                    onChange={e=>setKbForm({...kbForm, adminOnly: e.target.checked})}
+                  />
+                  🔒 Restrict to Committee Admins Only (Hide from Public Users)
+                </label>
+
+                <button
+                  type="submit"
+                  style={{
+                    padding:"10px 24px",
+                    background:"linear-gradient(135deg, #2563EB, #1D4ED8)",
+                    color:"white",
+                    border:"none",
+                    borderRadius:8,
+                    fontWeight:700,
+                    fontSize:".88rem",
+                    cursor:"pointer",
+                    boxShadow:"0 2px 8px rgba(37,99,235,0.25)"
+                  }}
+                >
+                  {editingKbId ? "💾 Save Changes" : "+ Add Slash Command"}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Knowledge Base Table */}
+          <div style={{background:"white",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+            <div style={{padding:"14px 18px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",fontWeight:700,fontSize:".88rem",color:"#0F172A",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>Configured Questions & Slash Commands ({kbList.length})</span>
+              <span style={{fontSize:".75rem",color:"#64748B"}}>Toggle Hide/Unhide with one click</span>
+            </div>
+
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:".85rem"}}>
+                <thead>
+                  <tr style={{background:"#1E293B",color:"white"}}>
+                    <th style={{padding:"11px 16px",textAlign:"left",width:140}}>Command (/)</th>
+                    <th style={{padding:"11px 16px",textAlign:"left",width:240}}>Question / Title</th>
+                    <th style={{padding:"11px 16px",textAlign:"left"}}>Answer Preview</th>
+                    <th style={{padding:"11px 16px",textAlign:"center",width:130}}>Status (Hide/Unhide)</th>
+                    <th style={{padding:"11px 16px",textAlign:"right",width:140}}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {kbList.map((item, idx) => (
+                    <tr key={item.id || idx} style={{borderBottom:"1px solid #F1F5F9",background:item.enabled ? (idx%2===1?"#F8FAFC":"white") : "#FFFBEB"}}>
+                      <td style={{padding:"12px 16px",fontWeight:800,fontFamily:"monospace",color:"#2563EB",fontSize:".9rem"}}>
+                        <span style={{marginRight:6}}>{item.icon || "❓"}</span>
+                        {item.cmd}
                       </td>
-                      <td style={{padding:"12px 16px",textAlign:"center"}}>
-                        <span style={{
-                          background: currentScope === "all" ? "#DBEAFE" : currentScope === "vibhag" ? "#FEF3C7" : "#F1F5F9",
-                          color: currentScope === "all" ? "#1E40AF" : currentScope === "vibhag" ? "#92400E" : "#475569",
-                          padding:"4px 10px",
-                          borderRadius:12,
-                          fontSize:".75rem",
-                          fontWeight:800
-                        }}>
-                          {currentScope === "all" ? "🌐 Super Admin" : currentScope === "vibhag" ? "📍 Vibhag Admin" : "📱 User (Own Txn)"}
-                        </span>
-                      </td>
-                      <td style={{padding:"12px 16px",textAlign:"right"}}>
-                        {item.mobile === "9820785209" ? (
-                          <span style={{fontSize:".75rem",color:"#64748B",fontWeight:600}}>Master Admin</span>
-                        ) : (
-                          <button 
-                            onClick={() => updateMemberScope(item.mobile, "individual", "Individual Only")}
-                            style={{background:"#F1F5F9",color:"#475569",border:"1px solid #CBD5E1",padding:"4px 10px",borderRadius:6,fontSize:".74rem",fontWeight:600,cursor:"pointer"}}
-                            title="Reset back to default Mobile/Txn"
-                          >
-                            Reset
-                          </button>
+                      <td style={{padding:"12px 16px",fontWeight:700,color:"#0F172A"}}>
+                        {item.title}
+                        {item.adminOnly && (
+                          <div style={{fontSize:".68rem",color:"#B45309",fontWeight:800,marginTop:2}}>🔒 Admin Only</div>
                         )}
                       </td>
+                      <td style={{padding:"12px 16px",color:"#475569",fontSize:".8rem",lineHeight:1.4,maxWidth:320,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        {item.answer}
+                      </td>
+                      <td style={{padding:"12px 16px",textAlign:"center"}}>
+                        <button
+                          onClick={() => toggleKbEnabled(item.id)}
+                          style={{
+                            background: item.enabled ? "#DCFCE7" : "#FEE2E2",
+                            color: item.enabled ? "#15803D" : "#DC2626",
+                            border: `1px solid ${item.enabled ? "#86EFAC" : "#FCA5A5"}`,
+                            padding: "4px 10px",
+                            borderRadius: 12,
+                            fontSize: ".75rem",
+                            fontWeight: 800,
+                            cursor: "pointer"
+                          }}
+                          title="Click to toggle visibility in Chatbot"
+                        >
+                          {item.enabled ? "👁️ Visible" : "🙈 Hidden"}
+                        </button>
+                      </td>
+                      <td style={{padding:"12px 16px",textAlign:"right"}}>
+                        <div style={{display:"flex",justifyContent:"flex-end",gap:6}}>
+                          <button
+                            onClick={() => {
+                              setEditingKbId(item.id);
+                              setKbForm({ ...item });
+                              window.scrollTo({ top: 0, behavior: "smooth" });
+                            }}
+                            style={{background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #BFDBFE",padding:"4px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteKbItem(item.id)}
+                            style={{background:"#FEE2E2",color:"#DC2626",border:"1px solid #FCA5A5",padding:"4px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </div>
-
-      <div style={{marginTop:16,background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:8,padding:"14px 18px",fontSize:".82rem",color:"#1E40AF",lineHeight:1.6}}>
-        📌 <strong>Auto-Population from Firebase Authentication & Registrations:</strong>
-        <br/>• All 41+ users registered via Firebase Phone/Email Auth are loaded automatically with default <strong>📱 Mobile/Txn</strong> access.
-        <br/>• Super Admin can elevate any user to <strong>📍 Vibhag</strong> (for area heads) or <strong>🌐 ALL</strong> (for committee admins) anytime.
-      </div>
+      )}
     </div>
   );
 }
@@ -18899,37 +19228,65 @@ function CommunityChatbot({ C, auth }) {
 
   const isAnyAdmin = userSessionScope === "all" || userSessionScope === "vibhag";
 
-  const SLASH_COMMANDS = [
+  // Dynamic Knowledge Base from C.chatbotKnowledgeBase or Defaults
+  const DEFAULT_KB = [
+    {
+      id: "kb_events",
+      cmd: "/events",
+      icon: "🎓",
+      title: "Upcoming Education Felicitation 2026 events",
+      answer: "🎓 **Education Felicitation 2026 - Mumbai Meghwal Panchayat & Vidya Gohil Trust**\n\n• **Event**: Annual Student Education Felicitation 2026\n• **Eligibility**: Students scoring 50%+ in 10th, 12th, Degree, Diploma & Post-Graduation\n• **Registration Portal**: Online via website Events section\n• **Venue & Date**: Mumbai (To be officially announced soon)\n• **Required Documents**: Marksheet & Passport Photo\n\nFor assistance with registration, contact your Vibhag Head.",
+      enabled: true,
+      adminOnly: false
+    },
+    {
+      id: "kb_edu_committee",
+      cmd: "/edu_committee",
+      icon: "👥",
+      title: "Education Committee Members",
+      answer: "👥 **Education Felicitation 2026 Committee Members**:\n\n• **Pradeep Parmar** — Trustee / Lead Coordinator (+91 9820785209)\n• **Keshav Wagh** — Lower Parel Head (+91 9967821964)\n• **Ashwin Kataria** — Ramdev Nagar Head (+91 8082234187)\n• **Samiksha Chudasama** — Committee Member (+91 7977561920)\n• **Dinesh Sondarva** — Mahalaxmi Head (+91 8779227886)\n• **Khushi Jogadiya** — Pratiksha Nagar Head (+91 8591563577)",
+      enabled: true,
+      adminOnly: false
+    },
+    {
+      id: "kb_cwc_committee",
+      cmd: "/cwc_committee",
+      icon: "🏛️",
+      title: "CWC Committee Members",
+      answer: "🏛️ **Central Working Committee (CWC) Members**:\n\n• **President**: MMP Central Leadership\n• **General Secretary**: CWC Executive\n• **Treasurer / Financial Head**: Trust Executive\n• **Coordination Team**: Central Vibhag Team\n\n*(You can edit full member details & phone numbers in Admin Panel)*",
+      enabled: true,
+      adminOnly: false
+    },
+    {
+      id: "kb_donate",
+      cmd: "/donate",
+      icon: "💰",
+      title: "80G Tax Donations & Bank Details",
+      answer: "💰 **Donations & 80G Tax Exemption**:\n\n• Vidya Gohil Charitable Trust offers **80G Tax Benefits** for all eligible donations under Indian Income Tax regulations.\n• You can donate online securely via Razorpay (UPI, Google Pay, PhonePe, Cards, NetBanking) on our **Donate** page.\n• Automated 80G tax receipts and 10BE acknowledgement certificates are provided.",
+      enabled: false, // Default hidden for MMP
+      adminOnly: false
+    },
+    {
+      id: "kb_contact",
+      cmd: "/contact",
+      icon: "📞",
+      title: "Trust Helpline & Office Contacts",
+      answer: "📞 **Trust Office & Helpline Contacts**:\n\n• **Office**: Mumbai, Maharashtra\n• **Email**: info@mmp-cwc-new.com\n• **Helpline Mobile**: +91 9820785209 / +91 9967821964\n• **Timings**: 10:00 AM – 7:00 PM (Mon – Sat)",
+      enabled: true,
+      adminOnly: false
+    }
+  ];
+
+  const kbList = Array.isArray(C.chatbotKnowledgeBase) && C.chatbotKnowledgeBase.length > 0 ? C.chatbotKnowledgeBase : DEFAULT_KB;
+
+  // System Core Commands + Custom Knowledge Base Commands
+  const SYSTEM_COMMANDS = [
     {
       cmd: "/check",
       icon: "🔍",
       label: "Check My Application Status",
       desc: "Look up your application by Transaction ID (e.g. VG-7, EDU26-2) or Mobile",
       action: "Check VG-7",
-      adminOnly: false
-    },
-    {
-      cmd: "/events",
-      icon: "🎓",
-      label: "Upcoming Events & Felicitation 2026",
-      desc: "Event dates, venues, guidelines, and registration forms",
-      action: "Education Felicitation 2026 events",
-      adminOnly: false
-    },
-    {
-      cmd: "/donate",
-      icon: "💰",
-      label: "80G Tax Donations",
-      desc: "Donation options, 80G tax benefit certificate & receipts",
-      action: "Donation 80G Tax Exemption",
-      adminOnly: false
-    },
-    {
-      cmd: "/contact",
-      icon: "📞",
-      label: "Helpline & Office Contacts",
-      desc: "Trust office address, committee contacts & support helpline",
-      action: "Trust contact numbers",
       adminOnly: false
     },
     {
@@ -18963,7 +19320,22 @@ function CommunityChatbot({ C, auth }) {
       desc: "Show registrations verified & approved by committee",
       action: "Show approved registrations",
       adminOnly: true
-    },
+    }
+  ];
+
+  // Dynamic items filtered by enabled status
+  const DYNAMIC_KB_COMMANDS = kbList.filter(item => item.enabled !== false).map(item => ({
+    cmd: item.cmd,
+    icon: item.icon || "❓",
+    label: item.title,
+    desc: item.answer.slice(0, 65) + "...",
+    action: item.cmd,
+    adminOnly: Boolean(item.adminOnly)
+  }));
+
+  const ALL_SLASH_COMMANDS = [
+    ...SYSTEM_COMMANDS,
+    ...DYNAMIC_KB_COMMANDS,
     {
       cmd: "/help",
       icon: "❓",
@@ -18979,7 +19351,7 @@ function CommunityChatbot({ C, auth }) {
       id: "m_welcome",
       sender: "bot",
       type: "welcome",
-      text: "👋 **Namaste & Welcome!**\n\nI am your **MMP & Vidya Gohil Trust Assistant**.\n\n• 🔍 **Check Application Status**: Type your **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.\n• 🛡️ **Committee Admin**: Enter your authorized mobile to unlock live counts & area summaries.\n• 🎓 **FAQs**: Ask about Education Felicitation 2026, events, eligibility, or donations."
+      text: "👋 **Namaste & Welcome!**\n\nI am your **MMP & Vidya Gohil Trust Assistant**.\n\n• 🔍 **Check Application Status**: Type your **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.\n• ⚡ **Question Shortcuts**: Type **`/`** to see all FAQ shortcuts (Education Committee, CWC, Events, Vibhag Summary).\n• 🛡️ **Committee Admin**: Enter your authorized mobile to unlock live analytics."
     }
   ]);
 
@@ -19055,6 +19427,14 @@ function CommunityChatbot({ C, auth }) {
     let botType = "text";
     let cardData = null;
 
+    // Check Dynamic Knowledge Base Match
+    const matchedKb = kbList.find(kb => {
+      if (kb.enabled === false) return false;
+      const cLower = kb.cmd.toLowerCase();
+      const tLower = kb.title.toLowerCase();
+      return qLower === cLower || qLower === cLower.replace("/", "") || qLower === tLower || (qLower.length > 5 && (qLower.includes(cLower.replace("/", "")) || tLower.includes(qLower)));
+    });
+
     // Check if query matches ANY Transaction ID (e.g. VG-7, EDU26-2, EDU26-1, VG-9, etc.)
     const txnFound = currentRegs.filter(r => {
       const tId = String(r["Transaction ID"] || r.transactionId || r.txnId || r.id || "").trim().toUpperCase();
@@ -19070,31 +19450,18 @@ function CommunityChatbot({ C, auth }) {
       return false;
     });
 
-    if (qLower === "/help" || qLower === "help" || qLower === "/commands" || qLower.includes("what can you do") || qLower.includes("capabilities")) {
-      if (isAnyAdmin) {
-        botReply = `🤖 **Chatbot Capabilities & Question Guide (Admin Mode)**:
-
-Here are all the questions and slash commands available for Committee Admins:
-
-• 📊 **/all** — Complete summary counts & metrics across ALL Vibhags
-• 📍 **/vibhag [name]** — Summary data of a specific Vibhag (e.g. *15 RAMDEV NAGAR*, *10 MAHALAXMI*, *65 KALWA*)
-• ⏳ **/pending** — List registrations currently pending review
-• 🟢 **/approved** — List verified & approved registrations
-• 🔍 **/check [VG-ID / Mobile]** — Search any applicant by ID (e.g. *VG-7*, *EDU26-2*) or Mobile
-• 🎓 **/events** — Education Felicitation 2026 event details
-• 💰 **/donate** — 80G tax benefit details & donation links
-• 📞 **/contact** — Trust office, helpline & committee contacts`;
+    if (matchedKb) {
+      // Dynamic Knowledge Base Q&A Response
+      if (matchedKb.adminOnly && !isAnyAdmin) {
+        botReply = `🔒 **Access Restricted**\n\nThis question/data is restricted to authorized Committee Admins.\n\n👉 Please type your 10-digit Authorized Mobile Number to unlock.`;
       } else {
-        botReply = `🤖 **Chatbot Capabilities & Question Guide (Public Mode)**:
-
-Here are the questions you can ask:
-
-• 🔍 **Check Application Status**: Enter your **Transaction ID (e.g. VG-7, EDU26-2)** or registered **10-Digit Mobile Number**
-• 🎓 **/events** — Education Felicitation 2026 event schedule & venue
-• 💰 **/donate** — 80G tax benefit donation guide & receipts
-• 📞 **/contact** — Trust helpline & office address
-• 🛡️ **Committee Member Access**: Enter your authorized 10-digit mobile number to unlock committee admin tools.`;
+        botReply = matchedKb.answer;
       }
+    } else if (qLower === "/help" || qLower === "help" || qLower === "/commands" || qLower.includes("what can you do") || qLower.includes("capabilities")) {
+      const activeCommands = ALL_SLASH_COMMANDS.filter(c => !c.adminOnly || isAnyAdmin);
+      botReply = `🤖 **Chatbot Capabilities & Available Shortcuts**:\n\n` + 
+        activeCommands.map(c => `• ${c.icon} **${c.cmd}** — ${c.label}`).join("\n") + 
+        `\n\n*(You can configure or add new custom shortcuts anytime in the Admin Panel under Chatbot Admins > Slash Commands)*`;
     } else if (txnFound.length > 0) {
       // Transaction ID Record Found (Supports VG-X, EDU26-X, etc.)
       const r = txnFound[0];
@@ -19128,7 +19495,6 @@ Here are the questions you can ask:
           botReply = `📍 **Vibhag Admin Access Activated: ${memberName}** (+91 ${rawDigits})\n\n✨ **Scope: ${vibhag}**\nYou can use:\n• 📊 **/vibhag** — Summary count for ${vibhag}\n• ⏳ **/pending** — Pending applications in ${vibhag}\n• 🔍 **/check [ID]** — Search applicants in ${vibhag}`;
         }
 
-        // Check for personal registrations of this member
         const personalRegs = currentRegs.filter(r => {
           const m1 = String(r.submitterMob || "").replace(/\D/g, "").slice(-10);
           const m2 = String(r["Mobile Number"] || "").replace(/\D/g, "").slice(-10);
@@ -19140,7 +19506,6 @@ Here are the questions you can ask:
           cardData = { apps: personalRegs };
         }
       } else {
-        // Regular Applicant Look-up: STRICTLY returns only this applicant's application!
         const found = currentRegs.filter(r => {
           const m1 = String(r.submitterMob || "").replace(/\D/g, "").slice(-10);
           const m2 = String(r["Mobile Number"] || "").replace(/\D/g, "").slice(-10);
@@ -19157,7 +19522,6 @@ Here are the questions you can ask:
         }
       }
     } else if (qLower.includes("pending")) {
-      // STRICT ADMIN GUARD FOR PENDING LIST
       if (!isAnyAdmin) {
         botReply = `🔒 **Access Restricted**\n\nPending review lists are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock this list.`;
       } else {
@@ -19182,7 +19546,6 @@ Here are the questions you can ask:
         }
       }
     } else if (qLower.includes("approved")) {
-      // STRICT ADMIN GUARD FOR APPROVED LIST
       if (!isAnyAdmin) {
         botReply = `🔒 **Access Restricted**\n\nApproved application registries are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock this list.`;
       } else {
@@ -19203,16 +19566,13 @@ Here are the questions you can ask:
         }
       }
     } else if (qLower.includes("vibhag") || qLower.includes("summary") || qLower.includes("count") || qLower.includes("total") || qLower.includes("report") || qLower.includes("kalwa") || qLower.includes("mahalaxmi") || qLower.includes("pakhadi") || qLower.includes("parel") || qLower.includes("ramdev") || qLower.includes("pratiksha") || qLower === "/all") {
-      // STRICT ADMIN GUARD FOR SUMMARY & VIBHAG COUNTS
       if (!isAnyAdmin) {
         botReply = `🔒 **Access Restricted**\n\nRegistration summaries, Vibhag counts, and committee metrics are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock your assigned access level.\n\n🔍 Regular applicants can check their individual status by typing their **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.`;
       } else {
-        // Check if specific Vibhag requested in query
         const matchedVibhag = VIBHAG_OPTIONS.find(v => qLower.includes(v.toLowerCase()) || qLower.includes(v.split(" ")[1]?.toLowerCase()));
         const targetVibhag = matchedVibhag || (userSessionScope === "vibhag" ? sessionVibhag : null);
 
         if (targetVibhag) {
-          // Single Vibhag Analytics
           const vibhagRegs = currentRegs.filter(r => {
             const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "").toLowerCase();
             return v.includes(targetVibhag.toLowerCase()) || targetVibhag.toLowerCase().includes(v);
@@ -19238,7 +19598,6 @@ Here are the questions you can ask:
             apps: vibhagRegs
           };
         } else {
-          // All Level Analytics
           const vibhagMap = {};
           let totalApproved = 0, totalPending = 0, totalRejected = 0, totalAll = 0;
 
@@ -19266,30 +19625,10 @@ Here are the questions you can ask:
           };
         }
       }
-    } else if (qLower.includes("event") || qLower.includes("felicitation") || qLower.includes("date") || qLower.includes("venue") || qLower.includes("when")) {
-      const evs = C.events || [];
-      botReply = `📅 **Upcoming Trust Events**: `;
-      evs.forEach(ev => {
-        botReply += `\n\n🎓 **${ev.title}**\n• **Date**: ${ev.date} ${ev.month || ""}\n• **Venue**: ${ev.location || "Mumbai"}\n• **Category**: ${ev.tag || "Education"}`;
-      });
-      botReply += `\n\nTo submit a registration, please click the **Register** button on the Events section on the website.`;
-    } else if (qLower.includes("donate") || qLower.includes("donation") || qLower.includes("80g") || qLower.includes("tax") || qLower.includes("receipt")) {
-      botReply = `💰 **Donations & 80G Tax Exemption**:
-• Vidya Gohil Charitable Trust offers **80G Tax Benefits** for all eligible donations under Indian Income Tax regulations.
-• You can donate online securely via Razorpay (UPI, Google Pay, PhonePe, Cards, NetBanking) on our **Donate** page.
-• Automated 80G tax receipts and 10BE acknowledgement certificates are provided.`;
-    } else if (qLower.includes("contact") || qLower.includes("phone") || qLower.includes("address") || qLower.includes("office") || qLower.includes("help")) {
-      const contact = C.contact || {};
-      const trust = C.trust || {};
-      botReply = `📞 **Trust Office & Committee Contact**:
-• **Trust**: ${trust.name || "Mumbai Meghwal Panchayat & Vidya Gohil Trust"}
-• **Office**: ${contact.address || "Mumbai, Maharashtra"}
-• **Email**: ${contact.email || "info@mmp-cwc-new.com"}
-• **Helpline**: ${contact.phone || "+91 9820785209"}`;
     } else {
       botReply = isAnyAdmin ? 
-        `🤖 **How can I assist you?**\n\nType **`/`** to browse all question shortcuts, or try:\n• **/all** — Summary data of all entries\n• **/vibhag 15 RAMDEV NAGAR** — Summary for a specific Vibhag\n• **/check VG-7** — Check application status\n• **/pending** — List pending registrations` :
-        `🤖 **How can I assist you?**\n\nHere are some things you can try:\n• Enter your **Transaction ID (e.g. VG-7, EDU26-2)** to check application status\n• Enter your **10-digit Mobile Number** to check your submissions\n• Ask about **Education Felicitation 2026**, **Events**, or **Donations**.`;
+        `🤖 **How can I assist you?**\n\nType **`/`** to browse all question shortcuts, or try:\n• **/all** — Summary data of all entries\n• **/vibhag 15 RAMDEV NAGAR** — Summary for a specific Vibhag\n• **/check VG-7** — Check application status\n• **/edu_committee** — Education Committee details\n• **/cwc_committee** — CWC Committee details` :
+        `🤖 **How can I assist you?**\n\nHere are some things you can try:\n• Enter your **Transaction ID (e.g. VG-7, EDU26-2)** to check application status\n• Enter your **10-digit Mobile Number** to check your submissions\n• Type **`/`** for shortcuts like **/edu_committee**, **/events**, or **/contact**.`;
     }
 
     setMessages(prev => [...prev, { id: "m_" + Date.now(), sender: "bot", type: botType, text: botReply, cardData }]);
@@ -19422,10 +19761,10 @@ Here are the questions you can ask:
                       📍 Vibhag #
                     </button>
                     <button
-                      onClick={() => handleSendMessage("Show all pending registrations")}
+                      onClick={() => handleSendMessage("/edu_committee")}
                       style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
                     >
-                      ⏳ Pending
+                      👥 Edu Committee
                     </button>
                   </>
                 ) : (
@@ -19437,16 +19776,16 @@ Here are the questions you can ask:
                       🔍 Sample: VG-7
                     </button>
                     <button
-                      onClick={() => handleSendMessage("Check EDU26-2")}
-                      style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
-                    >
-                      🔍 Sample: EDU26-2
-                    </button>
-                    <button
-                      onClick={() => handleSendMessage("Education Felicitation 2026 events")}
+                      onClick={() => handleSendMessage("/events")}
                       style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
                     >
                       🎓 Education 2026
+                    </button>
+                    <button
+                      onClick={() => handleSendMessage("/edu_committee")}
+                      style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
+                    >
+                      👥 Edu Committee
                     </button>
                   </>
                 )}
@@ -19563,7 +19902,7 @@ Here are the questions you can ask:
                       <div style={{fontSize:".7rem",fontWeight:800,color:"#64748B",padding:"4px 8px",textTransform:"uppercase",letterSpacing:0.5}}>
                         Question Shortcuts & Commands:
                       </div>
-                      {SLASH_COMMANDS.map(sc => {
+                      {ALL_SLASH_COMMANDS.map(sc => {
                         const isLockedForUser = sc.adminOnly && !isAnyAdmin;
 
                         return (
