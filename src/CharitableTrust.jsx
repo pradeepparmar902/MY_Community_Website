@@ -14840,6 +14840,84 @@ function ChatbotAccessManager({ C, setC, auth }) {
 
       {activeTab === "kb" && (
         <div>
+          {/* Chatbot Welcome Message & Title Settings */}
+          <div style={{background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"20px 24px",marginBottom:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+            <div style={{fontSize:".95rem",fontWeight:800,color:"#0F172A",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>
+              <span>⚙️</span> Chatbot Welcome Message & Title Configuration:
+            </div>
+            
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))",gap:16,marginBottom:14}}>
+              <div>
+                <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Chatbot Header Title:</label>
+                <input
+                  type="text"
+                  value={C.chatbotTitle !== undefined ? C.chatbotTitle : "MMP & Vidya Gohil Assistant"}
+                  onChange={e => {
+                    const newC = { ...C, chatbotTitle: e.target.value };
+                    if (setC) setC(newC);
+                  }}
+                  placeholder="e.g. MMP & Vidya Gohil Assistant"
+                  style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:700,boxSizing:"border-box"}}
+                />
+              </div>
+
+              <div>
+                <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Launcher Pill Label:</label>
+                <input
+                  type="text"
+                  value={C.chatbotPillLabel !== undefined ? C.chatbotPillLabel : "Trust Assistant"}
+                  onChange={e => {
+                    const newC = { ...C, chatbotPillLabel: e.target.value };
+                    if (setC) setC(newC);
+                  }}
+                  placeholder="e.g. Trust Assistant"
+                  style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:700,boxSizing:"border-box"}}
+                />
+              </div>
+            </div>
+
+            <div style={{marginBottom:14}}>
+              <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>
+                Chatbot Welcome Greeting Message (Supports **bold**, bullet • points, links):
+              </label>
+              <textarea
+                value={C.chatbotWelcomeText !== undefined ? C.chatbotWelcomeText : "👋 **Namaste & Welcome!**\n\nI am your **MMP & Vidya Gohil Trust Assistant**.\n\n• 🔍 **Check Application Status**: Type your **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.\n• ⚡ **Question Shortcuts**: Type **`/`** to see all FAQ shortcuts (Education Committee, CWC, Events, Vibhag Summary).\n• 🛡️ **Committee Admin**: Enter your authorized mobile to unlock live analytics."}
+                onChange={e => {
+                  const newC = { ...C, chatbotWelcomeText: e.target.value };
+                  if (setC) setC(newC);
+                }}
+                rows={5}
+                style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",lineHeight:1.5,fontFamily:"inherit",boxSizing:"border-box"}}
+              />
+            </div>
+
+            <div style={{display:"flex",justifyContent:"flex-end"}}>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await fbSave(C, auth?.idToken);
+                    alert("Chatbot Title & Welcome Message saved successfully!");
+                  } catch(err) {
+                    alert("Failed to save: " + err.message);
+                  }
+                }}
+                style={{
+                  padding:"9px 20px",
+                  background:"linear-gradient(135deg, #10B981, #059669)",
+                  color:"white",
+                  border:"none",
+                  borderRadius:6,
+                  fontWeight:700,
+                  fontSize:".85rem",
+                  cursor:"pointer",
+                  boxShadow:"0 2px 6px rgba(16,185,129,0.25)"
+                }}
+              >
+                💾 Save Welcome Message & Title
+              </button>
+            </div>
+          </div>
           {/* Add / Edit Q&A Form */}
           <div style={{background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"20px 24px",marginBottom:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
@@ -19368,13 +19446,16 @@ function CommunityChatbot({ C, auth }) {
 
   const isAnyAdmin = userSessionScope === "all" || userSessionScope === "vibhag";
 
+  const chatbotTitle = C.chatbotTitle || "MMP & Vidya Gohil Assistant";
+  const pillLabel = C.chatbotPillLabel || "Trust Assistant";
+  const welcomeText = C.chatbotWelcomeText || "👋 **Namaste & Welcome!**\n\nI am your **MMP & Vidya Gohil Trust Assistant**.\n\n• 🔍 **Check Application Status**: Type your **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.\n• ⚡ **Question Shortcuts**: Type **`/`** to see all FAQ shortcuts (Education Committee, CWC, Events, Vibhag Summary).\n• 🛡️ **Committee Admin**: Enter your authorized mobile to unlock live analytics.";
+
   // When Chatbot opens, ensure it expands upwards and never overflows below the bottom edge
   const openChatbot = () => {
     setIsOpen(true);
     setIsMinimized(false);
     ensureRegistrations();
 
-    // If widget was dragged down near bottom, shift it up so the full 590px window is in view
     setPos(prev => {
       if (prev.x === null || prev.y === null) return prev;
       const chatHeight = Math.min(590, window.innerHeight - 80);
@@ -19577,9 +19658,18 @@ function CommunityChatbot({ C, auth }) {
       id: "m_welcome",
       sender: "bot",
       type: "welcome",
-      text: "👋 **Namaste & Welcome!**\n\nI am your **MMP & Vidya Gohil Trust Assistant**.\n\n• 🔍 **Check Application Status**: Type your **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.\n• ⚡ **Question Shortcuts**: Type **`/`** to see all FAQ shortcuts (Education Committee, CWC, Events, Vibhag Summary).\n• 🛡️ **Committee Admin**: Enter your authorized mobile to unlock live analytics."
+      text: welcomeText
     }
   ]);
+
+  useEffect(() => {
+    setMessages(prev => {
+      if (prev.length === 1 && prev[0].type === "welcome") {
+        return [{ ...prev[0], text: welcomeText }];
+      }
+      return prev;
+    });
+  }, [welcomeText]);
 
   useEffect(() => {
     if (auth?.idToken) {
@@ -19654,7 +19744,7 @@ function CommunityChatbot({ C, auth }) {
       if (kb.enabled === false) return false;
       const cLower = kb.cmd.toLowerCase();
       const tLower = kb.title.toLowerCase();
-      return qLower === cLower || qLower === cLower.replace("/", "") || qLower === tLower || (qLower.length > 5 && (qLower.includes(cLower.replace("/", "")) || tLower.includes(qLower)));
+      return qLower === cLower || qLower === cLower.replace("/", "") || qLower === tLower || (qLower.length > 3 && (qLower.includes(cLower.replace("/", "")) || tLower.includes(qLower)));
     });
 
     const txnFound = currentRegs.filter(r => {
@@ -19846,8 +19936,8 @@ function CommunityChatbot({ C, auth }) {
       }
     } else {
       botReply = isAnyAdmin ? 
-        `🤖 **How can I assist you?**\n\nType **`/`** to browse all question shortcuts, or try:\n• **/all** — Summary data of all entries\n• **/vibhag 15 RAMDEV NAGAR** — Summary for a specific Vibhag\n• **/check VG-7** — Check application status\n• **/edu_committee** — Education Committee details\n• **/cwc_committee** — CWC Committee details` :
-        `🤖 **How can I assist you?**\n\nHere are some things you can try:\n• Enter your **Transaction ID (e.g. VG-7, EDU26-2)** to check application status\n• Enter your **10-digit Mobile Number** to check your submissions\n• Type **`/`** for shortcuts like **/edu_committee**, **/events**, or **/contact**.`;
+        `🤖 **How can I assist you?**\n\nType **`/`** to browse all question shortcuts, or try:\n• **/all** — Summary data of all entries\n• **/vibhag 15 RAMDEV NAGAR** — Summary for a specific Vibhag\n• **/check VG-7** — Check application status\n• **/events** — Event guidelines` :
+        `🤖 **How can I assist you?**\n\nHere are some things you can try:\n• Enter your **Transaction ID (e.g. VG-7, EDU26-2)** to check application status\n• Enter your **10-digit Mobile Number** to check your submissions\n• Type **`/`** for question shortcuts.`;
     }
 
     setMessages(prev => [...prev, { id: "m_" + Date.now(), sender: "bot", type: botType, text: botReply, cardData }]);
@@ -19905,7 +19995,7 @@ function CommunityChatbot({ C, auth }) {
         >
           <span style={{opacity:0.5,fontSize:"1rem",letterSpacing:-1}}>⠿</span>
           <span style={{fontSize:"1.2rem"}}>💬</span>
-          <span>Trust Assistant</span>
+          <span>{pillLabel}</span>
           {isAnyAdmin ? (
             <span style={{background:"#10B981",color:"white",fontSize:".65rem",padding:"2px 7px",borderRadius:10,fontWeight:800}}>
               {userSessionScope === "all" ? "Admin (All)" : "Vibhag Admin"}
@@ -19962,7 +20052,7 @@ function CommunityChatbot({ C, auth }) {
                 🤖
               </div>
               <div>
-                <div style={{fontSize:".86rem",fontWeight:800,lineHeight:1.2}}>MMP & Vidya Gohil Assistant</div>
+                <div style={{fontSize:".86rem",fontWeight:800,lineHeight:1.2}}>{chatbotTitle}</div>
                 <div style={{fontSize:".67rem",color:isAnyAdmin?"#86EFAC":"#94A3B8",display:"flex",alignItems:"center",gap:4,marginTop:2}}>
                   <span style={{width:6,height:6,borderRadius:"50%",background:isAnyAdmin?"#22C55E":"#10B981",display:"inline-block"}}></span>
                   {userSessionScope === "all" ? "🌐 All Level Admin" : userSessionScope === "vibhag" ? `📍 ${sessionVibhag}` : "🟢 Online | Public"}
@@ -19990,16 +20080,16 @@ function CommunityChatbot({ C, auth }) {
 
           {!isMinimized && (
             <>
-              {/* Quick Actions Bar */}
-              <div style={{padding:"8px 12px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",gap:6,overflowX:"auto",whiteSpace:"nowrap"}}>
+              {/* Quick Actions Bar (Clean - Only Essential Controls) */}
+              <div style={{padding:"8px 12px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",gap:6,alignItems:"center"}}>
                 <button
                   onClick={() => { setShowSlashMenu(!showSlashMenu); setSlashSubmenu(null); }}
-                  style={{fontSize:".72rem",background:"#1E293B",border:"none",borderRadius:12,padding:"4px 10px",color:"white",cursor:"pointer",fontWeight:700,boxShadow:"0 1px 3px rgba(0,0,0,0.15)",display:"flex",alignItems:"center",gap:4}}
+                  style={{fontSize:".75rem",background:"#1E293B",border:"none",borderRadius:12,padding:"5px 12px",color:"white",cursor:"pointer",fontWeight:700,boxShadow:"0 1px 3px rgba(0,0,0,0.15)",display:"flex",alignItems:"center",gap:4}}
                 >
-                  <span>⚡</span> Commands (/)
+                  <span>⚡</span> Questions / Shortcuts (/)
                 </button>
                 
-                {isAnyAdmin ? (
+                {isAnyAdmin && (
                   <>
                     <button
                       onClick={() => handleSendMessage("Summary data of all entry ALL")}
@@ -20012,33 +20102,6 @@ function CommunityChatbot({ C, auth }) {
                       style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
                     >
                       📍 Vibhag #
-                    </button>
-                    <button
-                      onClick={() => handleSendMessage("/edu_committee")}
-                      style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
-                    >
-                      👥 Edu Committee
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => handleSendMessage("Check VG-7")}
-                      style={{fontSize:".72rem",background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:12,padding:"4px 10px",color:"#1D4ED8",cursor:"pointer",fontWeight:700}}
-                    >
-                      🔍 Sample: VG-7
-                    </button>
-                    <button
-                      onClick={() => handleSendMessage("/events")}
-                      style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
-                    >
-                      🎓 Education 2026
-                    </button>
-                    <button
-                      onClick={() => handleSendMessage("/edu_committee")}
-                      style={{fontSize:".72rem",background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"4px 10px",color:"#1E293B",cursor:"pointer",fontWeight:600}}
-                    >
-                      👥 Edu Committee
                     </button>
                   </>
                 )}
@@ -20110,7 +20173,7 @@ function CommunityChatbot({ C, auth }) {
                 <div ref={chatBottomRef} />
               </div>
 
-              {/* Slash Command Autocomplete Menu */}
+              {/* Slash Command Autocomplete Menu (Real-time Filtered) */}
               {(showSlashMenu || input.startsWith("/")) && (
                 <div style={{
                   background: "white",
@@ -20178,48 +20241,48 @@ function CommunityChatbot({ C, auth }) {
                         }
 
                         return displayedCommands.map(sc => {
-                        const isLockedForUser = sc.adminOnly && !isAnyAdmin;
+                          const isLockedForUser = sc.adminOnly && !isAnyAdmin;
 
-                        return (
-                          <div
-                            key={sc.cmd}
-                            onClick={() => {
-                              if (sc.hasSubmenu) {
-                                setSlashSubmenu("vibhags");
-                              } else {
-                                handleSendMessage(sc.action);
-                              }
-                            }}
-                            style={{
-                              padding: "8px 10px",
-                              borderRadius: 8,
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 10,
-                              fontSize: ".8rem",
-                              transition: "background 0.15s",
-                              opacity: isLockedForUser ? 0.75 : 1
-                            }}
-                            onMouseEnter={e=>e.currentTarget.style.background="#F1F5F9"}
-                            onMouseLeave={e=>e.currentTarget.style.background="transparent"}
-                          >
-                            <span style={{fontSize:"1.1rem"}}>{sc.icon}</span>
-                            <div style={{flex:1}}>
-                              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                                <span style={{fontWeight:800,color:isLockedForUser?"#64748B":"#2563EB",fontFamily:"monospace"}}>{sc.cmd}</span>
-                                <span style={{fontWeight:700,color:"#0F172A"}}>{sc.label}</span>
-                                {isLockedForUser && (
-                                  <span style={{background:"#FEF3C7",color:"#92400E",fontSize:".65rem",padding:"1px 6px",borderRadius:4,fontWeight:800}}>
-                                    🔒 Admin Only
-                                  </span>
-                                )}
+                          return (
+                            <div
+                              key={sc.cmd}
+                              onClick={() => {
+                                if (sc.hasSubmenu) {
+                                  setSlashSubmenu("vibhags");
+                                } else {
+                                  handleSendMessage(sc.action);
+                                }
+                              }}
+                              style={{
+                                padding: "8px 10px",
+                                borderRadius: 8,
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 10,
+                                fontSize: ".8rem",
+                                transition: "background 0.15s",
+                                opacity: isLockedForUser ? 0.75 : 1
+                              }}
+                              onMouseEnter={e=>e.currentTarget.style.background="#F1F5F9"}
+                              onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+                            >
+                              <span style={{fontSize:"1.1rem"}}>{sc.icon}</span>
+                              <div style={{flex:1}}>
+                                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                  <span style={{fontWeight:800,color:isLockedForUser?"#64748B":"#2563EB",fontFamily:"monospace"}}>{sc.cmd}</span>
+                                  <span style={{fontWeight:700,color:"#0F172A"}}>{sc.label}</span>
+                                  {isLockedForUser && (
+                                    <span style={{background:"#FEF3C7",color:"#92400E",fontSize:".65rem",padding:"1px 6px",borderRadius:4,fontWeight:800}}>
+                                      🔒 Admin Only
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{fontSize:".7rem",color:"#64748B"}}>{sc.desc}</div>
                               </div>
-                              <div style={{fontSize:".7rem",color:"#64748B"}}>{sc.desc}</div>
+                              <span style={{fontSize:".75rem",color:"#94A3B8"}}>↵</span>
                             </div>
-                            <span style={{fontSize:".75rem",color:"#94A3B8"}}>↵</span>
-                          </div>
-                        );
+                          );
                         });
                       })()}
                     </div>
