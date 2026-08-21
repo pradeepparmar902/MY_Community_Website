@@ -14216,7 +14216,7 @@ function LoginScreen({ C, onLogin, onSkip }) {
 
 // ── Dedicated Chatbot Committee Admin Access Manager Component ───────────────────────────
 function ChatbotAccessManager({ C, setC, auth }) {
-  const [accessScope, setAccessScope] = useState("all"); // "all" | "vibhag" | "individual"
+  const [accessScope, setAccessScope] = useState("individual"); // Default to "individual" (Mobile/Txn only)
   const [selectedVibhag, setSelectedVibhag] = useState("10 MAHALAXMI");
 
   const VIBHAG_LIST = [
@@ -14234,11 +14234,11 @@ function ChatbotAccessManager({ C, setC, auth }) {
 
   const currentList = Array.isArray(C.committeeMobiles) && C.committeeMobiles.length > 0 ? C.committeeMobiles : [
     { name: "Pradeep Parmar (Super Admin)", mobile: "9820785209", scope: "all", vibhag: "All Vibhags", role: "Trustee / Super Admin", addedAt: "System Default" },
-    { name: "Keshav Wagh", mobile: "9967821964", scope: "vibhag", vibhag: "22 LOWER PAREL", role: "Lower Parel Head", addedAt: "System Default" },
-    { name: "Ashwin Kataria", mobile: "8082234187", scope: "vibhag", vibhag: "15 RAMDEV NAGAR", role: "Ramdev Nagar Head", addedAt: "System Default" },
-    { name: "Samiksha Chudasama", mobile: "7977561920", scope: "vibhag", vibhag: "15 RAMDEV NAGAR", role: "Committee Member", addedAt: "System Default" },
-    { name: "Dinesh Sondarva", mobile: "8779227886", scope: "vibhag", vibhag: "10 MAHALAXMI", role: "Mahalaxmi Head", addedAt: "System Default" },
-    { name: "Khushi Jogadiya", mobile: "8591563577", scope: "vibhag", vibhag: "30 PRATKISHA NAGAR", role: "Pratiksha Nagar Head", addedAt: "System Default" }
+    { name: "Keshav Wagh", mobile: "9967821964", scope: "individual", vibhag: "Individual Only", role: "Committee Member", addedAt: "System Default" },
+    { name: "Ashwin Kataria", mobile: "8082234187", scope: "individual", vibhag: "Individual Only", role: "Committee Member", addedAt: "System Default" },
+    { name: "Samiksha Chudasama", mobile: "7977561920", scope: "individual", vibhag: "Individual Only", role: "Committee Member", addedAt: "System Default" },
+    { name: "Dinesh Sondarva", mobile: "8779227886", scope: "individual", vibhag: "Individual Only", role: "Committee Member", addedAt: "System Default" },
+    { name: "Khushi Jogadiya", mobile: "8591563577", scope: "individual", vibhag: "Individual Only", role: "Committee Member", addedAt: "System Default" }
   ];
 
   const saveMobilesToFirebase = async (updatedList) => {
