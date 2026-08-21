@@ -14215,6 +14215,7 @@ function LoginScreen({ C, onLogin, onSkip }) {
 
 
 
+
 // ── Dedicated Chatbot Committee Admin Access Manager Component ───────────────────────────
 function ChatbotAccessManager({ C, setC, auth }) {
   const [accessScope, setAccessScope] = useState("individual"); // Default to "individual" (Mobile/Txn only)
@@ -14240,7 +14241,12 @@ function ChatbotAccessManager({ C, setC, auth }) {
     const fetchAll = async () => {
       setLoadingUsers(true);
       try {
-        const regs = await fbFetchRegistrations(auth?.idToken);
+        // Fetch from both /users (Auth accounts) and /registrations (Event submissions)
+        const [usersList, regsList] = await Promise.all([
+          fbFetchAllUsers(auth?.idToken).catch(() => []),
+          fbFetchRegistrations(auth?.idToken).catch(() => [])
+        ]);
+
         const map = new Map();
 
         // 1. Saved Custom Configuration in C.committeeMobiles
@@ -14266,8 +14272,36 @@ function ChatbotAccessManager({ C, setC, auth }) {
           });
         }
 
-        // 3. Automatically aggregate EVERY registered user from registrations / submissions
-        (regs || []).forEach(r => {
+        // 3. Automatically aggregate EVERY Firebase Auth User from /users collection
+        (usersList || []).forEach(u => {
+          const mobMatch = String(u.mobile || u.phone || u.phoneNumber || "").match(/([6-9]\d{9})/);
+          const cleanMob = mobMatch ? mobMatch[1] : (u.id && u.id.match(/([6-9]\d{9})/) ? u.id.match(/([6-9]\d{9})/)[1] : "");
+          
+          if (cleanMob && cleanMob.length === 10) {
+            if (!map.has(cleanMob)) {
+              map.set(cleanMob, {
+                name: u.name || u.displayName || u.email?.split("@")[0] || "Registered User",
+                mobile: cleanMob,
+                email: u.email || "",
+                scope: "individual",
+                vibhag: u.vibhag || u.address?.split(",")?.slice(-2)?.join(",")?.trim() || "Individual Only",
+                role: u.email ? `Auth User (${u.email})` : "Phone Auth User",
+                addedAt: "Firebase Auth",
+                source: "auth_user"
+              });
+            } else {
+              // Enhance existing entry with name/email if missing
+              const existing = map.get(cleanMob);
+              if ((!existing.name || existing.name === "Registered Applicant") && u.name) {
+                existing.name = u.name;
+              }
+              if (!existing.email && u.email) existing.email = u.email;
+            }
+          }
+        });
+
+        // 4. Automatically aggregate EVERY applicant from /registrations collection
+        (regsList || []).forEach(r => {
           if (r.deleted) return;
           const mobs = [
             r.submitterMob,
@@ -14277,16 +14311,24 @@ function ChatbotAccessManager({ C, setC, auth }) {
 
           mobs.forEach(mob => {
             if (!map.has(mob)) {
-              // Automatically defaults to "individual" (Mobile/Txn)
               map.set(mob, {
                 name: r["Full Name"] || r["Submitted By"] || "Registered Applicant",
                 mobile: mob,
+                email: r["Email Address"] || "",
                 scope: "individual",
                 vibhag: r["Vibhag"] || "Individual Only",
-                role: `Applicant (${r.eventName || r.eventTitle || "Education Felicitation 2026"})`,
+                role: `Applicant (${r.eventName || r.eventTitle || "Education Felicitation"})`,
                 addedAt: r._submittedAt ? new Date(r._submittedAt).toLocaleDateString("en-IN") : "Recent",
                 source: "registration"
               });
+            } else {
+              const existing = map.get(mob);
+              if ((!existing.name || existing.name === "Registered User") && (r["Full Name"] || r["Submitted By"])) {
+                existing.name = r["Full Name"] || r["Submitted By"];
+              }
+              if (existing.vibhag === "Individual Only" && r["Vibhag"]) {
+                existing.vibhag = r["Vibhag"];
+              }
             }
           });
         });
@@ -14346,6 +14388,7 @@ function ChatbotAccessManager({ C, setC, auth }) {
     return (
       (u.name && u.name.toLowerCase().includes(q)) ||
       (u.mobile && u.mobile.includes(q)) ||
+      (u.email && u.email.toLowerCase().includes(q)) ||
       (u.vibhag && u.vibhag.toLowerCase().includes(q)) ||
       (u.role && u.role.toLowerCase().includes(q))
     );
@@ -14356,10 +14399,10 @@ function ChatbotAccessManager({ C, setC, auth }) {
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:16}}>
         <div>
           <h2 className="sh" style={{fontSize:"1.4rem",color:"var(--dt)",marginBottom:4,display:"flex",alignItems:"center",gap:8}}>
-            <span>🤖</span> Chatbot Access Management (All Registered Users)
+            <span>🤖</span> Chatbot Access Management (All Firebase & Registered Users)
           </h2>
           <p style={{fontSize:".85rem",color:"var(--mu)",margin:0}}>
-            Every new user who registers automatically appears in this list with default <strong>📱 Mobile/Txn</strong> access. Super Admin can elevate access to <strong>Vibhag</strong> or <strong>ALL</strong> at any time.
+            Full list of all <strong>{allRegisteredUsers.length} Users</strong> (from Firebase Authentication & event registrations). Default access is <strong>📱 Mobile/Txn</strong>; Super Admin can toggle access to <strong>Vibhag</strong> or <strong>ALL</strong> at any time.
           </p>
         </div>
       </div>
@@ -14470,9 +14513,9 @@ function ChatbotAccessManager({ C, setC, auth }) {
       <div style={{background:"white",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
         <div style={{padding:"14px 18px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
           <div style={{fontWeight:700,fontSize:".88rem",color:"#0F172A"}}>
-            All Registered Users ({filteredUsers.length})
+            All Registered & Auth Users ({filteredUsers.length})
             <span style={{fontSize:".75rem",color:"#64748B",fontWeight:500,marginLeft:8}}>
-              (Auto-populated from registrations; default is 📱 Mobile/Txn)
+              (Merged from Firebase Auth Users & Event Registrations)
             </span>
           </div>
           <div>
@@ -14488,7 +14531,7 @@ function ChatbotAccessManager({ C, setC, auth }) {
 
         <div style={{overflowX:"auto"}}>
           {loadingUsers ? (
-            <div style={{padding:30,textAlign:"center",color:"#64748B",fontSize:".85rem"}}>⏳ Loading all registered users...</div>
+            <div style={{padding:30,textAlign:"center",color:"#64748B",fontSize:".85rem"}}>⏳ Loading all Firebase Auth & registered users...</div>
           ) : (
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:".85rem"}}>
               <thead>
@@ -14507,7 +14550,10 @@ function ChatbotAccessManager({ C, setC, auth }) {
 
                   return (
                     <tr key={item.mobile + "_" + idx} style={{borderBottom:"1px solid #F1F5F9",background:idx%2===1?"#F8FAFC":"white"}}>
-                      <td style={{padding:"12px 16px",fontWeight:700,color:"#0F172A"}}>{item.name}</td>
+                      <td style={{padding:"12px 16px",fontWeight:700,color:"#0F172A"}}>
+                        {item.name}
+                        {item.email && <div style={{fontSize:".72rem",color:"#64748B",fontWeight:400}}>{item.email}</div>}
+                      </td>
                       <td style={{padding:"12px 16px",fontWeight:700,color:"#2563EB",fontFamily:"monospace",fontSize:".9rem"}}>+91 {item.mobile}</td>
                       
                       {/* Interactive Radio Scope Selector */}
@@ -14614,7 +14660,7 @@ function ChatbotAccessManager({ C, setC, auth }) {
                       </td>
 
                       <td style={{padding:"12px 16px",color:"#475569"}}>
-                        {item.role || item.vibhag || "Registered Applicant"}
+                        {item.role || item.vibhag || "Registered User"}
                       </td>
                       <td style={{padding:"12px 16px",textAlign:"center"}}>
                         <span style={{
@@ -14651,9 +14697,9 @@ function ChatbotAccessManager({ C, setC, auth }) {
       </div>
 
       <div style={{marginTop:16,background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:8,padding:"14px 18px",fontSize:".82rem",color:"#1E40AF",lineHeight:1.6}}>
-        📌 <strong>Auto-Population & Access Control:</strong>
-        <br/>• Every applicant who registers automatically appears in this table with default <strong>📱 Mobile/Txn</strong> access.
-        <br/>• Super Admin can elevate any member to <strong>📍 Vibhag</strong> (for area heads) or <strong>🌐 ALL</strong> (for core committee).
+        📌 <strong>Auto-Population from Firebase Authentication & Registrations:</strong>
+        <br/>• All 41+ users registered via Firebase Phone/Email Auth are loaded automatically with default <strong>📱 Mobile/Txn</strong> access.
+        <br/>• Super Admin can elevate any user to <strong>📍 Vibhag</strong> (for area heads) or <strong>🌐 ALL</strong> (for committee admins) anytime.
       </div>
     </div>
   );
