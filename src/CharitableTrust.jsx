@@ -18994,112 +18994,134 @@ function FormattedChatText({ text, onQuickClick }) {
 
   const lines = text.split("\n");
 
-  const renderInlineContent = (contentStr) => {
-    // Regex for:
-    // 1. [Label](URL) - matches any URL inside parens including www.
-    // 2. **bold**
-    // 3. Raw URLs: https://... or http://... or www....
-    const combinedRegex = /(\[([^\]]+)\]\(([^)\s]+)\))|(\*{2}([^*]+)\*{2})|((https?:\/\/|www\.)[^\s<]+[^\s.,;:!?)<])/gi;
-    let match;
-    let cursor = 0;
-    const parts = [];
+  const renderRawUrls = (textStr, keyPrefix) => {
+    const parts = textStr.split(/(\s+)/);
+    return parts.map((part, pIdx) => {
+      const isUrl = part.startsWith("http://") || part.startsWith("https://") || part.startsWith("www.");
+      if (isUrl) {
+        let cleanUrl = part.trim();
+        if (cleanUrl.startsWith("www.")) cleanUrl = "https://" + cleanUrl;
+        const isYt = cleanUrl.includes("youtube.com") || cleanUrl.includes("youtu.be");
+        return (
+          <a
+            key={`${keyPrefix}_u_${pIdx}`}
+            href={cleanUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              color: isYt ? "#DC2626" : "#1D4ED8",
+              background: isYt ? "#FEE2E2" : "#EFF6FF",
+              border: `1px solid ${isYt ? "#FCA5A5" : "#93C5FD"}`,
+              padding: "2px 8px",
+              borderRadius: 6,
+              fontWeight: 700,
+              textDecoration: "none",
+              fontSize: ".8rem",
+              margin: "2px 3px"
+            }}
+          >
+            <span>{isYt ? "▶️" : "🔗"}</span>
+            <span>{isYt ? "Watch Video" : cleanUrl.replace(/^https?:\/\//i, "").slice(0, 28)}</span>
+            <span style={{fontSize:".7rem"}}>↗</span>
+          </a>
+        );
+      }
+      return part;
+    });
+  };
 
-    while ((match = combinedRegex.exec(contentStr)) !== null) {
-      if (match.index > cursor) {
-        parts.push(contentStr.substring(cursor, match.index));
+  const renderInline = (str, keyPrefix) => {
+    const elements = [];
+    let remaining = str;
+    let elemIdx = 0;
+
+    while (remaining) {
+      const linkStart = remaining.indexOf("[");
+      const boldStart = remaining.indexOf("**");
+
+      let nextType = null;
+      let nextPos = -1;
+
+      if (linkStart !== -1) {
+        const linkMid = remaining.indexOf("](", linkStart);
+        const linkEnd = linkMid !== -1 ? remaining.indexOf(")", linkMid + 2) : -1;
+        if (linkMid !== -1 && linkEnd !== -1) {
+          nextType = "link";
+          nextPos = linkStart;
+        }
       }
 
-      if (match[1]) {
-        // Markdown Link [Label](URL)
-        const label = match[2].trim();
-        let url = match[3].trim();
+      if (boldStart !== -1 && (nextPos === -1 || boldStart < nextPos)) {
+        const boldEnd = remaining.indexOf("**", boldStart + 2);
+        if (boldEnd !== -1) {
+          nextType = "bold";
+          nextPos = boldStart;
+        }
+      }
+
+      if (nextPos === -1) {
+        elements.push(renderRawUrls(remaining, `${keyPrefix}_${elemIdx++}`));
+        break;
+      }
+
+      if (nextPos > 0) {
+        elements.push(renderRawUrls(remaining.slice(0, nextPos), `${keyPrefix}_${elemIdx++}`));
+      }
+
+      if (nextType === "link") {
+        const linkMid = remaining.indexOf("](", nextPos);
+        const linkEnd = remaining.indexOf(")", linkMid + 2);
+        const label = remaining.slice(nextPos + 1, linkMid).trim();
+        let url = remaining.slice(linkMid + 2, linkEnd).trim();
         if (url.startsWith("www.")) url = "https://" + url;
         else if (!url.startsWith("http://") && !url.startsWith("https://")) url = "https://" + url;
 
         const isYt = url.includes("youtube.com") || url.includes("youtu.be");
 
-        parts.push(
+        elements.push(
           <a
-            key={match.index}
+            key={`${keyPrefix}_link_${elemIdx++}`}
             href={url}
             target="_blank"
             rel="noopener noreferrer"
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: 5,
+              gap: 4,
               color: isYt ? "#DC2626" : "#1D4ED8",
               background: isYt ? "#FEE2E2" : "#EFF6FF",
               border: `1px solid ${isYt ? "#FCA5A5" : "#93C5FD"}`,
-              padding: "3px 10px",
-              borderRadius: 8,
+              padding: "2px 8px",
+              borderRadius: 6,
               fontWeight: 700,
               textDecoration: "none",
-              fontSize: ".82rem",
-              margin: "2px 3px",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-              cursor: "pointer"
+              fontSize: ".8rem",
+              margin: "2px 3px"
             }}
-            className="ch"
           >
             <span>{isYt ? "▶️" : "🔗"}</span>
             <span>{label}</span>
-            <span style={{fontSize:".7rem",opacity:0.8}}>↗</span>
+            <span style={{fontSize:".7rem"}}>↗</span>
           </a>
         );
-      } else if (match[4]) {
-        // Bold **text**
-        parts.push(
-          <strong key={match.index} style={{fontWeight:800,color:"#0F172A"}}>
-            {match[5]}
+
+        remaining = remaining.slice(linkEnd + 1);
+      } else if (nextType === "bold") {
+        const boldEnd = remaining.indexOf("**", nextPos + 2);
+        const boldText = remaining.slice(nextPos + 2, boldEnd);
+        elements.push(
+          <strong key={`${keyPrefix}_bold_${elemIdx++}`} style={{fontWeight:800,color:"#0F172A"}}>
+            {boldText}
           </strong>
         );
-      } else if (match[6]) {
-        // Raw URL
-        let rawUrl = match[6].trim();
-        if (rawUrl.startsWith("www.")) rawUrl = "https://" + rawUrl;
-        const isYt = rawUrl.includes("youtube.com") || rawUrl.includes("youtu.be");
-        const displayLabel = isYt ? "Watch Video on YouTube" : rawUrl.replace(/^https?:\/\//i, "").slice(0, 32);
-
-        parts.push(
-          <a
-            key={match.index}
-            href={rawUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              color: isYt ? "#DC2626" : "#1D4ED8",
-              background: isYt ? "#FEE2E2" : "#EFF6FF",
-              border: `1px solid ${isYt ? "#FCA5A5" : "#93C5FD"}`,
-              padding: "3px 10px",
-              borderRadius: 8,
-              fontWeight: 700,
-              textDecoration: "none",
-              fontSize: ".82rem",
-              margin: "2px 3px",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-              cursor: "pointer"
-            }}
-            className="ch"
-          >
-            <span>{isYt ? "▶️" : "🔗"}</span>
-            <span>{displayLabel}</span>
-            <span style={{fontSize:".7rem",opacity:0.8}}>↗</span>
-          </a>
-        );
+        remaining = remaining.slice(boldEnd + 2);
       }
-
-      cursor = combinedRegex.lastIndex;
     }
 
-    if (cursor < contentStr.length) {
-      parts.push(contentStr.substring(cursor));
-    }
-
-    return parts;
+    return elements;
   };
 
   return (
@@ -19115,12 +19137,12 @@ function FormattedChatText({ text, onQuickClick }) {
           return (
             <div key={lIdx} style={{display:"flex",alignItems:"flex-start",gap:8,paddingLeft:4}}>
               <span style={{color:"#3B82F6",fontSize:".9rem",lineHeight:1.3}}>•</span>
-              <div style={{flex:1}}>{renderInlineContent(contentStr)}</div>
+              <div style={{flex:1}}>{renderInline(contentStr, `line_${lIdx}`)}</div>
             </div>
           );
         }
 
-        return <div key={lIdx}>{renderInlineContent(contentStr)}</div>;
+        return <div key={lIdx}>{renderInline(contentStr, `line_${lIdx}`)}</div>;
       })}
     </div>
   );
