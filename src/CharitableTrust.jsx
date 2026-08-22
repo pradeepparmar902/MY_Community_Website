@@ -20014,8 +20014,8 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
 
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [userSessionScope, setUserSessionScope] = useState(auth?.idToken ? "all" : "public"); // "all" | "vibhag" | "individual" | "public"
-  const [sessionVibhag, setSessionVibhag] = useState("");
+  const [manualSessionScope, setManualSessionScope] = useState(auth?.idToken ? "all" : null);
+  const [manualSessionVibhag, setManualSessionVibhag] = useState("");
   const [verifiedMember, setVerifiedMember] = useState(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20066,6 +20066,28 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
   };
 
   const activeUser = getActiveUser();
+
+  // Dynamic automatic role and scope detection from logged in mobile + C.committeeMobiles
+  const matchedCommitteeMember = useMemo(() => {
+    const cleanMob = activeUser.mobile;
+    if (!cleanMob || cleanMob.length < 10) return null;
+    const committeeList = Array.isArray(C.committeeMobiles) ? C.committeeMobiles : [];
+    return committeeList.find(m => {
+      const targetMob = typeof m === "string" ? m : m.mobile;
+      return String(targetMob).replace(/\D/g, "").slice(-10) === cleanMob;
+    }) || null;
+  }, [activeUser.mobile, C.committeeMobiles]);
+
+  const userSessionScope = auth?.idToken 
+    ? "all" 
+    : (matchedCommitteeMember 
+        ? (typeof matchedCommitteeMember === "object" ? (matchedCommitteeMember.scope || "all") : "all")
+        : (manualSessionScope || (activeUser.isLoggedIn ? "individual" : "public")));
+
+  const sessionVibhag = matchedCommitteeMember && typeof matchedCommitteeMember === "object" 
+    ? (matchedCommitteeMember.vibhag || manualSessionVibhag || "") 
+    : manualSessionVibhag;
+
   const isAnyAdmin = userSessionScope === "all" || userSessionScope === "vibhag";
 
   const chatbotTitle = C.chatbotTitle || (C.trust?.name ? `${C.trust.name} Assistant` : "Mumbai Meghwal Panchayat Assistant");
@@ -20297,8 +20319,8 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
 
   useEffect(() => {
     if (auth?.idToken) {
-      setUserSessionScope("all");
-      setSessionVibhag("All Vibhags");
+      setManualSessionScope("all");
+      setManualSessionVibhag("All Vibhags");
     }
   }, [auth]);
 
@@ -20452,8 +20474,8 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
         const vibhag = authRecord?.vibhag || "All Vibhags";
         const memberName = authRecord?.name || "Admin Member";
 
-        setUserSessionScope(scope);
-        setSessionVibhag(vibhag);
+        setManualSessionScope(scope);
+        setManualSessionVibhag(vibhag);
         setVerifiedMember(authRecord || { name: memberName, scope, vibhag });
 
         botType = "admin_verified";
@@ -20703,7 +20725,9 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
   };
 
   const headerStatusLabel = isAnyAdmin
-    ? (userSessionScope === "all" ? "🌐 All Level Admin" : `📍 ${sessionVibhag}`)
+    ? (userSessionScope === "all" 
+        ? `🛡️ Super Admin (${activeUser.name ? activeUser.name.split(' ')[0] : 'Admin'})`
+        : `📍 ${sessionVibhag || 'Vibhag Admin'} (${activeUser.name ? activeUser.name.split(' ')[0] : 'Member'})`)
     : (activeUser.isLoggedIn ? `👤 ${activeUser.name ? activeUser.name.split(' ')[0] : 'Logged In'} (+91 ${activeUser.mobile})` : "🟢 Online | Public");
 
   return (
