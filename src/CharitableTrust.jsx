@@ -20602,13 +20602,21 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       if (!isAnyAdmin) {
         botReply = `🔒 **Access Restricted**\n\nRegistration summaries, Vibhag counts, and committee metrics are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock your assigned access level.\n\n🔍 Regular applicants can check their individual status by typing their **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.`;
       } else {
-        const matchedVibhag = VIBHAG_OPTIONS.find(v => qLower.includes(v.toLowerCase()) || qLower.includes(v.split(" ")[1]?.toLowerCase()));
-        const targetVibhag = matchedVibhag || (userSessionScope === "vibhag" ? sessionVibhag : null);
+        const explicitlyMentionedVibhag = VIBHAG_OPTIONS.find(v => qLower.includes(v.toLowerCase()) || qLower.includes(v.split(" ")[1]?.toLowerCase()));
+        
+        // If user is a Vibhag Admin with assigned Vibhag, always show their assigned Vibhag data (even if they type /all)
+        let targetVibhag = null;
+        if (userSessionScope === "vibhag" && sessionVibhag && sessionVibhag !== "All Vibhags") {
+          targetVibhag = sessionVibhag;
+        } else if (explicitlyMentionedVibhag) {
+          targetVibhag = explicitlyMentionedVibhag;
+        }
 
         if (targetVibhag) {
+          const cleanTarget = targetVibhag.toLowerCase().trim();
           const vibhagRegs = currentRegs.filter(r => {
-            const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "").toLowerCase();
-            return v.includes(targetVibhag.toLowerCase()) || targetVibhag.toLowerCase().includes(v);
+            const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "").toLowerCase().trim();
+            return v.includes(cleanTarget) || cleanTarget.includes(v) || (v.split(" ")[1] && cleanTarget.includes(v.split(" ")[1]));
           });
 
           let approved = 0, pending = 0, rejected = 0;
@@ -20620,7 +20628,9 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
           });
 
           botType = "summary_card";
-          botReply = `📍 **Live Analytics for ${targetVibhag}**: `;
+          botReply = userSessionScope === "vibhag" 
+            ? `📍 **Live Analytics for ${targetVibhag} (Your Assigned Vibhag)**: `
+            : `📍 **Live Analytics for ${targetVibhag}**: `;
           cardData = {
             total: vibhagRegs.length,
             approved,
