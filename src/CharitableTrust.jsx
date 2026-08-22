@@ -16906,7 +16906,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
     status === "Approved" ? defaultApprovedText : status === "Needs Info" ? defaultNeedsInfoText : status === "Disapproved" ? defaultRejectedText : defaultApprovedText
   );
   const [copied, setCopied] = useState(false);
-  const [launchMode, setLaunchMode] = useState(() => localStorage.getItem("mmp_wa_launch_mode") || "app");
+  const [launchMode, setLaunchMode] = useState(() => localStorage.getItem("mmp_wa_launch_mode") || "web");
 
   const applyPreset = (p) => {
     setPreset(p);
@@ -16990,25 +16990,18 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
       }
     }
 
-    // 2. Direct Launch: App Scheme (0 browser tabs) or Web
+    // Auto-copy text to clipboard so user can also Ctrl+V anytime
+    try { navigator.clipboard.writeText(customMessage); } catch(e){}
+
     if (launchMode === "app") {
-      // whatsapp:// scheme communicates directly with Windows/Mac/Mobile WhatsApp App with ZERO browser tabs opened!
       const appUrl = `whatsapp://send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
       window.location.href = appUrl;
       return;
     }
 
+    // Direct WhatsApp Web Link
     const webUrl = `https://web.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
-    try {
-      if (window._mmpWaTab && !window._mmpWaTab.closed) {
-        window._mmpWaTab.location.href = webUrl;
-        try { window._mmpWaTab.focus(); } catch(e){}
-      } else {
-        window._mmpWaTab = window.open(webUrl, "mmp_whatsapp_tab");
-      }
-    } catch(err) {
-      window._mmpWaTab = window.open(webUrl, "mmp_whatsapp_tab");
-    }
+    window.open(webUrl, "_blank");
   };
 
   return (
