@@ -16867,11 +16867,28 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
   const vibhag = reg['Vibhag'] || reg.vibhag || reg['MMP Vibhag'] || 'All Vibhags';
   const stream = reg['Stream / Class'] || reg['Stream'] || reg['Course'] || 'N/A';
   const percentage = reg['% Obtained'] || reg.percentage || reg['Marks / Percentage'] || 'N/A';
-  const status = reg['Status'] || reg.status || 'Pending';
+  const currentStatus = reg['Status'] || reg.status || 'Pending';
   const remarks = reg['Remarks'] || reg.remarks || 'Application under review';
 
   const currentIndex = allRegs.findIndex(r => r.id === reg.id || (r['Transaction ID'] && r['Transaction ID'] === reg['Transaction ID']));
   const totalCount = allRegs.length;
+
+  const buildTemplateForStatus = (st, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks) => {
+    if (st === "Approved") {
+      return `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rName}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* ${rTxn}\n• *Student Name:* ${rName}\n• *Vibhag:* ${rVibhag}\n• *Stream / Class:* ${rStream}\n• *Percentage:* ${rPct}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai (Official venue, schedule & invitation letter will be shared soon)\n\n👉 View your application & student certificate on your dashboard:\nhttps://pradeepparmar902.github.io/MY_Community_Website/\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`;
+    } else if (st === "Needs Info") {
+      return `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rName}*,\n\nYour application (*${rTxn}*) for *Education Felicitation 2026* requires additional information or document correction for verification.\n\n⚠️ *Committee Remarks / Action Required:*\n👉 *${rRemarks}*\n\n📝 *How to Update Your Application:*\n1. Open portal: https://pradeepparmar902.github.io/MY_Community_Website/\n2. Log in with registered mobile: *+91 ${rMobile}*\n3. Go to *My Dashboard* > *Registrations*\n4. Click *Edit & Resubmit* and update the requested document/details.\n\nPlease complete this at the earliest to confirm your felicitation eligibility.\n\nWarm regards,\n*Education Verification Committee*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`;
+    } else if (st === "Disapproved") {
+      return `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rName}*,\n\nRegarding your application (*${rTxn}*) for *Education Felicitation 2026*.\n\n• *Status:* 🔴 *Not Approved*\n• *Reason / Remarks:* ${rRemarks}\n\nIf you believe this is an error or need clarification, please contact your Vibhag Committee Member or our helpline.\n\nWarm regards,\n*Education Committee*\n📞 Helpline: +91 9820785209`;
+    } else {
+      // Default for "Pending" or any unreviewed entry: Under Verification message
+      return `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rName}*,\n\nThank you for submitting your registration for *Education Felicitation 2026*.\n\n📋 *Application Summary:*\n• *Transaction ID:* ${rTxn}\n• *Student Name:* ${rName}\n• *Vibhag:* ${rVibhag}\n• *Stream / Class:* ${rStream}\n• *Current Status:* ⏳ *Under Verification / Review*\n\nOur Verification Committee is currently reviewing your submitted details and documents. You will receive an update once the verification is completed.\n\n👉 Track your live application status on your student dashboard:\nhttps://pradeepparmar902.github.io/MY_Community_Website/\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`;
+    }
+  };
+
+  const [customMessage, setCustomMessage] = useState(() => 
+    buildTemplateForStatus(currentStatus, rawName, rawMobile, txnId, vibhag, stream, percentage, remarks)
+  );
 
   useEffect(() => {
     const freshMobile = String(reg['Mobile Number'] || reg.submitterMob || reg['Alternate Mobile Number'] || reg.phone || '').replace(/\D/g, '').slice(-10);
@@ -16884,36 +16901,11 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
     const freshStream = reg['Stream / Class'] || reg['Stream'] || reg['Course'] || 'N/A';
     const freshPct = reg['% Obtained'] || reg.percentage || reg['Marks / Percentage'] || 'N/A';
 
-    const p = freshStatus === "Approved" ? "approved" : freshStatus === "Needs Info" ? "needs_info" : freshStatus === "Disapproved" ? "rejected" : "approved";
-    setPreset(p);
-    if (p === "approved") {
-      setCustomMessage(`🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${freshName}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* ${freshTxn}\n• *Student Name:* ${freshName}\n• *Vibhag:* ${freshVibhag}\n• *Stream / Class:* ${freshStream}\n• *Percentage:* ${freshPct}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai (Official venue, schedule & invitation letter will be shared soon)\n\n👉 View your application & student certificate on your dashboard:\nhttps://pradeepparmar902.github.io/MY_Community_Website/\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`);
-    } else if (p === "needs_info") {
-      setCustomMessage(`🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${freshName}*,\n\nYour application (*${freshTxn}*) for *Education Felicitation 2026* requires additional information or document correction for verification.\n\n⚠️ *Committee Remarks / Action Required:*\n👉 *${freshRemarks}*\n\n📝 *How to Update Your Application:*\n1. Open portal: https://pradeepparmar902.github.io/MY_Community_Website/\n2. Log in with registered mobile: *+91 ${freshMobile}*\n3. Go to *My Dashboard* > *Registrations*\n4. Click *Edit & Resubmit* and update the requested document/details.\n\nPlease complete this at the earliest to confirm your felicitation eligibility.\n\nWarm regards,\n*Education Verification Committee*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`);
-    } else {
-      setCustomMessage(`🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${freshName}*,\n\nRegarding your application (*${freshTxn}*) for *Education Felicitation 2026*.\n\n• *Status:* 🔴 *Not Approved*\n• *Reason / Remarks:* ${freshRemarks}\n\nIf you believe this is an error or need clarification, please contact your Vibhag Committee Member or our helpline.\n\nWarm regards,\n*Education Committee*\n📞 Helpline: +91 9820785209`);
-    }
+    setCustomMessage(buildTemplateForStatus(freshStatus, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks));
   }, [reg]);
 
-  const defaultApprovedText = `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rawName}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* ${txnId}\n• *Student Name:* ${rawName}\n• *Vibhag:* ${vibhag}\n• *Stream / Class:* ${stream}\n• *Percentage:* ${percentage}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai (Official venue, schedule & invitation letter will be shared soon)\n\n👉 View your application & student certificate on your dashboard:\nhttps://pradeepparmar902.github.io/MY_Community_Website/\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`;
-
-  const defaultNeedsInfoText = `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rawName}*,\n\nYour application (*${txnId}*) for *Education Felicitation 2026* requires additional information or document correction for verification.\n\n⚠️ *Committee Remarks / Action Required:*\n👉 *${remarks}*\n\n📝 *How to Update Your Application:*\n1. Open portal: https://pradeepparmar902.github.io/MY_Community_Website/\n2. Log in with registered mobile: *+91 ${recipientMobile}*\n3. Go to *My Dashboard* > *Registrations*\n4. Click *Edit & Resubmit* and update the requested document/details.\n\nPlease complete this at the earliest to confirm your felicitation eligibility.\n\nWarm regards,\n*Education Verification Committee*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`;
-
-  const defaultRejectedText = `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rawName}*,\n\nRegarding your application (*${txnId}*) for *Education Felicitation 2026*.\n\n• *Status:* 🔴 *Not Approved*\n• *Reason / Remarks:* ${remarks}\n\nIf you believe this is an error or need clarification, please contact your Vibhag Committee Member or our helpline.\n\nWarm regards,\n*Education Committee*\n📞 Helpline: +91 9820785209`;
-
-  const [preset, setPreset] = useState(status === "Approved" ? "approved" : status === "Needs Info" ? "needs_info" : status === "Disapproved" ? "rejected" : "approved");
-  const [customMessage, setCustomMessage] = useState(
-    status === "Approved" ? defaultApprovedText : status === "Needs Info" ? defaultNeedsInfoText : status === "Disapproved" ? defaultRejectedText : defaultApprovedText
-  );
   const [copied, setCopied] = useState(false);
   const [launchMode, setLaunchMode] = useState(() => localStorage.getItem("mmp_wa_launch_mode") || "web");
-
-  const applyPreset = (p) => {
-    setPreset(p);
-    if (p === "approved") setCustomMessage(defaultApprovedText);
-    else if (p === "needs_info") setCustomMessage(defaultNeedsInfoText);
-    else if (p === "rejected") setCustomMessage(defaultRejectedText);
-  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(customMessage);
@@ -17084,78 +17076,50 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
             </div>
           </div>
 
-          {/* Quick Preset Selector Buttons */}
-          <div>
-            <div style={{fontSize:".8rem",fontWeight:700,color:"#334155",marginBottom:8}}>
-              Select Message Template / Purpose:
+          {/* Auto Status Binding Banner */}
+          <div style={{
+            background: currentStatus === "Approved" ? "#F0FDF4" : currentStatus === "Needs Info" ? "#FFFBEB" : currentStatus === "Disapproved" ? "#FEF2F2" : "#F8FAFC",
+            border: currentStatus === "Approved" ? "1px solid #BBF7D0" : currentStatus === "Needs Info" ? "1px solid #FDE68A" : currentStatus === "Disapproved" ? "1px solid #FECACA" : "1px solid #E2E8F0",
+            borderRadius: 8,
+            padding: "10px 14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 8
+          }}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:"1.1rem"}}>
+                {currentStatus === "Approved" ? "🟢" : currentStatus === "Needs Info" ? "⚠️" : currentStatus === "Disapproved" ? "🔴" : "⏳"}
+              </span>
+              <div>
+                <div style={{fontSize:".82rem",fontWeight:800,color:"#0F172A"}}>
+                  Application Status: {currentStatus === "Approved" ? "Approved & Verified" : currentStatus === "Needs Info" ? "Needs Info / Action Required" : currentStatus === "Disapproved" ? "Disapproved" : "Under Verification (Pending)"}
+                </div>
+                <div style={{fontSize:".72rem",color:"#64748B"}}>
+                  Message template is automatically connected to this verified status.
+                </div>
+              </div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))",gap:8}}>
-              <button
-                type="button"
-                onClick={() => applyPreset("approved")}
-                style={{
-                  padding:"9px 12px",
-                  borderRadius:8,
-                  border: preset === "approved" ? "2px solid #16A34A" : "1px solid #CBD5E1",
-                  background: preset === "approved" ? "#DCFCE7" : "white",
-                  color: preset === "approved" ? "#15803D" : "#475569",
-                  fontWeight: 800,
-                  fontSize: ".78rem",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6
-                }}
-              >
-                <span>🟢</span>
-                <span>Approval Notice</span>
-              </button>
 
-              <button
-                type="button"
-                onClick={() => applyPreset("needs_info")}
-                style={{
-                  padding:"9px 12px",
-                  borderRadius:8,
-                  border: preset === "needs_info" ? "2px solid #EA580C" : "1px solid #CBD5E1",
-                  background: preset === "needs_info" ? "#FFEDD5" : "white",
-                  color: preset === "needs_info" ? "#C2410C" : "#475569",
-                  fontWeight: 800,
-                  fontSize: ".78rem",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6
-                }}
-              >
-                <span>⏳</span>
-                <span>Needs Info / Re-upload</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => applyPreset("rejected")}
-                style={{
-                  padding:"9px 12px",
-                  borderRadius:8,
-                  border: preset === "rejected" ? "2px solid #DC2626" : "1px solid #CBD5E1",
-                  background: preset === "rejected" ? "#FEE2E2" : "white",
-                  color: preset === "rejected" ? "#B91C1C" : "#475569",
-                  fontWeight: 800,
-                  fontSize: ".78rem",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6
-                }}
-              >
-                <span>🔴</span>
-                <span>Disapproved / Ineligible</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const freshMobile = String(reg['Mobile Number'] || reg.submitterMob || reg['Alternate Mobile Number'] || reg.phone || '').replace(/\D/g, '').slice(-10);
+                const freshStatus = reg['Status'] || reg.status || 'Pending';
+                const freshRemarks = reg['Remarks'] || reg.remarks || 'Application under review';
+                const freshName = String(reg['Full Name'] || reg['Submitted By'] || reg['Participant Name'] || reg.name || 'Applicant').replace(/\|/g, ' ').trim();
+                const freshTxn = reg['Transaction ID'] || reg.transactionId || reg.id || 'N/A';
+                const freshVibhag = reg['Vibhag'] || reg.vibhag || reg['MMP Vibhag'] || 'All Vibhags';
+                const freshStream = reg['Stream / Class'] || reg['Stream'] || reg['Course'] || 'N/A';
+                const freshPct = reg['% Obtained'] || reg.percentage || reg['Marks / Percentage'] || 'N/A';
+                setCustomMessage(buildTemplateForStatus(freshStatus, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks));
+              }}
+              style={{background:"white",border:"1px solid #CBD5E1",color:"#334155",padding:"4px 10px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+              title="Reset message to official default draft"
+            >
+              ↺ Reset Draft
+            </button>
           </div>
 
           {/* Formatted Message Editor */}
