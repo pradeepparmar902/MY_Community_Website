@@ -20412,15 +20412,19 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       return false;
     });
 
-    const txnFound = currentRegs.filter(r => {
+    const isSummaryOrVibhagIntent = qLower.includes("vibhag") || qLower.includes("summary") || qLower.includes("count") || qLower.includes("total") || qLower.includes("report") || qLower.includes("/all") || qLower.includes("/vibhag") || qLower.includes("committee");
+
+    const txnFound = isSummaryOrVibhagIntent ? [] : currentRegs.filter(r => {
       const tId = String(r["Transaction ID"] || r.transactionId || r.txnId || r.id || "").trim().toUpperCase();
       const cleanTId = tId.replace(/[^A-Z0-9]/g, "");
 
       if (tId === cleanQuery || cleanTId === cleanHyphen) return true;
       if (cleanQuery.length > 2 && (cleanTId.endsWith(cleanHyphen) || cleanTId === cleanHyphen)) return true;
 
-      const numOnly = query.replace(/\D/g, "");
-      if (numOnly && (tId === "VG-" + numOnly || tId === "EDU26-" + numOnly || cleanTId === "VG" + numOnly || cleanTId === "EDU26" + numOnly)) {
+      // Only allow pure numbers if query is short and doesn't contain long phrases
+      const numOnly = query.trim().replace(/\D/g, "");
+      const isPureNumber = /^\d{1,5}$/.test(query.trim());
+      if (isPureNumber && numOnly && (tId === "VG-" + numOnly || tId === "EDU26-" + numOnly || cleanTId === "VG" + numOnly || cleanTId === "EDU26" + numOnly)) {
         return true;
       }
       return false;
@@ -20614,18 +20618,53 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       if (!isAnyAdmin) {
         botReply = `🔒 **Access Restricted**\n\nRegistration summaries, Vibhag counts, and committee metrics are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock your assigned access level.\n\n🔍 Regular applicants can check their individual status by typing their **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.`;
       } else {
-        const explicitlyMentionedVibhag = VIBHAG_OPTIONS.find(v => qLower.includes(v.toLowerCase()) || qLower.includes(v.split(" ")[1]?.toLowerCase()));
-        
-        // If user is a Vibhag Admin with assigned Vibhag, always show their assigned Vibhag data (even if they type /all)
-        let targetVibhag = null;
-        if (userSessionScope === "vibhag" && sessionVibhag && sessionVibhag !== "All Vibhags") {
-          targetVibhag = sessionVibhag;
-        } else if (explicitlyMentionedVibhag) {
-          targetVibhag = explicitlyMentionedVibhag;
-        }
+        const explicitlyMentionedVibhag = VIBHAG_OPTIONS.find(v => {
+          const vName = v.toLowerCase();
+          const vWord = v.split(" ")[1]?.toLowerCase();
+          return qLower.includes(vName) || (vWord && vWord.length >= 4 && qLower.includes(vWord));
+        });
 
-        if (targetVibhag) {
-          const cleanTarget = targetVibhag.toLowerCase().trim();
+        // If user is a Vibhag Admin
+        if (userSessionScope === "vibhag" && sessionVibhag && sessionVibhag !== "All Vibhags") {
+          const cleanSession = sessionVibhag.toLowerCase().trim();
+          const cleanExplicit = explicitlyMentionedVibhag ? explicitlyMentionedVibhag.toLowerCase().trim() : null;
+
+          // If the user explicitly asked for a DIFFERENT Vibhag that they don't have access to
+          if (cleanExplicit && !cleanExplicit.includes(cleanSession) && !cleanSession.includes(cleanExplicit)) {
+            botType = "text";
+            botReply = `🔒 **Access Restricted to ${sessionVibhag}**\n\nYou have administrative access assigned specifically for **${sessionVibhag}**.\n\n• 🚫 You do not have permission to view registrations or analytics for **${explicitlyMentionedVibhag}**.\n• 👉 Type **`/vibhag`** or **`/all`** to view live analytics for **${sessionVibhag}**.`;
+            setMessages(prev => [...prev, { id: "m_" + Date.now(), sender: "bot", type: botType, text: botReply, cardData: null }]);
+            setLoading(false);
+            return;
+          }
+
+          // Otherwise show their assigned Vibhag data
+          const vibhagRegs = currentRegs.filter(r => {
+            const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "").toLowerCase().trim();
+            return v.includes(cleanSession) || cleanSession.includes(v);
+          });
+
+          let approved = 0, pending = 0, rejected = 0;
+          vibhagRegs.forEach(r => {
+            const s = String(r.Status || r.status || "Pending").trim();
+            if (s === "Approved") approved++;
+            else if (s === "Disapproved" || s === "Rejected") rejected++;
+            else pending++;
+          });
+
+          botType = "summary_card";
+          botReply = `📍 **Live Analytics for ${sessionVibhag} (Your Assigned Vibhag)**: `;
+          cardData = {
+            total: vibhagRegs.length,
+            approved,
+            pending,
+            rejected,
+            scopeTitle: `${sessionVibhag} Summary`,
+            vibhagList: [[`${sessionVibhag}`, { total: vibhagRegs.length, approved, pending, rejected }]],
+            apps: vibhagRegs
+          };
+        } else if (explicitlyMentionedVibhag) {
+          const cleanTarget = explicitlyMentionedVibhag.toLowerCase().trim();
           const vibhagRegs = currentRegs.filter(r => {
             const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "").toLowerCase().trim();
             return v.includes(cleanTarget) || cleanTarget.includes(v) || (v.split(" ")[1] && cleanTarget.includes(v.split(" ")[1]));
@@ -20640,16 +20679,14 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
           });
 
           botType = "summary_card";
-          botReply = userSessionScope === "vibhag" 
-            ? `📍 **Live Analytics for ${targetVibhag} (Your Assigned Vibhag)**: `
-            : `📍 **Live Analytics for ${targetVibhag}**: `;
+          botReply = `📍 **Live Analytics for ${explicitlyMentionedVibhag}**: `;
           cardData = {
             total: vibhagRegs.length,
             approved,
             pending,
             rejected,
-            scopeTitle: `${targetVibhag} Summary`,
-            vibhagList: [[`${targetVibhag}`, { total: vibhagRegs.length, approved, pending, rejected }]],
+            scopeTitle: `${explicitlyMentionedVibhag} Summary`,
+            vibhagList: [[`${explicitlyMentionedVibhag}`, { total: vibhagRegs.length, approved, pending, rejected }]],
             apps: vibhagRegs
           };
         } else {
