@@ -15053,6 +15053,200 @@ function ChatbotAccessManager({ C, setC, auth }) {
         </div>
       )}
 
+      
+      {/* DEDICATED SUB-TAB: 🛡️ Restricted Messages & Rules */}
+      {activeTab === "rules" && (
+        <div style={{animation:"fadeIn .2s ease"}}>
+          <div style={{background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"24px 26px",marginBottom:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,flexWrap:"wrap",gap:12}}>
+              <div>
+                <div style={{fontSize:"1.15rem",fontWeight:800,color:"#166534",display:"flex",alignItems:"center",gap:8}}>
+                  <span>🛡️</span> Chatbot Access Rules & Error Response Console
+                </div>
+                <p style={{fontSize:".85rem",color:"#475569",margin:"4px 0 0 0"}}>
+                  Configure the exact response messages triggered when users ask specific questions or query restricted Vibhags.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await fbSave(C, auth?.idToken);
+                    alert("✅ All Access Rules & Messages saved successfully to database!");
+                  } catch(err) {
+                    alert("Failed to save: " + err.message);
+                  }
+                }}
+                style={{
+                  padding:"10px 22px",
+                  background:"linear-gradient(135deg, #166534, #15803D)",
+                  color:"white",
+                  border:"none",
+                  borderRadius:8,
+                  fontWeight:800,
+                  fontSize:".88rem",
+                  cursor:"pointer",
+                  boxShadow:"0 2px 8px rgba(22,101,52,0.3)"
+                }}
+              >
+                💾 Save All Messages to Database
+              </button>
+            </div>
+
+            {/* How It Connects Explanation Banner */}
+            <div style={{background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"14px 18px",marginBottom:20}}>
+              <div style={{fontSize:".82rem",fontWeight:800,color:"#0F172A",marginBottom:6,display:"flex",alignItems:"center",gap:6}}>
+                <span>🔗</span> How are these messages connected to questions?
+              </div>
+              <ul style={{margin:0,paddingLeft:20,fontSize:".78rem",color:"#475569",lineHeight:1.6}}>
+                <li><strong>Rule 1 (Unauthorized Vibhag Query)</strong>: Connected to any question mentioning a Vibhag (e.g. <code>Summary data of vibhag 15 RAMDEV NAGAR</code> or <code>/vibhag 15 RAMDEV NAGAR</code>) when the user only has access to a different Vibhag (e.g. <code>10 MAHALAXMI</code>).</li>
+                <li><strong>Rule 2 (Admin Only Reports)</strong>: Connected when regular applicants query admin-only reports (<code>/all</code>, <code>/pending</code>, <code>/approved</code>).</li>
+                <li><strong>Rule 3 (General Fallback)</strong>: Connected when a user asks any question that is not related to community events or registrations.</li>
+              </ul>
+            </div>
+
+            {/* Configurable Message Cards */}
+            <div style={{display:"flex",flexDirection:"column",gap:20}}>
+              
+              {/* Rule 1 */}
+              <div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:10,padding:"18px 20px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <span style={{background:"#DCFCE7",color:"#166534",padding:"3px 8px",borderRadius:6,fontSize:".7rem",fontWeight:800,marginRight:8}}>RULE 1 (AUTOMATIC)</span>
+                    <strong style={{fontSize:".88rem",color:"#0F172A"}}>Unauthorized Vibhag Access Message</strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newC = { ...C, chatbotRestrictedVibhagMsg: "🔒 **Access Restricted to {ASSIGNED_VIBHAG}**\n\nYou have administrative access assigned specifically for **{ASSIGNED_VIBHAG}**.\n\n• 🚫 You do not have permission to view registrations or analytics for **{REQUESTED_VIBHAG}**.\n• ℹ️ **Check your access level of Vibhag**: Please connect with Admin ({ADMIN_PHONE}) if you require access to this Vibhag.\n• 👉 Type **`/vibhag`** or **`/all`** to view live analytics for **{ASSIGNED_VIBHAG}**." };
+                      if (setC) setC(newC);
+                    }}
+                    style={{background:"white",border:"1px solid #86EFAC",color:"#166534",padding:"4px 10px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                  >
+                    ↺ Reset to Default Template
+                  </button>
+                </div>
+
+                <div style={{fontSize:".75rem",color:"#15803D",marginBottom:8,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                  <span>Insert Placeholders:</span>
+                  <button type="button" onClick={() => {
+                    const cur = C.chatbotRestrictedVibhagMsg || "🔒 **Access Restricted to {ASSIGNED_VIBHAG}**\n\nYou have administrative access assigned specifically for **{ASSIGNED_VIBHAG}**.\n\n• 🚫 You do not have permission to view registrations or analytics for **{REQUESTED_VIBHAG}**.\n• ℹ️ **Check your access level of Vibhag**: Please connect with Admin ({ADMIN_PHONE}) if you require access to this Vibhag.\n• 👉 Type **`/vibhag`** or **`/all`** to view live analytics for **{ASSIGNED_VIBHAG}**.";
+                    if (setC) setC({ ...C, chatbotRestrictedVibhagMsg: cur + " {ASSIGNED_VIBHAG}" });
+                  }} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{ASSIGNED_VIBHAG}'}</button>
+                  <button type="button" onClick={() => {
+                    const cur = C.chatbotRestrictedVibhagMsg || "🔒 **Access Restricted to {ASSIGNED_VIBHAG}**\n\nYou have administrative access assigned specifically for **{ASSIGNED_VIBHAG}**.\n\n• 🚫 You do not have permission to view registrations or analytics for **{REQUESTED_VIBHAG}**.\n• ℹ️ **Check your access level of Vibhag**: Please connect with Admin ({ADMIN_PHONE}) if you require access to this Vibhag.\n• 👉 Type **`/vibhag`** or **`/all`** to view live analytics for **{ASSIGNED_VIBHAG}**.";
+                    if (setC) setC({ ...C, chatbotRestrictedVibhagMsg: cur + " {REQUESTED_VIBHAG}" });
+                  }} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{REQUESTED_VIBHAG}'}</button>
+                  <button type="button" onClick={() => {
+                    const cur = C.chatbotRestrictedVibhagMsg || "🔒 **Access Restricted to {ASSIGNED_VIBHAG}**\n\nYou have administrative access assigned specifically for **{ASSIGNED_VIBHAG}**.\n\n• 🚫 You do not have permission to view registrations or analytics for **{REQUESTED_VIBHAG}**.\n• ℹ️ **Check your access level of Vibhag**: Please connect with Admin ({ADMIN_PHONE}) if you require access to this Vibhag.\n• 👉 Type **`/vibhag`** or **`/all`** to view live analytics for **{ASSIGNED_VIBHAG}**.";
+                    if (setC) setC({ ...C, chatbotRestrictedVibhagMsg: cur + " {ADMIN_PHONE}" });
+                  }} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{ADMIN_PHONE}'}</button>
+                </div>
+
+                <textarea
+                  value={(C.chatbotRestrictedVibhagMsg && C.chatbotRestrictedVibhagMsg.trim()) ? C.chatbotRestrictedVibhagMsg : "🔒 **Access Restricted to {ASSIGNED_VIBHAG}**\n\nYou have administrative access assigned specifically for **{ASSIGNED_VIBHAG}**.\n\n• 🚫 You do not have permission to view registrations or analytics for **{REQUESTED_VIBHAG}**.\n• ℹ️ **Check your access level of Vibhag**: Please connect with Admin ({ADMIN_PHONE}) if you require access to this Vibhag.\n• 👉 Type **`/vibhag`** or **`/all`** to view live analytics for **{ASSIGNED_VIBHAG}**."}
+                  onChange={e => {
+                    const newC = { ...C, chatbotRestrictedVibhagMsg: e.target.value };
+                    if (setC) setC(newC);
+                  }}
+                  rows={6}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",lineHeight:1.6,fontFamily:"inherit",boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+
+              {/* Rule 2 */}
+              <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:10,padding:"18px 20px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <span style={{background:"#DBEAFE",color:"#1E40AF",padding:"3px 8px",borderRadius:6,fontSize:".7rem",fontWeight:800,marginRight:8}}>RULE 2 (AUTOMATIC)</span>
+                    <strong style={{fontSize:".88rem",color:"#0F172A"}}>General Admin Summary Restricted Message (Shown to Public/Applicants)</strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newC = { ...C, chatbotAdminRestrictedMsg: "🔒 **Access Restricted**\n\nRegistration summaries, Vibhag counts, and committee metrics are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock your assigned access level.\n\n🔍 Regular applicants can check their individual status by typing their **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**." };
+                      if (setC) setC(newC);
+                    }}
+                    style={{background:"white",border:"1px solid #93C5FD",color:"#1E40AF",padding:"4px 10px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                  >
+                    ↺ Reset to Default Template
+                  </button>
+                </div>
+
+                <textarea
+                  value={(C.chatbotAdminRestrictedMsg && C.chatbotAdminRestrictedMsg.trim()) ? C.chatbotAdminRestrictedMsg : "🔒 **Access Restricted**\n\nRegistration summaries, Vibhag counts, and committee metrics are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock your assigned access level.\n\n🔍 Regular applicants can check their individual status by typing their **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**."}
+                  onChange={e => {
+                    const newC = { ...C, chatbotAdminRestrictedMsg: e.target.value };
+                    if (setC) setC(newC);
+                  }}
+                  rows={5}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",lineHeight:1.6,fontFamily:"inherit",boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+
+              {/* Rule 3 */}
+              <div style={{background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:10,padding:"18px 20px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <span style={{background:"#FEF3C7",color:"#92400E",padding:"3px 8px",borderRadius:6,fontSize:".7rem",fontWeight:800,marginRight:8}}>RULE 3 (FALLBACK)</span>
+                    <strong style={{fontSize:".88rem",color:"#0F172A"}}>Non-Relevant Question / Default Fallback Message</strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newC = { ...C, chatbotNonRelevantMsg: "⚠️ **This Question is not relevant to this community.**\n\nI am specifically designed to help with **Mumbai Meghwal Panchayat & Vidya Gohil Trust** community activities, Education Felicitation 2026 event registrations, and application status tracking.\n\n👉 Type **`/`** to view all available community questions & shortcuts." };
+                      if (setC) setC(newC);
+                    }}
+                    style={{background:"white",border:"1px solid #FCD34D",color:"#92400E",padding:"4px 10px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                  >
+                    ↺ Reset to Default Template
+                  </button>
+                </div>
+
+                <textarea
+                  value={(C.chatbotNonRelevantMsg && C.chatbotNonRelevantMsg.trim()) ? C.chatbotNonRelevantMsg : "⚠️ **This Question is not relevant to this community.**\n\nI am specifically designed to help with **Mumbai Meghwal Panchayat & Vidya Gohil Trust** community activities, Education Felicitation 2026 event registrations, and application status tracking.\n\n👉 Type **`/`** to view all available community questions & shortcuts."}
+                  onChange={e => {
+                    const newC = { ...C, chatbotNonRelevantMsg: e.target.value };
+                    if (setC) setC(newC);
+                  }}
+                  rows={5}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",lineHeight:1.6,fontFamily:"inherit",boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+
+            </div>
+
+            <div style={{display:"flex",justifyContent:"flex-end",marginTop:24}}>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await fbSave(C, auth?.idToken);
+                    alert("✅ All Access Rules & Messages saved successfully to database!");
+                  } catch(err) {
+                    alert("Failed to save: " + err.message);
+                  }
+                }}
+                style={{
+                  padding:"12px 28px",
+                  background:"linear-gradient(135deg, #166534, #15803D)",
+                  color:"white",
+                  border:"none",
+                  borderRadius:8,
+                  fontWeight:800,
+                  fontSize:".92rem",
+                  cursor:"pointer",
+                  boxShadow:"0 2px 8px rgba(22,101,52,0.3)"
+                }}
+              >
+                💾 Save All Messages to Database
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeTab === "users" && (
         <>
           {/* Add / Authorize Member Form */}
