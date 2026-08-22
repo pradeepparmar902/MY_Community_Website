@@ -1,4 +1,4 @@
-name: Daily Pivot Summary Report Automation
+name: Daily Detailed Records Report Automation
 
 on:
   schedule:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch: # Allows manual trigger from GitHub Actions UI anytime
 
 jobs:
-  generate-and-send-report:
+  generate-and-send-detailed-report:
     runs-on: ubuntu-latest
 
     steps:
@@ -23,9 +23,9 @@ jobs:
         run: |
           cd scripts
           npm init -y
-          npm install jspdf nodemailer
+          npm install jspdf nodemailer xlsx
 
-      - name: Run Daily Pivot Report Generator
+      - name: Run Daily Detailed Records Report Generator
         env:
           FIREBASE_API_KEY: "AIzaSyAGw3g8VS23FfLiOrXdk1QafdxMIlIC9VE"
           FIREBASE_PROJECT_ID: "mmp-cwc-new"
@@ -35,4 +35,4 @@ jobs:
           SMTP_PASS: ${{ secrets.GMAIL_PASSWORD_PRADEEPARMAR902 || secrets.SMTP_PASS }}
           RECIPIENT_EMAILS: ${{ secrets.RECIPIENT_EMAILS || 'pradeepparmar902@gmail.com, makharishk@gmail.com, 89night@gmail.com' }}
         run: |
-          node scripts/generate_daily_pivot_report.js
+          node scripts/generate_daily_detailed_report.js
