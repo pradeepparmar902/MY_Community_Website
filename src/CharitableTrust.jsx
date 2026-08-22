@@ -20346,16 +20346,23 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
     if (regsLoaded && regs.length > 0) return regs;
     try {
       setLoading(true);
-      const data = await fbFetchRegistrations(auth?.idToken);
+      let token = auth?.idToken || localStorage.getItem("trustPublicAuthToken") || localStorage.getItem("globalAuthToken") || "";
+      if (!token && fbAuth?.currentUser) {
+        try { token = await fbAuth.currentUser.getIdToken(); } catch (e) {}
+      }
+      const data = await fbFetchRegistrations(token).catch(err => {
+        console.warn("fbFetchRegistrations fallback:", err);
+        return [];
+      });
       const cleanList = (data || []).filter(r => !r.deleted && !r.isGlobalGuest && !r.isSpecialGuest);
       setRegs(cleanList);
       setRegsLoaded(true);
-      setLoading(false);
       return cleanList;
     } catch (e) {
       console.error("Chatbot regs load error:", e);
-      setLoading(false);
       return [];
+    } finally {
+      setLoading(false);
     }
   };
 
