@@ -16689,6 +16689,259 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }
   );
 }
 
+
+// ── WhatsApp Applicant Communication Modal ───────────────────────────────────────
+function WhatsAppApplicantMessengerModal({ reg, onClose, C }) {
+  if (!reg) return null;
+
+  const rawName = String(reg['Full Name'] || reg['Submitted By'] || reg['Participant Name'] || reg.name || 'Applicant').replace(/\|/g, ' ').trim();
+  const rawMobile = String(reg['Mobile Number'] || reg.submitterMob || reg['Alternate Mobile Number'] || reg.phone || '').replace(/\D/g, '').slice(-10);
+  const [recipientMobile, setRecipientMobile] = useState(rawMobile);
+  const txnId = reg['Transaction ID'] || reg.transactionId || reg.id || 'N/A';
+  const vibhag = reg['Vibhag'] || reg.vibhag || reg['MMP Vibhag'] || 'All Vibhags';
+  const stream = reg['Stream / Class'] || reg['Stream'] || reg['Course'] || 'N/A';
+  const percentage = reg['% Obtained'] || reg.percentage || reg['Marks / Percentage'] || 'N/A';
+  const status = reg['Status'] || reg.status || 'Pending';
+  const remarks = reg['Remarks'] || reg.remarks || 'Application under review';
+
+  const defaultApprovedText = `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rawName}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* ${txnId}\n• *Student Name:* ${rawName}\n• *Vibhag:* ${vibhag}\n• *Stream / Class:* ${stream}\n• *Percentage:* ${percentage}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai (Official venue, schedule & invitation letter will be shared soon)\n\n👉 View your application & student certificate on your dashboard:\nhttps://pradeepparmar902.github.io/MY_Community_Website/\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`;
+
+  const defaultNeedsInfoText = `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rawName}*,\n\nYour application (*${txnId}*) for *Education Felicitation 2026* requires additional information or document correction for verification.\n\n⚠️ *Committee Remarks / Action Required:*\n👉 *${remarks}*\n\n📝 *How to Update Your Application:*\n1. Open portal: https://pradeepparmar902.github.io/MY_Community_Website/\n2. Log in with registered mobile: *+91 ${recipientMobile}*\n3. Go to *My Dashboard* > *Registrations*\n4. Click *Edit & Resubmit* and update the requested document/details.\n\nPlease complete this at the earliest to confirm your felicitation eligibility.\n\nWarm regards,\n*Education Verification Committee*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`;
+
+  const defaultRejectedText = `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rawName}*,\n\nRegarding your application (*${txnId}*) for *Education Felicitation 2026*.\n\n• *Status:* 🔴 *Not Approved*\n• *Reason / Remarks:* ${remarks}\n\nIf you believe this is an error or need clarification, please contact your Vibhag Committee Member or our helpline.\n\nWarm regards,\n*Education Committee*\n📞 Helpline: +91 9820785209`;
+
+  const [preset, setPreset] = useState(status === "Approved" ? "approved" : status === "Needs Info" ? "needs_info" : status === "Disapproved" ? "rejected" : "approved");
+  const [customMessage, setCustomMessage] = useState(
+    status === "Approved" ? defaultApprovedText : status === "Needs Info" ? defaultNeedsInfoText : status === "Disapproved" ? defaultRejectedText : defaultApprovedText
+  );
+  const [copied, setCopied] = useState(false);
+
+  const applyPreset = (p) => {
+    setPreset(p);
+    if (p === "approved") setCustomMessage(defaultApprovedText);
+    else if (p === "needs_info") setCustomMessage(defaultNeedsInfoText);
+    else if (p === "rejected") setCustomMessage(defaultRejectedText);
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(customMessage);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSendWhatsApp = () => {
+    const cleanPhone = String(recipientMobile).replace(/\D/g, '').slice(-10);
+    if (!cleanPhone || cleanPhone.length < 10) {
+      alert("Please enter a valid 10-digit mobile number for the applicant.");
+      return;
+    }
+    const targetUrl = `https://api.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
+    window.open(targetUrl, "_blank");
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100001,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:"white",borderRadius:16,maxWidth:620,width:"100%",maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 40px rgba(0,0,0,0.35)"}} onClick={e=>e.stopPropagation()}>
+        
+        {/* Header */}
+        <div style={{padding:"16px 20px",background:"linear-gradient(135deg, #15803D, #166534)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:"1.4rem"}}>💬</span>
+            <div>
+              <h3 style={{fontSize:"1.1rem",fontWeight:700,margin:0}}>Send WhatsApp Update to Applicant</h3>
+              <div style={{fontSize:".75rem",opacity:0.85,marginTop:2}}>
+                {rawName} • {txnId} • {vibhag}
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:"50%",width:32,height:32,cursor:"pointer",fontWeight:700,fontSize:"1.1rem"}}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{padding:20,overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:16}}>
+          
+          {/* Recipient Phone Row */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#F8FAFC",padding:"10px 14px",borderRadius:8,border:"1px solid #E2E8F0",flexWrap:"wrap",gap:10}}>
+            <div style={{fontSize:".82rem",color:"#475569",fontWeight:700}}>
+              📱 Recipient WhatsApp Mobile:
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontWeight:700,color:"#1E293B",fontSize:".88rem"}}>+91</span>
+              <input 
+                type="tel" 
+                value={recipientMobile} 
+                onChange={e => setRecipientMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="10-digit mobile"
+                style={{padding:"6px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontWeight:700,fontSize:".88rem",width:130,color:"#15803D",fontFamily:"monospace"}}
+              />
+            </div>
+          </div>
+
+          {/* Quick Preset Selector Buttons */}
+          <div>
+            <div style={{fontSize:".8rem",fontWeight:700,color:"#334155",marginBottom:8}}>
+              Select Message Template / Purpose:
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))",gap:8}}>
+              <button
+                type="button"
+                onClick={() => applyPreset("approved")}
+                style={{
+                  padding:"9px 12px",
+                  borderRadius:8,
+                  border: preset === "approved" ? "2px solid #16A34A" : "1px solid #CBD5E1",
+                  background: preset === "approved" ? "#DCFCE7" : "white",
+                  color: preset === "approved" ? "#15803D" : "#475569",
+                  fontWeight: 800,
+                  fontSize: ".78rem",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6
+                }}
+              >
+                <span>🟢</span>
+                <span>Approval Notice</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => applyPreset("needs_info")}
+                style={{
+                  padding:"9px 12px",
+                  borderRadius:8,
+                  border: preset === "needs_info" ? "2px solid #EA580C" : "1px solid #CBD5E1",
+                  background: preset === "needs_info" ? "#FFEDD5" : "white",
+                  color: preset === "needs_info" ? "#C2410C" : "#475569",
+                  fontWeight: 800,
+                  fontSize: ".78rem",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6
+                }}
+              >
+                <span>⏳</span>
+                <span>Needs Info / Re-upload</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => applyPreset("rejected")}
+                style={{
+                  padding:"9px 12px",
+                  borderRadius:8,
+                  border: preset === "rejected" ? "2px solid #DC2626" : "1px solid #CBD5E1",
+                  background: preset === "rejected" ? "#FEE2E2" : "white",
+                  color: preset === "rejected" ? "#B91C1C" : "#475569",
+                  fontWeight: 800,
+                  fontSize: ".78rem",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6
+                }}
+              >
+                <span>🔴</span>
+                <span>Disapproved / Ineligible</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Formatted Message Editor */}
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+              <label style={{fontSize:".8rem",fontWeight:700,color:"#334155"}}>
+                Message Content (WhatsApp Formatted):
+              </label>
+              <button
+                type="button"
+                onClick={handleCopy}
+                style={{background:"none",border:"none",color:copied?"#15803D":"#2563EB",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
+              >
+                {copied ? "✅ Copied to Clipboard!" : "📋 Copy Text"}
+              </button>
+            </div>
+            <textarea
+              value={customMessage}
+              onChange={e => setCustomMessage(e.target.value)}
+              rows={10}
+              style={{
+                width: "100%",
+                padding: "12px 14px",
+                borderRadius: 8,
+                border: "1px solid #CBD5E1",
+                fontSize: ".82rem",
+                lineHeight: 1.5,
+                fontFamily: "monospace",
+                boxSizing: "border-box",
+                background: "#FAFDF7"
+              }}
+            />
+          </div>
+
+        </div>
+
+        {/* Footer Actions */}
+        <div style={{padding:"14px 20px",background:"#F8FAFC",borderTop:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{padding:"9px 16px",background:"white",border:"1px solid #CBD5E1",borderRadius:8,fontSize:".82rem",fontWeight:700,color:"#475569",cursor:"pointer"}}
+          >
+            Close
+          </button>
+
+          <div style={{display:"flex",gap:10}}>
+            <button
+              type="button"
+              onClick={handleCopy}
+              style={{
+                padding: "9px 16px",
+                background: copied ? "#DCFCE7" : "white",
+                color: copied ? "#15803D" : "#334155",
+                border: "1px solid #CBD5E1",
+                borderRadius: 8,
+                fontSize: ".82rem",
+                fontWeight: 700,
+                cursor: "pointer"
+              }}
+            >
+              {copied ? "✅ Copied" : "📋 Copy"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSendWhatsApp}
+              style={{
+                padding: "9px 20px",
+                background: "#25D366",
+                color: "white",
+                border: "none",
+                borderRadius: 8,
+                fontSize: ".85rem",
+                fontWeight: 800,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                boxShadow: "0 2px 8px rgba(37,211,102,0.35)"
+              }}
+            >
+              <span>🟢</span>
+              <span>Open in WhatsApp</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 function AdminRegistrations({ mob, C, setC, auth }) {
 
   const [bulkGroup, setBulkGroup] = useState("");
@@ -16701,6 +16954,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
   const [selectedPreset, setSelectedPreset] = useState("");
   const [showBulkTools, setShowBulkTools] = useState(false);
   const [historyModalReg, setHistoryModalReg] = useState(null);
+  const [whatsAppModalReg, setWhatsAppModalReg] = useState(null);
 
   const saveToFb = async (newC) => {
     try {
@@ -17490,6 +17744,9 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                         <button onClick={()=>setViewing(r)} style={{padding:"6px 10px",borderRadius:6,fontSize:".75rem",background:"var(--dt)",color:"white",border:"none",cursor:"pointer",fontWeight:600,boxShadow:"0 2px 4px rgba(0,0,0,0.1)"}}>
                           View
                         </button>
+                        <button onClick={()=>setWhatsAppModalReg(r)} style={{padding:"6px 9px",borderRadius:6,fontSize:".75rem",background:"#DCFCE7",color:"#15803D",border:"1px solid #86EFAC",cursor:"pointer",fontWeight:700,display:"flex",alignItems:"center",gap:4}} title="Send WhatsApp Update to Applicant">
+                          <span>💬</span> WhatsApp
+                        </button>
                         <button onClick={()=>setHistoryModalReg(r)} style={{padding:"6px 8px",borderRadius:6,fontSize:".75rem",background:"#FFF4EC",color:"var(--sf)",border:"1px solid #FDDBB8",cursor:"pointer",fontWeight:700}} title="View Log History">
                           📜 Logs {r.logHistory && r.logHistory.length > 0 ? `(${r.logHistory.length})` : ""}
                         </button>
@@ -17590,6 +17847,14 @@ function AdminRegistrations({ mob, C, setC, auth }) {
 
       {viewing && (
         <VerificationModal viewing={viewing} setViewing={setViewing} allRegs={regs} saveVerification={saveVerification} C={C} />
+      )}
+
+      {whatsAppModalReg && (
+        <WhatsAppApplicantMessengerModal 
+          reg={whatsAppModalReg} 
+          onClose={() => setWhatsAppModalReg(null)} 
+          C={C} 
+        />
       )}
 
       {historyModalReg && (
