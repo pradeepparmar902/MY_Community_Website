@@ -14863,6 +14863,22 @@ function ChatbotAccessManager({ C, setC, auth }) {
           >
             🛡️ Restricted Messages & Rules
           </button>
+          <button
+            onClick={() => setActiveTab("gateway")}
+            style={{
+              padding: "8px 14px",
+              borderRadius: 8,
+              fontSize: ".82rem",
+              fontWeight: 800,
+              background: activeTab === "gateway" ? "#0284C7" : "#E0F2FE",
+              color: activeTab === "gateway" ? "white" : "#0369A1",
+              border: "1px solid #7DD3FC",
+              cursor: "pointer",
+              boxShadow: activeTab === "gateway" ? "0 2px 8px rgba(2,132,199,0.3)" : "none"
+            }}
+          >
+            📡 WhatsApp Direct API Gateway
+          </button>
         </div>
       </div>
 
@@ -15243,6 +15259,155 @@ function ChatbotAccessManager({ C, setC, auth }) {
                 💾 Save All Messages to Database
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      
+      {/* SUB-TAB: 📡 WhatsApp Direct API Gateway */}
+      {activeTab === "gateway" && (
+        <div style={{animation:"fadeIn .2s ease"}}>
+          <div style={{background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"24px 26px",marginBottom:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,flexWrap:"wrap",gap:12}}>
+              <div>
+                <div style={{fontSize:"1.15rem",fontWeight:800,color:"#0369A1",display:"flex",alignItems:"center",gap:8}}>
+                  <span>📡</span> WhatsApp Direct Background API Gateway
+                </div>
+                <p style={{fontSize:".85rem",color:"#475569",margin:"4px 0 0 0"}}>
+                  Send WhatsApp messages directly in the background with <strong>zero tabs opened</strong> and <strong>100% automated delivery</strong> for 300+ applicants.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await fbSave(C, auth?.idToken);
+                    alert("✅ WhatsApp Gateway settings saved successfully!");
+                  } catch(err) {
+                    alert("Failed to save: " + err.message);
+                  }
+                }}
+                style={{
+                  padding:"10px 22px",
+                  background:"linear-gradient(135deg, #0284C7, #0369A1)",
+                  color:"white",
+                  border:"none",
+                  borderRadius:8,
+                  fontWeight:800,
+                  fontSize:".88rem",
+                  cursor:"pointer",
+                  boxShadow:"0 2px 8px rgba(2,132,199,0.3)"
+                }}
+              >
+                💾 Save Gateway Settings
+              </button>
+            </div>
+
+            <div style={{background:"#F0F9FF",border:"1px solid #BAE6FD",borderRadius:10,padding:"18px 20px",marginBottom:20}}>
+              
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,paddingBottom:12,borderBottom:"1px solid #E0F2FE",flexWrap:"wrap",gap:10}}>
+                <div>
+                  <strong style={{fontSize:".9rem",color:"#0C4A6E"}}>Enable Background REST API Sending</strong>
+                  <div style={{fontSize:".75rem",color:"#0369A1"}}>When enabled, clicking 'Send WhatsApp' delivers messages instantly via HTTP API without opening WhatsApp Web tabs.</div>
+                </div>
+                <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontWeight:700,fontSize:".85rem",color:"#0369A1"}}>
+                  <input 
+                    type="checkbox" 
+                    checked={Boolean(C.whatsAppGateway?.enabled)} 
+                    onChange={e => {
+                      const cur = C.whatsAppGateway || {};
+                      setC({ ...C, whatsAppGateway: { ...cur, enabled: e.target.checked } });
+                    }}
+                    style={{width:18,height:18,cursor:"pointer"}}
+                  />
+                  <span>Enable API Gateway</span>
+                </label>
+              </div>
+
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))",gap:16,marginBottom:16}}>
+                <div>
+                  <label style={{fontSize:".78rem",fontWeight:800,color:"#0F172A",display:"block",marginBottom:4}}>API Provider:</label>
+                  <select 
+                    value={C.whatsAppGateway?.provider || "ultramsg"}
+                    onChange={e => {
+                      const cur = C.whatsAppGateway || {};
+                      setC({ ...C, whatsAppGateway: { ...cur, provider: e.target.value } });
+                    }}
+                    style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:700,background:"white"}}
+                  >
+                    <option value="ultramsg">UltraMsg (Instance + Token)</option>
+                    <option value="greenapi">Green-API (Instance + Token)</option>
+                    <option value="direct_web">Direct WhatsApp Web / App Launch</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{fontSize:".78rem",fontWeight:800,color:"#0F172A",display:"block",marginBottom:4}}>Instance ID / Phone ID:</label>
+                  <input 
+                    type="text" 
+                    value={C.whatsAppGateway?.instanceId || ""} 
+                    onChange={e => {
+                      const cur = C.whatsAppGateway || {};
+                      setC({ ...C, whatsAppGateway: { ...cur, instanceId: e.target.value } });
+                    }}
+                    placeholder="e.g. instance12345 or 110023456" 
+                    style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}
+                  />
+                </div>
+
+                <div>
+                  <label style={{fontSize:".78rem",fontWeight:800,color:"#0F172A",display:"block",marginBottom:4}}>API Token / Secret Key:</label>
+                  <input 
+                    type="password" 
+                    value={C.whatsAppGateway?.token || ""} 
+                    onChange={e => {
+                      const cur = C.whatsAppGateway || {};
+                      setC({ ...C, whatsAppGateway: { ...cur, token: e.target.value } });
+                    }}
+                    placeholder="e.g. your_secret_api_token" 
+                    style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}
+                  />
+                </div>
+              </div>
+
+              <div style={{fontSize:".78rem",color:"#0369A1",background:"white",padding:"12px 14px",borderRadius:8,border:"1px solid #BAE6FD",lineHeight:1.5}}>
+                ℹ️ <strong>How to connect UltraMsg or Green-API in 2 minutes:</strong><br/>
+                1. Create a free instance on <a href="https://ultramsg.com" target="_blank" rel="noreferrer" style={{color:"#0284C7",fontWeight:700}}>UltraMsg.com</a> or <a href="https://green-api.com" target="_blank" rel="noreferrer" style={{color:"#0284C7",fontWeight:700}}>Green-API.com</a>.<br/>
+                2. Scan your committee WhatsApp QR code on their dashboard.<br/>
+                3. Paste your <strong>Instance ID</strong> and <strong>Token</strong> above and click <strong>Save</strong>.<br/>
+                4. Messages will now send directly from the website with <strong>0 tabs opened!</strong>
+              </div>
+
+            </div>
+
+            <div style={{display:"flex",justifyContent:"flex-end"}}>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await fbSave(C, auth?.idToken);
+                    alert("✅ WhatsApp Gateway settings saved successfully!");
+                  } catch(err) {
+                    alert("Failed to save: " + err.message);
+                  }
+                }}
+                style={{
+                  padding:"11px 26px",
+                  background:"linear-gradient(135deg, #0284C7, #0369A1)",
+                  color:"white",
+                  border:"none",
+                  borderRadius:8,
+                  fontWeight:800,
+                  fontSize:".9rem",
+                  cursor:"pointer",
+                  boxShadow:"0 2px 8px rgba(2,132,199,0.3)"
+                }}
+              >
+                💾 Save Gateway Settings
+              </button>
+            </div>
+
           </div>
         </div>
       )}
@@ -16729,14 +16894,66 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSendWhatsApp = () => {
+  const [sendingApi, setSendingApi] = useState(false);
+  const [sendSuccess, setSendSuccess] = useState(false);
+
+  const handleSendWhatsApp = async () => {
     const cleanPhone = String(recipientMobile).replace(/\D/g, '').slice(-10);
     if (!cleanPhone || cleanPhone.length < 10) {
       alert("Please enter a valid 10-digit mobile number for the applicant.");
       return;
     }
-    const targetUrl = `https://api.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
-    window.open(targetUrl, "_blank");
+
+    // 1. If WhatsApp Gateway API is configured in Admin (UltraMsg, GreenAPI, or Meta Cloud API)
+    const gateway = C.whatsAppGateway || {};
+    if (gateway.enabled && gateway.instanceId && gateway.token) {
+      try {
+        setSendingApi(true);
+        let apiUrl = "";
+        let payload = {};
+
+        if (gateway.provider === "greenapi") {
+          apiUrl = `https://api.green-api.com/waInstance${gateway.instanceId}/sendMessage/${gateway.token}`;
+          payload = { chatId: `91${cleanPhone}@c.us`, message: customMessage };
+        } else {
+          // Default: UltraMsg / Standard Gateway
+          apiUrl = `https://api.ultramsg.com/${gateway.instanceId}/messages/chat`;
+          payload = { token: gateway.token, to: `+91${cleanPhone}`, body: customMessage };
+        }
+
+        const res = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          setSendSuccess(true);
+          setTimeout(() => {
+            setSendSuccess(false);
+            onClose();
+          }, 1500);
+          return;
+        }
+      } catch (err) {
+        console.warn("Direct WhatsApp API error, falling back to Web launch:", err);
+      } finally {
+        setSendingApi(false);
+      }
+    }
+
+    // 2. Direct Web & App Launch (Bypasses intermediate https://api.whatsapp.com landing page)
+    const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const directUrl = isMobileDevice 
+      ? `whatsapp://send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`
+      : `https://web.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
+
+    // Attempt direct app scheme, fallback to web
+    try {
+      window.open(directUrl, "_blank");
+    } catch (e) {
+      window.open(`https://web.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`, "_blank");
+    }
   };
 
   return (
@@ -16916,23 +17133,24 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C }) {
             <button
               type="button"
               onClick={handleSendWhatsApp}
+              disabled={sendingApi}
               style={{
                 padding: "9px 20px",
-                background: "#25D366",
+                background: sendSuccess ? "#15803D" : "#25D366",
                 color: "white",
                 border: "none",
                 borderRadius: 8,
                 fontSize: ".85rem",
                 fontWeight: 800,
-                cursor: "pointer",
+                cursor: sendingApi ? "wait" : "pointer",
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
                 boxShadow: "0 2px 8px rgba(37,211,102,0.35)"
               }}
             >
-              <span>🟢</span>
-              <span>Open in WhatsApp</span>
+              <span>{sendSuccess ? "✅" : sendingApi ? "⏳" : "🟢"}</span>
+              <span>{sendSuccess ? "Sent Directly via WhatsApp!" : sendingApi ? "Sending in Background..." : (C.whatsAppGateway?.enabled ? "Send Direct (WhatsApp API)" : "Direct WhatsApp Web / App")}</span>
             </button>
           </div>
         </div>
