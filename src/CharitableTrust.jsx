@@ -14405,6 +14405,8 @@ function WhatsAppAdminManager({ C, setC, auth }) {
 
   const DEFAULT_DISAPPROVED_TPL = `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nRegarding your application (*{TXN_ID}*) for *Education Felicitation 2026*.\n\n• *Status:* 🔴 *Not Approved*\n• *Reason / Remarks:* {REMARKS}\n\nIf you believe this is an error or need clarification, please contact your Vibhag Committee Member or our helpline.\n\nWarm regards,\n*Education Committee*\n📞 Helpline: +91 9820785209`;
 
+  const DEFAULT_INVITE_TPL = `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026 - Official Invitation*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nWe are pleased to invite you and your family as our esteemed guests of honor to the *Annual Student Education Felicitation 2026*.\n\n📋 *Invitation Pass Details:*\n• *Transaction / Pass ID:* {TXN_ID}\n• *Invitee Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *Download Official PDF Invitation Letter & Entry Pass:*\n{PORTAL_URL}\n\nPlease show this digital pass or downloaded invitation letter at the registration desk upon arrival.\n\nWarm regards,\n*Central Working Committee (CWC) & Education Board*\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
+
   const handleSaveAll = async () => {
     try {
       await fbSave(C, auth?.idToken);
@@ -14674,6 +14676,44 @@ function WhatsAppAdminManager({ C, setC, auth }) {
                     if (setC) setC({ ...C, whatsAppTplDisapproved: e.target.value });
                   }}
                   rows={7}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".82rem",lineHeight:1.5,fontFamily:"monospace",boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+
+              {/* 5. Official Event Invitation Letter Template */}
+              <div style={{background:"#F0FDF4",border:"1px solid #86EFAC",borderRadius:10,padding:"18px 20px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <span style={{background:"#DCFCE7",color:"#15803D",padding:"3px 8px",borderRadius:6,fontSize:".72rem",fontWeight:800,marginRight:8}}>INVITATION PASS / EVENT LETTER</span>
+                    <strong style={{fontSize:".9rem",color:"#0F172A"}}>5. Official Event Invitation Letter & Entry Pass Template</strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (setC) setC({ ...C, whatsAppTplInvite: DEFAULT_INVITE_TPL });
+                    }}
+                    style={{background:"white",border:"1px solid #86EFAC",color:"#15803D",padding:"4px 10px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                  >
+                    ↺ Reset to Default
+                  </button>
+                </div>
+
+                <div style={{fontSize:".74rem",color:"#15803D",marginBottom:8,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                  <span>Quick Insert Placeholders:</span>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplInvite: (C.whatsAppTplInvite || DEFAULT_INVITE_TPL) + " {STUDENT_NAME}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{STUDENT_NAME}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplInvite: (C.whatsAppTplInvite || DEFAULT_INVITE_TPL) + " {TXN_ID}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{TXN_ID}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplInvite: (C.whatsAppTplInvite || DEFAULT_INVITE_TPL) + " {VIBHAG}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{VIBHAG}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplInvite: (C.whatsAppTplInvite || DEFAULT_INVITE_TPL) + " {STREAM}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{STREAM}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplInvite: (C.whatsAppTplInvite || DEFAULT_INVITE_TPL) + " {PORTAL_URL}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{PORTAL_URL}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplInvite: (C.whatsAppTplInvite || DEFAULT_INVITE_TPL) + " {HELPLINE_PHONES}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{HELPLINE_PHONES}'}</button>
+                </div>
+
+                <textarea
+                  value={C.whatsAppTplInvite !== undefined ? C.whatsAppTplInvite : DEFAULT_INVITE_TPL}
+                  onChange={e => {
+                    if (setC) setC({ ...C, whatsAppTplInvite: e.target.value });
+                  }}
+                  rows={9}
                   style={{width:"100%",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".82rem",lineHeight:1.5,fontFamily:"monospace",boxSizing:"border-box",background:"white"}}
                 />
               </div>
