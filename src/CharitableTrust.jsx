@@ -16989,14 +16989,22 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
       }
     }
 
-    // 2. Direct Web & App Launch (Reuses the SAME SINGLE TAB 'mmp_whatsapp_tab' to prevent multi-tab clutter)
+    // 2. Direct Web & App Launch (Strict Single Tab Enforcement via window._mmpWaTab)
     const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     const directUrl = isMobileDevice 
       ? `whatsapp://send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`
       : `https://web.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
 
-    // Re-use single persistent tab name 'mmp_whatsapp_tab'
-    window.open(directUrl, "mmp_whatsapp_tab");
+    try {
+      if (window._mmpWaTab && !window._mmpWaTab.closed) {
+        window._mmpWaTab.location.href = directUrl;
+        try { window._mmpWaTab.focus(); } catch(e){}
+      } else {
+        window._mmpWaTab = window.open(directUrl, "mmp_whatsapp_tab");
+      }
+    } catch(err) {
+      window._mmpWaTab = window.open(directUrl, "mmp_whatsapp_tab");
+    }
   };
 
   return (
