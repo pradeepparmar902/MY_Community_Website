@@ -14602,12 +14602,21 @@ function ChatbotAccessManager({ C, setC, auth }) {
     const userObj = allRegisteredUsers.find(u => u.mobile === cleanTarget);
     const foundIdx = existingConfig.findIndex(m => (typeof m === "string" ? m : m.mobile) === cleanTarget);
 
+    let assignedVibhag = "Individual Only";
+    if (newScope === "vibhag") {
+      assignedVibhag = (newVibhag && newVibhag !== "All Vibhags" && newVibhag !== "Individual Only")
+        ? newVibhag
+        : (userObj?.vibhag && userObj.vibhag !== "All Vibhags" && userObj.vibhag !== "Individual Only" ? userObj.vibhag : "10 MAHALAXMI");
+    } else if (newScope === "all") {
+      assignedVibhag = "All Vibhags";
+    }
+
     const updatedEntry = {
       ...(userObj || {}),
       mobile: cleanTarget,
       name: userObj?.name || "Member",
       scope: newScope,
-      vibhag: newScope === "vibhag" ? (newVibhag || userObj?.vibhag || "10 MAHALAXMI") : newScope === "all" ? "All Vibhags" : "Individual Only",
+      vibhag: assignedVibhag,
       role: userObj?.role || (newScope === "all" ? "Super Admin" : newScope === "vibhag" ? "Vibhag Head" : "Applicant"),
       addedAt: userObj?.addedAt || new Date().toLocaleDateString("en-IN")
     };
@@ -15173,7 +15182,7 @@ function ChatbotAccessManager({ C, setC, auth }) {
                                     name={`scope_row_${idx}`} 
                                     value="vibhag" 
                                     checked={currentScope === "vibhag"} 
-                                    onChange={() => updateMemberScope(item.mobile, "vibhag", item.vibhag !== "Individual Only" ? item.vibhag : "10 MAHALAXMI")}
+                                    onChange={() => updateMemberScope(item.mobile, "vibhag", item.vibhag && item.vibhag !== "Individual Only" && item.vibhag !== "All Vibhags" ? item.vibhag : "10 MAHALAXMI")}
                                     style={{display:"none"}}
                                   />
                                   📍 Vibhag
@@ -15209,7 +15218,7 @@ function ChatbotAccessManager({ C, setC, auth }) {
                                 <div style={{display:"flex",alignItems:"center",gap:6}}>
                                   <span style={{fontSize:".7rem",color:"#B45309",fontWeight:700}}>Assigned:</span>
                                   <select 
-                                    value={item.vibhag && item.vibhag !== "Individual Only" ? item.vibhag : "10 MAHALAXMI"}
+                                    value={item.vibhag && item.vibhag !== "Individual Only" && item.vibhag !== "All Vibhags" ? item.vibhag : "10 MAHALAXMI"}
                                     onChange={e => updateMemberScope(item.mobile, "vibhag", e.target.value)}
                                     style={{
                                       padding: "4px 8px",
@@ -20083,9 +20092,13 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
     ? (typeof matchedCommitteeMember === "object" ? (matchedCommitteeMember.scope || "all") : "all")
     : (manualSessionScope || (auth?.idToken ? "all" : (activeUser.isLoggedIn ? "individual" : "public")));
 
-  const sessionVibhag = matchedCommitteeMember && typeof matchedCommitteeMember === "object" 
+  let sessionVibhag = matchedCommitteeMember && typeof matchedCommitteeMember === "object" 
     ? (matchedCommitteeMember.vibhag || manualSessionVibhag || "") 
     : manualSessionVibhag;
+
+  if (userSessionScope === "vibhag" && (!sessionVibhag || sessionVibhag === "All Vibhags" || sessionVibhag === "Individual Only")) {
+    sessionVibhag = "10 MAHALAXMI";
+  }
 
   const isAnyAdmin = userSessionScope === "all" || userSessionScope === "vibhag";
 
