@@ -6440,6 +6440,7 @@ const ANAV = [
   {id:"achievements",icon:"🏆",label:"Achievements"},
   {id:"settings",icon:"⚙️",label:"Settings"},
   {id:"chatbotaccess",icon:"🤖",label:"Chatbot Admins"},
+  {id:"whatsappadmin",icon:"📱",label:"WhatsApp Admin"},
   {id:"access",icon:"🔐",label:"Access Control"},
   {id:"backup",icon:"💾",label:"Backup & Restore"},
   {id:"profile",icon:"👤",label:"My Profile"},
@@ -7117,7 +7118,7 @@ function Admin({ C, setC, setPage, auth, onLogout, onShowLogin }) {
 
   let hasAccess = [];
   if (auth?.email) {
-    hasAccess = master ? ["content", "seo", "overview", "donations", "events", "registrations", "volunteers", "gallery", "team", "achievements", "settings", "chatbotaccess", "access", "backup", "profile", "meritlist", "inviteletters", "certificates"] : [...(userRole?.permissions || []), "chatbotaccess", "profile"];
+    hasAccess = master ? ["content", "seo", "overview", "donations", "events", "registrations", "volunteers", "gallery", "team", "achievements", "settings", "chatbotaccess", "whatsappadmin", "access", "backup", "profile", "meritlist", "inviteletters", "certificates"] : [...(userRole?.permissions || []), "chatbotaccess", "whatsappadmin", "profile"];
   }
 
   const visibleNav = ANAV.filter(item => hasAccess.includes(item.id));
@@ -7251,6 +7252,7 @@ function Admin({ C, setC, setPage, auth, onLogout, onShowLogin }) {
           {tab==="achievements" && hasAccess.includes("achievements") && <AdminAchievements mob={mob} C={C} setC={setC} auth={auth}/>}
           {tab==="settings"  && hasAccess.includes("settings") && <Settings mob={mob} C={C} setC={setC} auth={auth} setPage={setPage} hasAccess={hasAccess} master={master}/>}
           {tab==="chatbotaccess" && <ChatbotAccessManager C={C} setC={setC} auth={auth}/>}
+          {tab==="whatsappadmin" && <WhatsAppAdminManager C={C} setC={setC} auth={auth}/>}
           {tab==="access"    && hasAccess.includes("access") && <AdminAccess C={C} setC={setC} master={master} auth={auth}/>}
           {tab==="backup"    && hasAccess.includes("backup") && <BackupRestore C={C} setC={setC} auth={auth}/>}
           {tab==="profile"   && hasAccess.includes("profile") && <AdminProfile auth={auth} mob={mob} adminProfile={adminProfile} setAdminProfile={setAdminProfile}/>}
@@ -14390,6 +14392,412 @@ function LoginScreen({ C, onLogin, onSkip }) {
 
 
 // ── Dedicated Chatbot Committee Admin Access & Knowledge Base Manager ───────────────────
+
+// ── Dedicated WhatsApp Admin Console ───────────────────────────────────────────
+function WhatsAppAdminManager({ C, setC, auth }) {
+  const [activeTab, setActiveTab] = useState("templates"); // "templates" | "gateway"
+
+  const DEFAULT_PENDING_TPL = `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nThank you for submitting your registration for *Education Felicitation 2026*.\n\n📋 *Application Summary:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Current Status:* ⏳ *Under Verification / Review*\n\nOur Verification Committee is currently reviewing your submitted details and documents. You will receive an update once the verification is completed.\n\n👉 Track your live application status on your student dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
+
+  const DEFAULT_APPROVED_TPL = `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Percentage:* {PERCENTAGE}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai (Official venue, schedule & invitation letter will be shared soon)\n\n👉 View your application & student certificate on your dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
+
+  const DEFAULT_NEEDS_INFO_TPL = `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nYour application (*{TXN_ID}*) for *Education Felicitation 2026* requires additional information or document correction for verification.\n\n⚠️ *Committee Remarks / Action Required:*\n👉 *{REMARKS}*\n\n📝 *How to Update Your Application:*\n1. Open portal: {PORTAL_URL}\n2. Log in with registered mobile: *+91 {MOBILE}*\n3. Go to *My Dashboard* > *Registrations*\n4. Click *Edit & Resubmit* and update the requested document/details.\n\nPlease complete this at the earliest to confirm your felicitation eligibility.\n\nWarm regards,\n*Education Verification Committee*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
+
+  const DEFAULT_DISAPPROVED_TPL = `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nRegarding your application (*{TXN_ID}*) for *Education Felicitation 2026*.\n\n• *Status:* 🔴 *Not Approved*\n• *Reason / Remarks:* {REMARKS}\n\nIf you believe this is an error or need clarification, please contact your Vibhag Committee Member or our helpline.\n\nWarm regards,\n*Education Committee*\n📞 Helpline: +91 9820785209`;
+
+  const handleSaveAll = async () => {
+    try {
+      await fbSave(C, auth?.idToken);
+      alert("✅ WhatsApp Templates and Settings saved successfully to database!");
+    } catch (e) {
+      alert("Failed to save: " + e.message);
+    }
+  };
+
+  return (
+    <div style={{maxWidth:1100,margin:"0 auto",padding:"10px 0"}}>
+      
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,flexWrap:"wrap",gap:16}}>
+        <div>
+          <h2 style={{fontSize:"1.4rem",color:"var(--dt)",marginBottom:4,display:"flex",alignItems:"center",gap:8}}>
+            <span>📱</span> WhatsApp Admin & Status Message Templates
+          </h2>
+          <p style={{fontSize:".85rem",color:"var(--mu)",margin:0}}>
+            Configure automated WhatsApp templates per registration status and manage background API gateway settings.
+          </p>
+        </div>
+
+        {/* Sub-Tabs Switcher */}
+        <div style={{display:"flex",background:"#E2E8F0",padding:4,borderRadius:12,gap:4,flexWrap:"wrap"}}>
+          <button
+            onClick={() => setActiveTab("templates")}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              fontSize: ".82rem",
+              fontWeight: 800,
+              background: activeTab === "templates" ? "white" : "transparent",
+              color: activeTab === "templates" ? "#166534" : "#475569",
+              border: activeTab === "templates" ? "1px solid #CBD5E1" : "1px solid transparent",
+              cursor: "pointer",
+              boxShadow: activeTab === "templates" ? "0 2px 6px rgba(0,0,0,0.08)" : "none"
+            }}
+          >
+            📝 Status Message Templates
+          </button>
+          <button
+            onClick={() => setActiveTab("gateway")}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              fontSize: ".82rem",
+              fontWeight: 800,
+              background: activeTab === "gateway" ? "#0284C7" : "transparent",
+              color: activeTab === "gateway" ? "white" : "#475569",
+              border: activeTab === "gateway" ? "1px solid #7DD3FC" : "1px solid transparent",
+              cursor: "pointer",
+              boxShadow: activeTab === "gateway" ? "0 2px 6px rgba(2,132,199,0.3)" : "none"
+            }}
+          >
+            📡 WhatsApp API Gateway
+          </button>
+        </div>
+      </div>
+
+      {/* SUB-TAB 1: Status Message Templates */}
+      {activeTab === "templates" && (
+        <div style={{animation:"fadeIn .2s ease"}}>
+          <div style={{background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"24px 26px",marginBottom:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+            
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:12}}>
+              <div>
+                <h3 style={{fontSize:"1.1rem",fontWeight:800,color:"#166534",margin:0}}>
+                  📝 Status-Connected Message Templates
+                </h3>
+                <div style={{fontSize:".8rem",color:"#64748B",marginTop:2}}>
+                  When sending WhatsApp from Registrations, the message will automatically use the template matching the record's status.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSaveAll}
+                style={{
+                  padding:"10px 24px",
+                  background:"linear-gradient(135deg, #15803D, #166534)",
+                  color:"white",
+                  border:"none",
+                  borderRadius:8,
+                  fontWeight:800,
+                  fontSize:".88rem",
+                  cursor:"pointer",
+                  boxShadow:"0 2px 8px rgba(21,128,61,0.3)"
+                }}
+              >
+                💾 Save All Templates
+              </button>
+            </div>
+
+            <div style={{display:"flex",flexDirection:"column",gap:24}}>
+
+              {/* 1. Pending Template */}
+              <div style={{background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"18px 20px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <span style={{background:"#E2E8F0",color:"#334155",padding:"3px 8px",borderRadius:6,fontSize:".72rem",fontWeight:800,marginRight:8}}>STATUS: PENDING</span>
+                    <strong style={{fontSize:".9rem",color:"#0F172A"}}>1. Under Verification Message Template</strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (setC) setC({ ...C, whatsAppTplPending: DEFAULT_PENDING_TPL });
+                    }}
+                    style={{background:"white",border:"1px solid #CBD5E1",color:"#475569",padding:"4px 10px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                  >
+                    ↺ Reset to Default
+                  </button>
+                </div>
+
+                <div style={{fontSize:".74rem",color:"#64748B",marginBottom:8,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                  <span>Quick Insert Placeholders:</span>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplPending: (C.whatsAppTplPending || DEFAULT_PENDING_TPL) + " {STUDENT_NAME}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{STUDENT_NAME}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplPending: (C.whatsAppTplPending || DEFAULT_PENDING_TPL) + " {TXN_ID}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{TXN_ID}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplPending: (C.whatsAppTplPending || DEFAULT_PENDING_TPL) + " {VIBHAG}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{VIBHAG}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplPending: (C.whatsAppTplPending || DEFAULT_PENDING_TPL) + " {STREAM}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{STREAM}'}</button>
+                </div>
+
+                <textarea
+                  value={C.whatsAppTplPending !== undefined ? C.whatsAppTplPending : DEFAULT_PENDING_TPL}
+                  onChange={e => {
+                    if (setC) setC({ ...C, whatsAppTplPending: e.target.value });
+                  }}
+                  rows={8}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".82rem",lineHeight:1.5,fontFamily:"monospace",boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+
+              {/* 2. Approved Template */}
+              <div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:10,padding:"18px 20px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <span style={{background:"#DCFCE7",color:"#166534",padding:"3px 8px",borderRadius:6,fontSize:".72rem",fontWeight:800,marginRight:8}}>STATUS: APPROVED</span>
+                    <strong style={{fontSize:".9rem",color:"#0F172A"}}>2. Approved & Verified Felicitation Message Template</strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (setC) setC({ ...C, whatsAppTplApproved: DEFAULT_APPROVED_TPL });
+                    }}
+                    style={{background:"white",border:"1px solid #86EFAC",color:"#166534",padding:"4px 10px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                  >
+                    ↺ Reset to Default
+                  </button>
+                </div>
+
+                <div style={{fontSize:".74rem",color:"#15803D",marginBottom:8,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                  <span>Quick Insert Placeholders:</span>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplApproved: (C.whatsAppTplApproved || DEFAULT_APPROVED_TPL) + " {STUDENT_NAME}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{STUDENT_NAME}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplApproved: (C.whatsAppTplApproved || DEFAULT_APPROVED_TPL) + " {TXN_ID}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{TXN_ID}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplApproved: (C.whatsAppTplApproved || DEFAULT_APPROVED_TPL) + " {PERCENTAGE}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{PERCENTAGE}'}</button>
+                </div>
+
+                <textarea
+                  value={C.whatsAppTplApproved !== undefined ? C.whatsAppTplApproved : DEFAULT_APPROVED_TPL}
+                  onChange={e => {
+                    if (setC) setC({ ...C, whatsAppTplApproved: e.target.value });
+                  }}
+                  rows={8}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".82rem",lineHeight:1.5,fontFamily:"monospace",boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+
+              {/* 3. Needs Info Template */}
+              <div style={{background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:10,padding:"18px 20px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <span style={{background:"#FEF3C7",color:"#92400E",padding:"3px 8px",borderRadius:6,fontSize:".72rem",fontWeight:800,marginRight:8}}>STATUS: NEEDS INFO</span>
+                    <strong style={{fontSize:".9rem",color:"#0F172A"}}>3. Document Correction & Re-upload Request Template</strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (setC) setC({ ...C, whatsAppTplNeedsInfo: DEFAULT_NEEDS_INFO_TPL });
+                    }}
+                    style={{background:"white",border:"1px solid #FCD34D",color:"#92400E",padding:"4px 10px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                  >
+                    ↺ Reset to Default
+                  </button>
+                </div>
+
+                <div style={{fontSize:".74rem",color:"#B45309",marginBottom:8,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                  <span>Quick Insert Placeholders:</span>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplNeedsInfo: (C.whatsAppTplNeedsInfo || DEFAULT_NEEDS_INFO_TPL) + " {REMARKS}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{REMARKS}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplNeedsInfo: (C.whatsAppTplNeedsInfo || DEFAULT_NEEDS_INFO_TPL) + " {MOBILE}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{MOBILE}'}</button>
+                </div>
+
+                <textarea
+                  value={C.whatsAppTplNeedsInfo !== undefined ? C.whatsAppTplNeedsInfo : DEFAULT_NEEDS_INFO_TPL}
+                  onChange={e => {
+                    if (setC) setC({ ...C, whatsAppTplNeedsInfo: e.target.value });
+                  }}
+                  rows={8}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".82rem",lineHeight:1.5,fontFamily:"monospace",boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+
+              {/* 4. Disapproved Template */}
+              <div style={{background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:10,padding:"18px 20px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
+                  <div>
+                    <span style={{background:"#FEE2E2",color:"#991B1B",padding:"3px 8px",borderRadius:6,fontSize:".72rem",fontWeight:800,marginRight:8}}>STATUS: DISAPPROVED</span>
+                    <strong style={{fontSize:".9rem",color:"#0F172A"}}>4. Not Approved / Ineligible Notice Template</strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (setC) setC({ ...C, whatsAppTplDisapproved: DEFAULT_DISAPPROVED_TPL });
+                    }}
+                    style={{background:"white",border:"1px solid #FCA5A5",color:"#991B1B",padding:"4px 10px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                  >
+                    ↺ Reset to Default
+                  </button>
+                </div>
+
+                <textarea
+                  value={C.whatsAppTplDisapproved !== undefined ? C.whatsAppTplDisapproved : DEFAULT_DISAPPROVED_TPL}
+                  onChange={e => {
+                    if (setC) setC({ ...C, whatsAppTplDisapproved: e.target.value });
+                  }}
+                  rows={7}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".82rem",lineHeight:1.5,fontFamily:"monospace",boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+
+            </div>
+
+            <div style={{display:"flex",justifyContent:"flex-end",marginTop:24}}>
+              <button
+                type="button"
+                onClick={handleSaveAll}
+                style={{
+                  padding:"11px 28px",
+                  background:"linear-gradient(135deg, #15803D, #166534)",
+                  color:"white",
+                  border:"none",
+                  borderRadius:8,
+                  fontWeight:800,
+                  fontSize:".9rem",
+                  cursor:"pointer",
+                  boxShadow:"0 2px 8px rgba(21,128,61,0.3)"
+                }}
+              >
+                💾 Save All Templates
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 2: 📡 WhatsApp API Gateway */}
+      {activeTab === "gateway" && (
+        <div style={{animation:"fadeIn .2s ease"}}>
+          <div style={{background:"white",border:"1px solid #CBD5E1",borderRadius:12,padding:"24px 26px",marginBottom:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,flexWrap:"wrap",gap:12}}>
+              <div>
+                <div style={{fontSize:"1.15rem",fontWeight:800,color:"#0369A1",display:"flex",alignItems:"center",gap:8}}>
+                  <span>📡</span> WhatsApp Direct Background API Gateway
+                </div>
+                <p style={{fontSize:".85rem",color:"#475569",margin:"4px 0 0 0"}}>
+                  Send WhatsApp messages directly in the background with <strong>zero tabs opened</strong> and <strong>100% automated delivery</strong> for 300+ applicants.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSaveAll}
+                style={{
+                  padding:"10px 22px",
+                  background:"linear-gradient(135deg, #0284C7, #0369A1)",
+                  color:"white",
+                  border:"none",
+                  borderRadius:8,
+                  fontWeight:800,
+                  fontSize:".88rem",
+                  cursor:"pointer",
+                  boxShadow:"0 2px 8px rgba(2,132,199,0.3)"
+                }}
+              >
+                💾 Save Gateway Settings
+              </button>
+            </div>
+
+            <div style={{background:"#F0F9FF",border:"1px solid #BAE6FD",borderRadius:10,padding:"18px 20px",marginBottom:20}}>
+              
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,paddingBottom:12,borderBottom:"1px solid #E0F2FE",flexWrap:"wrap",gap:10}}>
+                <div>
+                  <strong style={{fontSize:".9rem",color:"#0C4A6E"}}>Enable Background REST API Sending</strong>
+                  <div style={{fontSize:".75rem",color:"#0369A1"}}>When enabled, clicking 'Send WhatsApp' delivers messages instantly via HTTP API without opening WhatsApp Web tabs.</div>
+                </div>
+                <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontWeight:700,fontSize:".85rem",color:"#0369A1"}}>
+                  <input 
+                    type="checkbox" 
+                    checked={Boolean(C.whatsAppGateway?.enabled)} 
+                    onChange={e => {
+                      const cur = C.whatsAppGateway || {};
+                      setC({ ...C, whatsAppGateway: { ...cur, enabled: e.target.checked } });
+                    }}
+                    style={{width:18,height:18,cursor:"pointer"}}
+                  />
+                  <span>Enable API Gateway</span>
+                </label>
+              </div>
+
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))",gap:16,marginBottom:16}}>
+                <div>
+                  <label style={{fontSize:".78rem",fontWeight:800,color:"#0F172A",display:"block",marginBottom:4}}>API Provider:</label>
+                  <select 
+                    value={C.whatsAppGateway?.provider || "meta"}
+                    onChange={e => {
+                      const cur = C.whatsAppGateway || {};
+                      setC({ ...C, whatsAppGateway: { ...cur, provider: e.target.value } });
+                    }}
+                    style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:700,background:"white"}}
+                  >
+                    <option value="meta">Official Meta WhatsApp Cloud API (1,000 Free Messages/Month)</option>
+                    <option value="greenapi">Green-API (Free Developer / Standard)</option>
+                    <option value="ultramsg">UltraMsg (Instance + Token)</option>
+                    <option value="direct_web">Direct WhatsApp Web / App Launch (Free)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{fontSize:".78rem",fontWeight:800,color:"#0F172A",display:"block",marginBottom:4}}>Instance ID / Phone ID:</label>
+                  <input 
+                    type="text" 
+                    value={C.whatsAppGateway?.instanceId || ""} 
+                    onChange={e => {
+                      const cur = C.whatsAppGateway || {};
+                      setC({ ...C, whatsAppGateway: { ...cur, instanceId: e.target.value } });
+                    }}
+                    placeholder="e.g. 110023456 or instance12345" 
+                    style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}
+                  />
+                </div>
+
+                <div>
+                  <label style={{fontSize:".78rem",fontWeight:800,color:"#0F172A",display:"block",marginBottom:4}}>API Token / Secret Key:</label>
+                  <input 
+                    type="password" 
+                    value={C.whatsAppGateway?.token || ""} 
+                    onChange={e => {
+                      const cur = C.whatsAppGateway || {};
+                      setC({ ...C, whatsAppGateway: { ...cur, token: e.target.value } });
+                    }}
+                    placeholder="e.g. EAABw... or secret_token" 
+                    style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}
+                  />
+                </div>
+              </div>
+
+              <div style={{fontSize:".78rem",color:"#0369A1",background:"white",padding:"12px 14px",borderRadius:8,border:"1px solid #BAE6FD",lineHeight:1.5}}>
+                ℹ️ <strong>Meta Cloud API (1,000 Free Messages/Month) or Green-API:</strong><br/>
+                1. Register your number on Facebook Developer Console or Green-API.com.<br/>
+                2. Paste your <strong>Phone ID / Instance ID</strong> and <strong>Token</strong> above and click <strong>Save</strong>.<br/>
+                3. Messages will now send directly from the website with <strong>0 tabs opened!</strong>
+              </div>
+
+            </div>
+
+            <div style={{display:"flex",justifyContent:"flex-end"}}>
+              <button
+                type="button"
+                onClick={handleSaveAll}
+                style={{
+                  padding:"11px 26px",
+                  background:"linear-gradient(135deg, #0284C7, #0369A1)",
+                  color:"white",
+                  border:"none",
+                  borderRadius:8,
+                  fontWeight:800,
+                  fontSize:".9rem",
+                  cursor:"pointer",
+                  boxShadow:"0 2px 8px rgba(2,132,199,0.3)"
+                }}
+              >
+                💾 Save Gateway Settings
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
 function ChatbotAccessManager({ C, setC, auth }) {
   const [activeTab, setActiveTab] = useState("users"); // "users" | "kb"
   const [accessScope, setAccessScope] = useState("individual"); // Default to "individual" (Mobile/Txn only)
@@ -14862,22 +15270,6 @@ function ChatbotAccessManager({ C, setC, auth }) {
             }}
           >
             🛡️ Restricted Messages & Rules
-          </button>
-          <button
-            onClick={() => setActiveTab("gateway")}
-            style={{
-              padding: "8px 14px",
-              borderRadius: 8,
-              fontSize: ".82rem",
-              fontWeight: 800,
-              background: activeTab === "gateway" ? "#0284C7" : "#E0F2FE",
-              color: activeTab === "gateway" ? "white" : "#0369A1",
-              border: "1px solid #7DD3FC",
-              cursor: "pointer",
-              boxShadow: activeTab === "gateway" ? "0 2px 8px rgba(2,132,199,0.3)" : "none"
-            }}
-          >
-            📡 WhatsApp Direct API Gateway
           </button>
         </div>
       </div>
@@ -16874,16 +17266,28 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
   const totalCount = allRegs.length;
 
   const buildTemplateForStatus = (st, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks) => {
+    let tpl = "";
     if (st === "Approved") {
-      return `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rName}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* ${rTxn}\n• *Student Name:* ${rName}\n• *Vibhag:* ${rVibhag}\n• *Stream / Class:* ${rStream}\n• *Percentage:* ${rPct}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai (Official venue, schedule & invitation letter will be shared soon)\n\n👉 View your application & student certificate on your dashboard:\nhttps://pradeepparmar902.github.io/MY_Community_Website/\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`;
+      tpl = C.whatsAppTplApproved || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Percentage:* {PERCENTAGE}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai (Official venue, schedule & invitation letter will be shared soon)\n\n👉 View your application & student certificate on your dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
     } else if (st === "Needs Info") {
-      return `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rName}*,\n\nYour application (*${rTxn}*) for *Education Felicitation 2026* requires additional information or document correction for verification.\n\n⚠️ *Committee Remarks / Action Required:*\n👉 *${rRemarks}*\n\n📝 *How to Update Your Application:*\n1. Open portal: https://pradeepparmar902.github.io/MY_Community_Website/\n2. Log in with registered mobile: *+91 ${rMobile}*\n3. Go to *My Dashboard* > *Registrations*\n4. Click *Edit & Resubmit* and update the requested document/details.\n\nPlease complete this at the earliest to confirm your felicitation eligibility.\n\nWarm regards,\n*Education Verification Committee*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`;
+      tpl = C.whatsAppTplNeedsInfo || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nYour application (*{TXN_ID}*) for *Education Felicitation 2026* requires additional information or document correction for verification.\n\n⚠️ *Committee Remarks / Action Required:*\n👉 *{REMARKS}*\n\n📝 *How to Update Your Application:*\n1. Open portal: {PORTAL_URL}\n2. Log in with registered mobile: *+91 {MOBILE}*\n3. Go to *My Dashboard* > *Registrations*\n4. Click *Edit & Resubmit* and update the requested document/details.\n\nPlease complete this at the earliest to confirm your felicitation eligibility.\n\nWarm regards,\n*Education Verification Committee*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
     } else if (st === "Disapproved") {
-      return `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rName}*,\n\nRegarding your application (*${rTxn}*) for *Education Felicitation 2026*.\n\n• *Status:* 🔴 *Not Approved*\n• *Reason / Remarks:* ${rRemarks}\n\nIf you believe this is an error or need clarification, please contact your Vibhag Committee Member or our helpline.\n\nWarm regards,\n*Education Committee*\n📞 Helpline: +91 9820785209`;
+      tpl = C.whatsAppTplDisapproved || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nRegarding your application (*{TXN_ID}*) for *Education Felicitation 2026*.\n\n• *Status:* 🔴 *Not Approved*\n• *Reason / Remarks:* {REMARKS}\n\nIf you believe this is an error or need clarification, please contact your Vibhag Committee Member or our helpline.\n\nWarm regards,\n*Education Committee*\n📞 Helpline: +91 9820785209`;
     } else {
       // Default for "Pending" or any unreviewed entry: Under Verification message
-      return `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rName}*,\n\nThank you for submitting your registration for *Education Felicitation 2026*.\n\n📋 *Application Summary:*\n• *Transaction ID:* ${rTxn}\n• *Student Name:* ${rName}\n• *Vibhag:* ${rVibhag}\n• *Stream / Class:* ${rStream}\n• *Current Status:* ⏳ *Under Verification / Review*\n\nOur Verification Committee is currently reviewing your submitted details and documents. You will receive an update once the verification is completed.\n\n👉 Track your live application status on your student dashboard:\nhttps://pradeepparmar902.github.io/MY_Community_Website/\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`;
+      tpl = C.whatsAppTplPending || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nThank you for submitting your registration for *Education Felicitation 2026*.\n\n📋 *Application Summary:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Current Status:* ⏳ *Under Verification / Review*\n\nOur Verification Committee is currently reviewing your submitted details and documents. You will receive an update once the verification is completed.\n\n👉 Track your live application status on your student dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
     }
+
+    return tpl
+      .replace(/\{STUDENT_NAME\}/g, rName || "Student")
+      .replace(/\{TXN_ID\}/g, rTxn || "N/A")
+      .replace(/\{VIBHAG\}/g, rVibhag || "All Vibhags")
+      .replace(/\{STREAM\}/g, rStream || "N/A")
+      .replace(/\{PERCENTAGE\}/g, rPct || "N/A")
+      .replace(/\{REMARKS\}/g, rRemarks || "Application under review")
+      .replace(/\{MOBILE\}/g, rMobile || "")
+      .replace(/\{PORTAL_URL\}/g, "https://pradeepparmar902.github.io/MY_Community_Website/")
+      .replace(/\{HELPLINE_PHONES\}/g, "+91 9820785209 / +91 9967821964");
   };
 
   const [customMessage, setCustomMessage] = useState(() => 
