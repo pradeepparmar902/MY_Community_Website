@@ -14495,8 +14495,46 @@ function WhatsAppAdminManager({ C, setC, auth }) {
                   boxShadow:"0 2px 8px rgba(21,128,61,0.3)"
                 }}
               >
-                💾 Save All Templates
+                💾 Save All Templates & Settings
               </button>
+            </div>
+
+            {/* Dynamic Helpline & Portal Link Card */}
+            <div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:10,padding:"16px 20px",marginBottom:20}}>
+              <div style={{fontSize:".88rem",fontWeight:800,color:"#166534",marginBottom:12,display:"flex",alignItems:"center",gap:6}}>
+                <span>📞</span> Global Admin Contact & Website Variables (Replaced dynamically in all templates):
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(300px, 1fr))",gap:16}}>
+                <div>
+                  <label style={{fontSize:".78rem",fontWeight:700,color:"#1E293B",display:"block",marginBottom:4}}>
+                    Committee Admin Helpline Numbers (Replaces <code>{'{HELPLINE_PHONES}'}</code>):
+                  </label>
+                  <input
+                    type="text"
+                    value={C.whatsAppHelpline !== undefined ? C.whatsAppHelpline : (C.trust?.phone || "+91 9820785209 / +91 9967821964")}
+                    onChange={e => {
+                      if (setC) setC({ ...C, whatsAppHelpline: e.target.value });
+                    }}
+                    placeholder="e.g. +91 9820785209 / +91 9967821964"
+                    style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".88rem",fontWeight:700,color:"#15803D",boxSizing:"border-box",background:"white"}}
+                  />
+                </div>
+
+                <div>
+                  <label style={{fontSize:".78rem",fontWeight:700,color:"#1E293B",display:"block",marginBottom:4}}>
+                    Portal / Website URL (Replaces <code>{'{PORTAL_URL}'}</code>):
+                  </label>
+                  <input
+                    type="text"
+                    value={C.whatsAppPortalUrl !== undefined ? C.whatsAppPortalUrl : "https://pradeepparmar902.github.io/MY_Community_Website/"}
+                    onChange={e => {
+                      if (setC) setC({ ...C, whatsAppPortalUrl: e.target.value });
+                    }}
+                    placeholder="e.g. https://pradeepparmar902.github.io/MY_Community_Website/"
+                    style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".88rem",fontWeight:700,color:"#2563EB",boxSizing:"border-box",background:"white"}}
+                  />
+                </div>
+              </div>
             </div>
 
             <div style={{display:"flex",flexDirection:"column",gap:24}}>
@@ -14525,6 +14563,8 @@ function WhatsAppAdminManager({ C, setC, auth }) {
                   <button type="button" onClick={() => setC({ ...C, whatsAppTplPending: (C.whatsAppTplPending || DEFAULT_PENDING_TPL) + " {TXN_ID}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{TXN_ID}'}</button>
                   <button type="button" onClick={() => setC({ ...C, whatsAppTplPending: (C.whatsAppTplPending || DEFAULT_PENDING_TPL) + " {VIBHAG}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{VIBHAG}'}</button>
                   <button type="button" onClick={() => setC({ ...C, whatsAppTplPending: (C.whatsAppTplPending || DEFAULT_PENDING_TPL) + " {STREAM}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{STREAM}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplPending: (C.whatsAppTplPending || DEFAULT_PENDING_TPL) + " {PORTAL_URL}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{PORTAL_URL}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplPending: (C.whatsAppTplPending || DEFAULT_PENDING_TPL) + " {HELPLINE_PHONES}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{HELPLINE_PHONES}'}</button>
                 </div>
 
                 <textarea
@@ -14560,6 +14600,8 @@ function WhatsAppAdminManager({ C, setC, auth }) {
                   <button type="button" onClick={() => setC({ ...C, whatsAppTplApproved: (C.whatsAppTplApproved || DEFAULT_APPROVED_TPL) + " {STUDENT_NAME}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{STUDENT_NAME}'}</button>
                   <button type="button" onClick={() => setC({ ...C, whatsAppTplApproved: (C.whatsAppTplApproved || DEFAULT_APPROVED_TPL) + " {TXN_ID}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{TXN_ID}'}</button>
                   <button type="button" onClick={() => setC({ ...C, whatsAppTplApproved: (C.whatsAppTplApproved || DEFAULT_APPROVED_TPL) + " {PERCENTAGE}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{PERCENTAGE}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplApproved: (C.whatsAppTplApproved || DEFAULT_APPROVED_TPL) + " {PORTAL_URL}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{PORTAL_URL}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplApproved: (C.whatsAppTplApproved || DEFAULT_APPROVED_TPL) + " {HELPLINE_PHONES}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{HELPLINE_PHONES}'}</button>
                 </div>
 
                 <textarea
@@ -14594,6 +14636,8 @@ function WhatsAppAdminManager({ C, setC, auth }) {
                   <span>Quick Insert Placeholders:</span>
                   <button type="button" onClick={() => setC({ ...C, whatsAppTplNeedsInfo: (C.whatsAppTplNeedsInfo || DEFAULT_NEEDS_INFO_TPL) + " {REMARKS}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{REMARKS}'}</button>
                   <button type="button" onClick={() => setC({ ...C, whatsAppTplNeedsInfo: (C.whatsAppTplNeedsInfo || DEFAULT_NEEDS_INFO_TPL) + " {MOBILE}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{MOBILE}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplNeedsInfo: (C.whatsAppTplNeedsInfo || DEFAULT_NEEDS_INFO_TPL) + " {PORTAL_URL}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{PORTAL_URL}'}</button>
+                  <button type="button" onClick={() => setC({ ...C, whatsAppTplNeedsInfo: (C.whatsAppTplNeedsInfo || DEFAULT_NEEDS_INFO_TPL) + " {HELPLINE_PHONES}" })} style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem",cursor:"pointer"}}>+ {'{HELPLINE_PHONES}'}</button>
                 </div>
 
                 <textarea
@@ -17286,8 +17330,9 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
       .replace(/\{PERCENTAGE\}/g, rPct || "N/A")
       .replace(/\{REMARKS\}/g, rRemarks || "Application under review")
       .replace(/\{MOBILE\}/g, rMobile || "")
-      .replace(/\{PORTAL_URL\}/g, "https://pradeepparmar902.github.io/MY_Community_Website/")
-      .replace(/\{HELPLINE_PHONES\}/g, "+91 9820785209 / +91 9967821964");
+      .replace(/\{PORTAL_URL\}/g, C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/")
+      .replace(/\{HELPLINE_PHONES\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209 / +91 9967821964")
+      .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209");
   };
 
   const [customMessage, setCustomMessage] = useState(() => 
