@@ -20127,14 +20127,16 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       let nextX = clientX - dragOffsetRef.current.x;
       let nextY = clientY - dragOffsetRef.current.y;
 
-      const chatHeight = isOpen ? (isMinimized ? 60 : Math.min(590, window.innerHeight - 80)) : 50;
-      const chatWidth = isOpen ? Math.min(410, window.innerWidth - 32) : 200;
+      const pillWidth = isMob ? 170 : 190;
+      const pillHeight = 44;
+      const chatHeight = isOpen ? (isMinimized ? 58 : Math.min(590, window.innerHeight - 80)) : pillHeight;
+      const chatWidth = isOpen ? Math.min(410, window.innerWidth - 32) : pillWidth;
 
-      const maxX = window.innerWidth - chatWidth - 10;
-      const maxY = window.innerHeight - chatHeight - 10;
+      const maxX = Math.max(10, window.innerWidth - chatWidth - 10);
+      const maxY = Math.max(10, window.innerHeight - chatHeight - 10);
 
-      nextX = Math.max(10, Math.min(nextX, Math.max(10, maxX)));
-      nextY = Math.max(10, Math.min(nextY, Math.max(10, maxY)));
+      nextX = Math.max(10, Math.min(nextX, maxX));
+      nextY = Math.max(10, Math.min(nextY, maxY));
 
       setPos({ x: nextX, y: nextY });
     };
@@ -20672,7 +20674,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
     setLoading(false);
   };
 
-  // Position Styling (Fully Responsive for Mobile Viewports & Draggable on Desktop)
+  // Position Styling (Smoothly Draggable on BOTH Mobile & Desktop, and Stays Below Mobile Drawer Menu)
   const positionStyle = (isMob && isOpen) ? {
     position: "fixed",
     left: 8,
@@ -20684,18 +20686,20 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
     display: "flex",
     flexDirection: "column",
     justifyContent: "flex-end"
-  } : (pos.x !== null && pos.y !== null && !isMob) ? {
+  } : (pos.x !== null && pos.y !== null) ? {
     position: "fixed",
     left: `${pos.x}px`,
     top: `${pos.y}px`,
-    zIndex: 99999,
-    fontFamily: "inherit"
+    zIndex: isOpen ? 99999 : 800, // Stays below mobile drawer (z-index: 1000) when closed so it never blocks menu
+    fontFamily: "inherit",
+    touchAction: "none"
   } : {
     position: "fixed",
     right: isMob ? 14 : 24,
     bottom: isMob ? 14 : 24,
-    zIndex: 99999,
-    fontFamily: "inherit"
+    zIndex: isOpen ? 99999 : 800,
+    fontFamily: "inherit",
+    touchAction: "none"
   };
 
   const headerStatusLabel = isAnyAdmin
@@ -20731,6 +20735,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
             alignItems: "center",
             gap: 8,
             userSelect: "none",
+            touchAction: "none",
             transition: isDragging ? "none" : "box-shadow 0.2s"
           }}
           className="ch"
