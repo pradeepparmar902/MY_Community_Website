@@ -1,5 +1,5 @@
 import { QRCodeCanvas } from "qrcode.react";
-import { useState, useEffect, useRef, createContext, useContext } from "react";
+import { useState, useEffect, useRef, createContext, useContext, useMemo } from "react";
 
 const SearchableDropdown = ({ value, onChange, options, placeholder, required, isError }) => {
   const [open, setOpen] = useState(false);
