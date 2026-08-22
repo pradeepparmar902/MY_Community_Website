@@ -20078,11 +20078,10 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
     }) || null;
   }, [activeUser.mobile, C.committeeMobiles]);
 
-  const userSessionScope = auth?.idToken 
-    ? "all" 
-    : (matchedCommitteeMember 
-        ? (typeof matchedCommitteeMember === "object" ? (matchedCommitteeMember.scope || "all") : "all")
-        : (manualSessionScope || (activeUser.isLoggedIn ? "individual" : "public")));
+  // 1. If active logged in user has an assigned scope in C.committeeMobiles, prioritize that exact role
+  const userSessionScope = matchedCommitteeMember
+    ? (typeof matchedCommitteeMember === "object" ? (matchedCommitteeMember.scope || "all") : "all")
+    : (manualSessionScope || (auth?.idToken ? "all" : (activeUser.isLoggedIn ? "individual" : "public")));
 
   const sessionVibhag = matchedCommitteeMember && typeof matchedCommitteeMember === "object" 
     ? (matchedCommitteeMember.vibhag || manualSessionVibhag || "") 
@@ -20779,8 +20778,18 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
           <span style={{fontSize:"1.2rem"}}>💬</span>
           <span>{pillLabel}</span>
           {isAnyAdmin ? (
-            <span style={{background:"#10B981",color:"white",fontSize:".65rem",padding:"2px 7px",borderRadius:10,fontWeight:800}}>
-              {userSessionScope === "all" ? "Admin (All)" : "Vibhag Admin"}
+            <span style={{
+              background: userSessionScope === "all" ? "#10B981" : "#EA580C",
+              color: "white",
+              fontSize: ".65rem",
+              padding: "2px 7px",
+              borderRadius: 10,
+              fontWeight: 800,
+              display: "flex",
+              alignItems: "center",
+              gap: 3
+            }}>
+              <span>{userSessionScope === "all" ? "🛡️ Admin (All)" : `📍 ${sessionVibhag ? sessionVibhag.split(" ")[0] : "Vibhag"} Admin`}</span>
             </span>
           ) : activeUser.isLoggedIn ? (
             <span style={{background:"#2563EB",color:"white",fontSize:".65rem",padding:"2px 7px",borderRadius:10,fontWeight:800}}>
