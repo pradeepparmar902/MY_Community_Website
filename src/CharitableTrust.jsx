@@ -14928,6 +14928,58 @@ function ChatbotAccessManager({ C, setC, auth }) {
               />
             </div>
 
+            {/* Configurable Restricted Access & Error Messages */}
+            <div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:10,padding:"18px 20px",marginBottom:20}}>
+              <div style={{fontSize:".95rem",fontWeight:800,color:"#166534",marginBottom:14,display:"flex",alignItems:"center",gap:6}}>
+                <span>🛡️</span> Configurable Restricted Access & Query Guidance Messages:
+              </div>
+
+              <div style={{marginBottom:14}}>
+                <label style={{fontSize:".78rem",fontWeight:700,color:"#1E293B",display:"block",marginBottom:4}}>
+                  1. Unauthorized Vibhag Access Message (Placeholders: <code>{'{ASSIGNED_VIBHAG}'}</code>, <code>{'{REQUESTED_VIBHAG}'}</code>, <code>{'{ADMIN_PHONE}'}</code>):
+                </label>
+                <textarea
+                  value={C.chatbotRestrictedVibhagMsg !== undefined ? C.chatbotRestrictedVibhagMsg : "🔒 **Access Restricted to {ASSIGNED_VIBHAG}**\n\nYou have administrative access assigned specifically for **{ASSIGNED_VIBHAG}**.\n\n• 🚫 You do not have permission to view registrations or analytics for **{REQUESTED_VIBHAG}**.\n• ℹ️ **Check your access level of Vibhag**: Please connect with Admin ({ADMIN_PHONE}) if you require access to this Vibhag.\n• 👉 Type **`/vibhag`** or **`/all`** to view live analytics for **{ASSIGNED_VIBHAG}**."}
+                  onChange={e => {
+                    const newC = { ...C, chatbotRestrictedVibhagMsg: e.target.value };
+                    if (setC) setC(newC);
+                  }}
+                  rows={5}
+                  style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".82rem",lineHeight:1.5,fontFamily:"monospace",boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+
+              <div style={{marginBottom:14}}>
+                <label style={{fontSize:".78rem",fontWeight:700,color:"#1E293B",display:"block",marginBottom:4}}>
+                  2. General Admin-Only Restricted Message (Shown to public/regular users querying admin data):
+                </label>
+                <textarea
+                  value={C.chatbotAdminRestrictedMsg !== undefined ? C.chatbotAdminRestrictedMsg : "🔒 **Access Restricted**\n\nRegistration summaries, Vibhag counts, and committee metrics are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock your assigned access level.\n\n🔍 Regular applicants can check their individual status by typing their **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**."}
+                  onChange={e => {
+                    const newC = { ...C, chatbotAdminRestrictedMsg: e.target.value };
+                    if (setC) setC(newC);
+                  }}
+                  rows={4}
+                  style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".82rem",lineHeight:1.5,fontFamily:"monospace",boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+
+              <div>
+                <label style={{fontSize:".78rem",fontWeight:700,color:"#1E293B",display:"block",marginBottom:4}}>
+                  3. Non-Relevant Question / Default Fallback Message:
+                </label>
+                <textarea
+                  value={C.chatbotNonRelevantMsg !== undefined ? C.chatbotNonRelevantMsg : "⚠️ **This Question is not relevant to this community.**\n\nI am specifically designed to help with **Mumbai Meghwal Panchayat & Vidya Gohil Trust** community activities, Education Felicitation 2026 event registrations, and application status tracking.\n\n👉 Type **`/`** to view all available community questions & shortcuts."}
+                  onChange={e => {
+                    const newC = { ...C, chatbotNonRelevantMsg: e.target.value };
+                    if (setC) setC(newC);
+                  }}
+                  rows={4}
+                  style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".82rem",lineHeight:1.5,fontFamily:"monospace",boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+            </div>
+
             {/* Live Preview Box */}
             <div style={{background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:16,marginBottom:20}}>
               <div style={{fontSize:".75rem",fontWeight:800,color:"#64748B",textTransform:"uppercase",marginBottom:8}}>
@@ -20624,7 +20676,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       }
     } else if (qLower.includes("vibhag") || qLower.includes("summary") || qLower.includes("count") || qLower.includes("total") || qLower.includes("report") || qLower.includes("kalwa") || qLower.includes("mahalaxmi") || qLower.includes("pakhadi") || qLower.includes("parel") || qLower.includes("ramdev") || qLower.includes("pratiksha") || qLower === "/all") {
       if (!isAnyAdmin) {
-        botReply = `🔒 **Access Restricted**\n\nRegistration summaries, Vibhag counts, and committee metrics are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock your assigned access level.\n\n🔍 Regular applicants can check their individual status by typing their **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.`;
+        botReply = C.chatbotAdminRestrictedMsg || `🔒 **Access Restricted**\n\nRegistration summaries, Vibhag counts, and committee metrics are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock your assigned access level.\n\n🔍 Regular applicants can check their individual status by typing their **Transaction ID (e.g. VG-7, EDU26-2)** or registered **Mobile Number**.`;
       } else {
         const explicitlyMentionedVibhag = VIBHAG_OPTIONS.find(v => {
           const vName = v.toLowerCase();
@@ -20639,7 +20691,11 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
 
           if (cleanExplicit && !cleanExplicit.includes(cleanSession) && !cleanSession.includes(cleanExplicit)) {
             botType = "text";
-            botReply = `🔒 **Access Restricted to ${sessionVibhag}**\n\nYou have administrative access assigned specifically for **${sessionVibhag}**.\n\n• 🚫 You do not have permission to view registrations or analytics for **${explicitlyMentionedVibhag}**.\n• ℹ️ **Check your access level of Vibhag**: Please connect with Admin (+91 9820785209) if you require access to this Vibhag.\n• 👉 Type **`/vibhag`** or **`/all`** to view live analytics for **${sessionVibhag}**.`;
+            const customTpl = C.chatbotRestrictedVibhagMsg || `🔒 **Access Restricted to {ASSIGNED_VIBHAG}**\n\nYou have administrative access assigned specifically for **{ASSIGNED_VIBHAG}**.\n\n• 🚫 You do not have permission to view registrations or analytics for **{REQUESTED_VIBHAG}**.\n• ℹ️ **Check your access level of Vibhag**: Please connect with Admin ({ADMIN_PHONE}) if you require access to this Vibhag.\n• 👉 Type **`/vibhag`** or **`/all`** to view live analytics for **{ASSIGNED_VIBHAG}**.`;
+            botReply = customTpl
+              .replace(/\{ASSIGNED_VIBHAG\}/g, sessionVibhag || "Your Assigned Vibhag")
+              .replace(/\{REQUESTED_VIBHAG\}/g, explicitlyMentionedVibhag || "this Vibhag")
+              .replace(/\{ADMIN_PHONE\}/g, "+91 9820785209");
           } else {
             const vibhagRegs = currentRegs.filter(r => {
               const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "").toLowerCase().trim();
@@ -20747,7 +20803,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
         if (isCommunityRelated) {
           botReply = `ℹ️ **I do not have answer on this, please connect with committee member.**\n\n• 📞 **Trust Helpline**: +91 9820785209 / +91 9967821964\n• 💬 **Committee Details**: Type **`/edu_committee`** or **`/contact`** to view member contact numbers.`;
         } else {
-          botReply = `⚠️ **This Question is not relevant to this community.**\n\nI am specifically designed to help with **Mumbai Meghwal Panchayat & Vidya Gohil Trust** community activities, Education Felicitation 2026 event registrations, and application status tracking.\n\n👉 Type **`/`** to view all available community questions & shortcuts.`;
+          botReply = C.chatbotNonRelevantMsg || `⚠️ **This Question is not relevant to this community.**\n\nI am specifically designed to help with **Mumbai Meghwal Panchayat & Vidya Gohil Trust** community activities, Education Felicitation 2026 event registrations, and application status tracking.\n\n👉 Type **`/`** to view all available community questions & shortcuts.`;
         }
       }
     }
