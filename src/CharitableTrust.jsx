@@ -20106,11 +20106,16 @@ function AdminInviteLetters({ mob, C, auth }) {
          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24,flexDirection:mob?"column":"row",gap:16}}>
            <div>
              <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",margin:0}}>Invite Letters Workspaces</h2>
-             <p style={{fontSize:".85rem",color:"var(--mu)",marginTop:4}}>Select an event below to manage its invite letters.</p>
+             <p style={{fontSize:".85rem",color:"var(--mu)",marginTop:4}}>Select an event below to manage invite letters and send WhatsApp invitation passes.</p>
            </div>
-           <button onClick={() => setShowGlobalGuestsModal(true)} style={{padding:"10px 16px",borderRadius:8,fontSize:".85rem",fontWeight:600,display:"flex",alignItems:"center",gap:8,background:"white",border:"1px solid var(--dt)",color:"var(--dt)",cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
-             <span style={{fontSize:"1.2rem"}}>👥</span> Manage Special Guests Directory ({globalGuests.length})
-           </button>
+           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+             <button onClick={() => setShowInviteTplModal(true)} style={{padding:"10px 18px",borderRadius:8,fontSize:".85rem",fontWeight:700,display:"flex",alignItems:"center",gap:8,background:"#DCFCE7",border:"1px solid #86EFAC",color:"#15803D",cursor:"pointer",boxShadow:"0 2px 8px rgba(21,128,61,0.15)"}}>
+               <span style={{fontSize:"1.1rem"}}>📝</span> WhatsApp Invite Template
+             </button>
+             <button onClick={() => setShowGlobalGuestsModal(true)} style={{padding:"10px 16px",borderRadius:8,fontSize:".85rem",fontWeight:600,display:"flex",alignItems:"center",gap:8,background:"white",border:"1px solid var(--dt)",color:"var(--dt)",cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.05)"}}>
+               <span style={{fontSize:"1.2rem"}}>👥</span> Manage Special Guests Directory ({globalGuests.length})
+             </button>
+           </div>
          </div>
          
          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:20,marginTop:24}}>
