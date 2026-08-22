@@ -20632,7 +20632,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
 
           if (cleanExplicit && !cleanExplicit.includes(cleanSession) && !cleanSession.includes(cleanExplicit)) {
             botType = "text";
-            botReply = `🔒 **Access Restricted to ${sessionVibhag}**\n\nYou have administrative access assigned specifically for **${sessionVibhag}**.\n\n• 🚫 You do not have permission to view registrations or analytics for **${explicitlyMentionedVibhag}**.\n• 👉 Type **`/vibhag`** or **`/all`** to view live analytics for **${sessionVibhag}**.`;
+            botReply = `🔒 **Access Restricted to ${sessionVibhag}**\n\nYou have administrative access assigned specifically for **${sessionVibhag}**.\n\n• 🚫 You do not have permission to view registrations or analytics for **${explicitlyMentionedVibhag}**.\n• ℹ️ **Check your access level of Vibhag**: Please connect with Admin (+91 9820785209) if you require access to this Vibhag.\n• 👉 Type **`/vibhag`** or **`/all`** to view live analytics for **${sessionVibhag}**.`;
           } else {
             const vibhagRegs = currentRegs.filter(r => {
               const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "").toLowerCase().trim();
