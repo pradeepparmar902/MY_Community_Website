@@ -15336,9 +15336,10 @@ function ChatbotAccessManager({ C, setC, auth }) {
                     }}
                     style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:700,background:"white"}}
                   >
+                    <option value="meta">Official Meta WhatsApp Cloud API (1,000 Free Messages/Month)</option>
+                    <option value="greenapi">Green-API (Free Developer / Standard)</option>
                     <option value="ultramsg">UltraMsg (Instance + Token)</option>
-                    <option value="greenapi">Green-API (Instance + Token)</option>
-                    <option value="direct_web">Direct WhatsApp Web / App Launch</option>
+                    <option value="direct_web">Direct WhatsApp Web / App Launch (Free)</option>
                   </select>
                 </div>
 
@@ -16912,20 +16913,41 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C }) {
         let apiUrl = "";
         let payload = {};
 
-        if (gateway.provider === "greenapi") {
+        let res = null;
+        if (gateway.provider === "meta") {
+          apiUrl = `https://graph.facebook.com/v19.0/${gateway.instanceId}/messages`;
+          res = await fetch(apiUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${gateway.token}`
+            },
+            body: JSON.stringify({
+              messaging_product: "whatsapp",
+              recipient_type: "individual",
+              to: `91${cleanPhone}`,
+              type: "text",
+              text: { preview_url: true, body: customMessage }
+            })
+          });
+        } else if (gateway.provider === "greenapi") {
           apiUrl = `https://api.green-api.com/waInstance${gateway.instanceId}/sendMessage/${gateway.token}`;
           payload = { chatId: `91${cleanPhone}@c.us`, message: customMessage };
+          res = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
         } else {
           // Default: UltraMsg / Standard Gateway
           apiUrl = `https://api.ultramsg.com/${gateway.instanceId}/messages/chat`;
           payload = { token: gateway.token, to: `+91${cleanPhone}`, body: customMessage };
+          res = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
         }
-
-        const res = await fetch(apiUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
 
         if (res.ok) {
           setSendSuccess(true);
