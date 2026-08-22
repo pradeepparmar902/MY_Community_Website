@@ -20133,6 +20133,66 @@ function AdminInviteLetters({ mob, C, auth }) {
              )}
          </div>
 
+         {/* WhatsApp Invite Letter Template Modal */}
+         {showInviteTplModal && (
+           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:100002,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowInviteTplModal(false)}>
+             <div style={{background:"white",borderRadius:16,maxWidth:700,width:"100%",maxHeight:"90vh",overflowY:"auto",padding:24,boxShadow:"0 20px 40px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
+               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,borderBottom:"1px solid #E2E8F0",paddingBottom:12}}>
+                 <div>
+                   <h3 style={{fontSize:"1.15rem",fontWeight:800,color:"#15803D",margin:0,display:"flex",alignItems:"center",gap:8}}>
+                     <span>📩</span> Official WhatsApp Invitation Letter & Pass Template
+                   </h3>
+                   <div style={{fontSize:".8rem",color:"#64748B",marginTop:2}}>
+                     Configure the invitation message sent to students and guests for events.
+                   </div>
+                 </div>
+                 <button onClick={()=>setShowInviteTplModal(false)} style={{background:"#F1F5F9",border:"none",borderRadius:"50%",width:32,height:32,cursor:"pointer",fontWeight:700}}>✕</button>
+               </div>
+
+               <div style={{background:"#F8FAFC",border:"1px solid #CBD5E1",borderRadius:10,padding:16,marginBottom:16}}>
+                 <div style={{fontSize:".78rem",fontWeight:700,color:"#334155",marginBottom:8,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                   <span>Insert Placeholders:</span>
+                   <span style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem"}}>{'{STUDENT_NAME}'}</span>
+                   <span style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem"}}>{'{TXN_ID}'}</span>
+                   <span style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem"}}>{'{VIBHAG}'}</span>
+                   <span style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem"}}>{'{STREAM}'}</span>
+                   <span style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem"}}>{'{PORTAL_URL}'}</span>
+                   <span style={{background:"white",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:4,fontSize:".7rem"}}>{'{HELPLINE_PHONES}'}</span>
+                 </div>
+
+                 <textarea
+                   defaultValue={C.whatsAppTplInvite !== undefined ? C.whatsAppTplInvite : `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026 - Official Invitation*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nWe are pleased to invite you and your family as our esteemed guests of honor to the *Annual Student Education Felicitation 2026*.\n\n📋 *Invitation Pass Details:*\n• *Transaction / Pass ID:* {TXN_ID}\n• *Invitee Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *Download Official PDF Invitation Letter & Entry Pass:*\n{PORTAL_URL}\n\nPlease show this digital pass or downloaded invitation letter at the registration desk upon arrival.\n\nWarm regards,\n*Central Working Committee (CWC) & Education Board*\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`}
+                   onChange={e => {
+                     if (C) C.whatsAppTplInvite = e.target.value;
+                   }}
+                   rows={11}
+                   style={{width:"100%",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",lineHeight:1.5,fontFamily:"monospace",boxSizing:"border-box",background:"white"}}
+                 />
+               </div>
+
+               <div style={{display:"flex",justifyContent:"flex-end",gap:10}}>
+                 <button onClick={()=>setShowInviteTplModal(false)} style={{padding:"8px 16px",borderRadius:8,background:"white",border:"1px solid #CBD5E1",fontSize:".85rem",cursor:"pointer",fontWeight:600}}>
+                   Cancel
+                 </button>
+                 <button 
+                   onClick={async () => {
+                     try {
+                       await fbSave(C, auth?.idToken);
+                       alert("✅ WhatsApp Invitation Letter Template saved successfully!");
+                       setShowInviteTplModal(false);
+                     } catch(err) {
+                       alert("Failed to save: " + err.message);
+                     }
+                   }} 
+                   style={{padding:"8px 20px",borderRadius:8,background:"#15803D",color:"white",border:"none",fontSize:".85rem",fontWeight:700,cursor:"pointer"}}
+                 >
+                   💾 Save Template
+                 </button>
+               </div>
+             </div>
+           </div>
+         )}
+
          {/* Global Guests Modal */}
          {showGlobalGuestsModal && renderGlobalGuestsModal()}
       </div>
