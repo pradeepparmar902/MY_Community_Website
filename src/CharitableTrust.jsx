@@ -14847,6 +14847,22 @@ function ChatbotAccessManager({ C, setC, auth }) {
           >
             👥 User Access & Scopes ({allRegisteredUsers.length})
           </button>
+          <button
+            onClick={() => setActiveTab("rules")}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              fontSize: ".82rem",
+              fontWeight: 700,
+              background: activeTab === "rules" ? "#166534" : "transparent",
+              color: activeTab === "rules" ? "white" : "#166534",
+              border: "none",
+              cursor: "pointer",
+              boxShadow: activeTab === "rules" ? "0 2px 6px rgba(0,0,0,0.12)" : "none"
+            }}
+          >
+            🛡️ Restricted Messages & Rules
+          </button>
         </div>
       </div>
 
