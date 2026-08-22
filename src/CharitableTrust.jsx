@@ -16906,6 +16906,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
     status === "Approved" ? defaultApprovedText : status === "Needs Info" ? defaultNeedsInfoText : status === "Disapproved" ? defaultRejectedText : defaultApprovedText
   );
   const [copied, setCopied] = useState(false);
+  const [launchMode, setLaunchMode] = useState(() => localStorage.getItem("mmp_wa_launch_mode") || "app");
 
   const applyPreset = (p) => {
     setPreset(p);
@@ -16989,21 +16990,24 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
       }
     }
 
-    // 2. Direct Web & App Launch (Strict Single Tab Enforcement via window._mmpWaTab)
-    const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const directUrl = isMobileDevice 
-      ? `whatsapp://send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`
-      : `https://web.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
+    // 2. Direct Launch: App Scheme (0 browser tabs) or Web
+    if (launchMode === "app") {
+      // whatsapp:// scheme communicates directly with Windows/Mac/Mobile WhatsApp App with ZERO browser tabs opened!
+      const appUrl = `whatsapp://send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
+      window.location.href = appUrl;
+      return;
+    }
 
+    const webUrl = `https://web.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
     try {
       if (window._mmpWaTab && !window._mmpWaTab.closed) {
-        window._mmpWaTab.location.href = directUrl;
+        window._mmpWaTab.location.href = webUrl;
         try { window._mmpWaTab.focus(); } catch(e){}
       } else {
-        window._mmpWaTab = window.open(directUrl, "mmp_whatsapp_tab");
+        window._mmpWaTab = window.open(webUrl, "mmp_whatsapp_tab");
       }
     } catch(err) {
-      window._mmpWaTab = window.open(directUrl, "mmp_whatsapp_tab");
+      window._mmpWaTab = window.open(webUrl, "mmp_whatsapp_tab");
     }
   };
 
@@ -17028,20 +17032,62 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
         {/* Body */}
         <div style={{padding:20,overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:16}}>
           
-          {/* Recipient Phone Row */}
+          {/* Recipient Phone & App/Web Mode Toggle */}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#F8FAFC",padding:"10px 14px",borderRadius:8,border:"1px solid #E2E8F0",flexWrap:"wrap",gap:10}}>
-            <div style={{fontSize:".82rem",color:"#475569",fontWeight:700}}>
-              📱 Recipient WhatsApp Mobile:
-            </div>
             <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:".82rem",color:"#475569",fontWeight:700}}>📱 Recipient Mobile:</span>
               <span style={{fontWeight:700,color:"#1E293B",fontSize:".88rem"}}>+91</span>
               <input 
                 type="tel" 
                 value={recipientMobile} 
                 onChange={e => setRecipientMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                 placeholder="10-digit mobile"
-                style={{padding:"6px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontWeight:700,fontSize:".88rem",width:130,color:"#15803D",fontFamily:"monospace"}}
+                style={{padding:"5px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontWeight:700,fontSize:".88rem",width:125,color:"#15803D",fontFamily:"monospace"}}
               />
+            </div>
+
+            {/* Launch Mode Switcher */}
+            <div style={{display:"flex",background:"#E2E8F0",padding:2,borderRadius:6,gap:2}}>
+              <button
+                type="button"
+                onClick={() => {
+                  setLaunchMode("app");
+                  localStorage.setItem("mmp_wa_launch_mode", "app");
+                }}
+                style={{
+                  padding:"4px 10px",
+                  borderRadius:4,
+                  fontSize:".74rem",
+                  fontWeight:800,
+                  border:"none",
+                  cursor:"pointer",
+                  background: launchMode === "app" ? "#15803D" : "transparent",
+                  color: launchMode === "app" ? "white" : "#475569"
+                }}
+                title="Opens directly in WhatsApp Windows/Mac/Mobile App with ZERO browser tabs!"
+              >
+                💻 WhatsApp App (0 Tabs)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLaunchMode("web");
+                  localStorage.setItem("mmp_wa_launch_mode", "web");
+                }}
+                style={{
+                  padding:"4px 10px",
+                  borderRadius:4,
+                  fontSize:".74rem",
+                  fontWeight:800,
+                  border:"none",
+                  cursor:"pointer",
+                  background: launchMode === "web" ? "#2563EB" : "transparent",
+                  color: launchMode === "web" ? "white" : "#475569"
+                }}
+                title="Opens in WhatsApp Web in browser"
+              >
+                🌐 Web Browser
+              </button>
             </div>
           </div>
 
