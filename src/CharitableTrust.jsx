@@ -20371,7 +20371,8 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
     setMessages(prev => [...prev, userMsg]);
     setLoading(true);
 
-    const currentRegs = await ensureRegistrations();
+    try {
+      const currentRegs = await ensureRegistrations();
     const qLower = query.toLowerCase();
     const cleanQuery = query.trim().toUpperCase().replace(/\s+/g, "");
     const cleanHyphen = cleanQuery.replace(/[^A-Z0-9]/g, "");
@@ -20629,40 +20630,35 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
           const cleanSession = sessionVibhag.toLowerCase().trim();
           const cleanExplicit = explicitlyMentionedVibhag ? explicitlyMentionedVibhag.toLowerCase().trim() : null;
 
-          // If the user explicitly asked for a DIFFERENT Vibhag that they don't have access to
           if (cleanExplicit && !cleanExplicit.includes(cleanSession) && !cleanSession.includes(cleanExplicit)) {
             botType = "text";
             botReply = `🔒 **Access Restricted to ${sessionVibhag}**\n\nYou have administrative access assigned specifically for **${sessionVibhag}**.\n\n• 🚫 You do not have permission to view registrations or analytics for **${explicitlyMentionedVibhag}**.\n• 👉 Type **`/vibhag`** or **`/all`** to view live analytics for **${sessionVibhag}**.`;
-            setMessages(prev => [...prev, { id: "m_" + Date.now(), sender: "bot", type: botType, text: botReply, cardData: null }]);
-            setLoading(false);
-            return;
+          } else {
+            const vibhagRegs = currentRegs.filter(r => {
+              const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "").toLowerCase().trim();
+              return v.includes(cleanSession) || cleanSession.includes(v);
+            });
+
+            let approved = 0, pending = 0, rejected = 0;
+            vibhagRegs.forEach(r => {
+              const s = String(r.Status || r.status || "Pending").trim();
+              if (s === "Approved") approved++;
+              else if (s === "Disapproved" || s === "Rejected") rejected++;
+              else pending++;
+            });
+
+            botType = "summary_card";
+            botReply = `📍 **Live Analytics for ${sessionVibhag} (Your Assigned Vibhag)**: `;
+            cardData = {
+              total: vibhagRegs.length,
+              approved,
+              pending,
+              rejected,
+              scopeTitle: `${sessionVibhag} Summary`,
+              vibhagList: [[`${sessionVibhag}`, { total: vibhagRegs.length, approved, pending, rejected }]],
+              apps: vibhagRegs
+            };
           }
-
-          // Otherwise show their assigned Vibhag data
-          const vibhagRegs = currentRegs.filter(r => {
-            const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "").toLowerCase().trim();
-            return v.includes(cleanSession) || cleanSession.includes(v);
-          });
-
-          let approved = 0, pending = 0, rejected = 0;
-          vibhagRegs.forEach(r => {
-            const s = String(r.Status || r.status || "Pending").trim();
-            if (s === "Approved") approved++;
-            else if (s === "Disapproved" || s === "Rejected") rejected++;
-            else pending++;
-          });
-
-          botType = "summary_card";
-          botReply = `📍 **Live Analytics for ${sessionVibhag} (Your Assigned Vibhag)**: `;
-          cardData = {
-            total: vibhagRegs.length,
-            approved,
-            pending,
-            rejected,
-            scopeTitle: `${sessionVibhag} Summary`,
-            vibhagList: [[`${sessionVibhag}`, { total: vibhagRegs.length, approved, pending, rejected }]],
-            apps: vibhagRegs
-          };
         } else if (explicitlyMentionedVibhag) {
           const cleanTarget = explicitlyMentionedVibhag.toLowerCase().trim();
           const vibhagRegs = currentRegs.filter(r => {
@@ -20752,7 +20748,12 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
     const finalBotReply = (botReply && botReply.trim()) ? botReply : "⚠️ **This Question is not relevant to this community.**\n\nI am specifically designed to help with **Mumbai Meghwal Panchayat & Vidya Gohil Trust** community activities, Education Felicitation 2026 event registrations, and application status tracking.\n\n👉 Type **`/`** to view all available community questions & shortcuts.";
 
     setMessages(prev => [...prev, { id: "m_" + Date.now(), sender: "bot", type: botType, text: finalBotReply, cardData }]);
-    setLoading(false);
+    } catch (err) {
+      console.error("handleSendMessage error:", err);
+      setMessages(prev => [...prev, { id: "m_" + Date.now(), sender: "bot", type: "text", text: "⚠️ An error occurred while processing your request. Please try again." }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Position Styling (Smoothly Draggable on BOTH Mobile & Desktop, and Stays Below Mobile Drawer Menu)
