@@ -14798,33 +14798,33 @@ function ChatbotAccessManager({ C, setC, auth }) {
         </div>
 
         {/* Sub-Tabs Switcher */}
-        <div style={{display:"flex",background:"#E2E8F0",padding:3,borderRadius:10,gap:3,flexWrap:"wrap"}}>
+        <div style={{display:"flex",background:"#E2E8F0",padding:4,borderRadius:12,gap:4,flexWrap:"wrap",boxShadow:"inset 0 1px 3px rgba(0,0,0,0.1)"}}>
           <button
             onClick={() => setActiveTab("branding")}
             style={{
-              padding: "8px 16px",
+              padding: "8px 14px",
               borderRadius: 8,
               fontSize: ".82rem",
-              fontWeight: 700,
+              fontWeight: 800,
               background: activeTab === "branding" ? "white" : "transparent",
-              color: activeTab === "branding" ? "#1E293B" : "#64748B",
-              border: "none",
+              color: activeTab === "branding" ? "#0F172A" : "#475569",
+              border: activeTab === "branding" ? "1px solid #CBD5E1" : "1px solid transparent",
               cursor: "pointer",
               boxShadow: activeTab === "branding" ? "0 2px 6px rgba(0,0,0,0.08)" : "none"
             }}
           >
-            🎨 Header Name & Branding
+            🎨 Header & Branding
           </button>
           <button
             onClick={() => setActiveTab("kb")}
             style={{
-              padding: "8px 16px",
+              padding: "8px 14px",
               borderRadius: 8,
               fontSize: ".82rem",
-              fontWeight: 700,
+              fontWeight: 800,
               background: activeTab === "kb" ? "white" : "transparent",
-              color: activeTab === "kb" ? "#1E293B" : "#64748B",
-              border: "none",
+              color: activeTab === "kb" ? "#0F172A" : "#475569",
+              border: activeTab === "kb" ? "1px solid #CBD5E1" : "1px solid transparent",
               cursor: "pointer",
               boxShadow: activeTab === "kb" ? "0 2px 6px rgba(0,0,0,0.08)" : "none"
             }}
@@ -14834,13 +14834,13 @@ function ChatbotAccessManager({ C, setC, auth }) {
           <button
             onClick={() => setActiveTab("users")}
             style={{
-              padding: "8px 16px",
+              padding: "8px 14px",
               borderRadius: 8,
               fontSize: ".82rem",
-              fontWeight: 700,
+              fontWeight: 800,
               background: activeTab === "users" ? "white" : "transparent",
-              color: activeTab === "users" ? "#1E293B" : "#64748B",
-              border: "none",
+              color: activeTab === "users" ? "#0F172A" : "#475569",
+              border: activeTab === "users" ? "1px solid #CBD5E1" : "1px solid transparent",
               cursor: "pointer",
               boxShadow: activeTab === "users" ? "0 2px 6px rgba(0,0,0,0.08)" : "none"
             }}
@@ -14850,15 +14850,15 @@ function ChatbotAccessManager({ C, setC, auth }) {
           <button
             onClick={() => setActiveTab("rules")}
             style={{
-              padding: "8px 16px",
+              padding: "8px 14px",
               borderRadius: 8,
               fontSize: ".82rem",
-              fontWeight: 700,
-              background: activeTab === "rules" ? "#166534" : "transparent",
+              fontWeight: 800,
+              background: activeTab === "rules" ? "#15803D" : "#DCFCE7",
               color: activeTab === "rules" ? "white" : "#166534",
-              border: "none",
+              border: "1px solid #86EFAC",
               cursor: "pointer",
-              boxShadow: activeTab === "rules" ? "0 2px 6px rgba(0,0,0,0.12)" : "none"
+              boxShadow: activeTab === "rules" ? "0 2px 8px rgba(21,128,61,0.3)" : "none"
             }}
           >
             🛡️ Restricted Messages & Rules
