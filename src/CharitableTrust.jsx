@@ -16857,7 +16857,7 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }
 
 
 // ── WhatsApp Applicant Communication Modal ───────────────────────────────────────
-function WhatsAppApplicantMessengerModal({ reg, onClose, C }) {
+function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSelectReg }) {
   if (!reg) return null;
 
   const rawName = String(reg['Full Name'] || reg['Submitted By'] || reg['Participant Name'] || reg.name || 'Applicant').replace(/\|/g, ' ').trim();
@@ -16869,6 +16869,31 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C }) {
   const percentage = reg['% Obtained'] || reg.percentage || reg['Marks / Percentage'] || 'N/A';
   const status = reg['Status'] || reg.status || 'Pending';
   const remarks = reg['Remarks'] || reg.remarks || 'Application under review';
+
+  const currentIndex = allRegs.findIndex(r => r.id === reg.id || (r['Transaction ID'] && r['Transaction ID'] === reg['Transaction ID']));
+  const totalCount = allRegs.length;
+
+  useEffect(() => {
+    const freshMobile = String(reg['Mobile Number'] || reg.submitterMob || reg['Alternate Mobile Number'] || reg.phone || '').replace(/\D/g, '').slice(-10);
+    setRecipientMobile(freshMobile);
+    const freshStatus = reg['Status'] || reg.status || 'Pending';
+    const freshRemarks = reg['Remarks'] || reg.remarks || 'Application under review';
+    const freshName = String(reg['Full Name'] || reg['Submitted By'] || reg['Participant Name'] || reg.name || 'Applicant').replace(/\|/g, ' ').trim();
+    const freshTxn = reg['Transaction ID'] || reg.transactionId || reg.id || 'N/A';
+    const freshVibhag = reg['Vibhag'] || reg.vibhag || reg['MMP Vibhag'] || 'All Vibhags';
+    const freshStream = reg['Stream / Class'] || reg['Stream'] || reg['Course'] || 'N/A';
+    const freshPct = reg['% Obtained'] || reg.percentage || reg['Marks / Percentage'] || 'N/A';
+
+    const p = freshStatus === "Approved" ? "approved" : freshStatus === "Needs Info" ? "needs_info" : freshStatus === "Disapproved" ? "rejected" : "approved";
+    setPreset(p);
+    if (p === "approved") {
+      setCustomMessage(`🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${freshName}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* ${freshTxn}\n• *Student Name:* ${freshName}\n• *Vibhag:* ${freshVibhag}\n• *Stream / Class:* ${freshStream}\n• *Percentage:* ${freshPct}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai (Official venue, schedule & invitation letter will be shared soon)\n\n👉 View your application & student certificate on your dashboard:\nhttps://pradeepparmar902.github.io/MY_Community_Website/\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`);
+    } else if (p === "needs_info") {
+      setCustomMessage(`🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${freshName}*,\n\nYour application (*${freshTxn}*) for *Education Felicitation 2026* requires additional information or document correction for verification.\n\n⚠️ *Committee Remarks / Action Required:*\n👉 *${freshRemarks}*\n\n📝 *How to Update Your Application:*\n1. Open portal: https://pradeepparmar902.github.io/MY_Community_Website/\n2. Log in with registered mobile: *+91 ${freshMobile}*\n3. Go to *My Dashboard* > *Registrations*\n4. Click *Edit & Resubmit* and update the requested document/details.\n\nPlease complete this at the earliest to confirm your felicitation eligibility.\n\nWarm regards,\n*Education Verification Committee*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`);
+    } else {
+      setCustomMessage(`🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${freshName}*,\n\nRegarding your application (*${freshTxn}*) for *Education Felicitation 2026*.\n\n• *Status:* 🔴 *Not Approved*\n• *Reason / Remarks:* ${freshRemarks}\n\nIf you believe this is an error or need clarification, please contact your Vibhag Committee Member or our helpline.\n\nWarm regards,\n*Education Committee*\n📞 Helpline: +91 9820785209`);
+    }
+  }, [reg]);
 
   const defaultApprovedText = `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *${rawName}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* ${txnId}\n• *Student Name:* ${rawName}\n• *Vibhag:* ${vibhag}\n• *Stream / Class:* ${stream}\n• *Percentage:* ${percentage}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai (Official venue, schedule & invitation letter will be shared soon)\n\n👉 View your application & student certificate on your dashboard:\nhttps://pradeepparmar902.github.io/MY_Community_Website/\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: +91 9820785209 / +91 9967821964`;
 
@@ -16964,18 +16989,14 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C }) {
       }
     }
 
-    // 2. Direct Web & App Launch (Bypasses intermediate https://api.whatsapp.com landing page)
+    // 2. Direct Web & App Launch (Reuses the SAME SINGLE TAB 'mmp_whatsapp_tab' to prevent multi-tab clutter)
     const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     const directUrl = isMobileDevice 
       ? `whatsapp://send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`
       : `https://web.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
 
-    // Attempt direct app scheme, fallback to web
-    try {
-      window.open(directUrl, "_blank");
-    } catch (e) {
-      window.open(`https://web.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`, "_blank");
-    }
+    // Re-use single persistent tab name 'mmp_whatsapp_tab'
+    window.open(directUrl, "mmp_whatsapp_tab");
   };
 
   return (
@@ -17126,20 +17147,44 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C }) {
 
         {/* Footer Actions */}
         <div style={{padding:"14px 20px",background:"#F8FAFC",borderTop:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{padding:"9px 16px",background:"white",border:"1px solid #CBD5E1",borderRadius:8,fontSize:".82rem",fontWeight:700,color:"#475569",cursor:"pointer"}}
-          >
-            Close
-          </button>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{padding:"9px 14px",background:"white",border:"1px solid #CBD5E1",borderRadius:8,fontSize:".82rem",fontWeight:700,color:"#475569",cursor:"pointer"}}
+            >
+              Close
+            </button>
 
-          <div style={{display:"flex",gap:10}}>
+            {currentIndex > 0 && onSelectReg && (
+              <button
+                type="button"
+                onClick={() => onSelectReg(allRegs[currentIndex - 1])}
+                style={{padding:"9px 12px",background:"#F1F5F9",border:"1px solid #CBD5E1",borderRadius:8,fontSize:".8rem",fontWeight:700,cursor:"pointer"}}
+                title="Previous Applicant"
+              >
+                ◀ Prev
+              </button>
+            )}
+
+            {currentIndex >= 0 && currentIndex < totalCount - 1 && onSelectReg && (
+              <button
+                type="button"
+                onClick={() => onSelectReg(allRegs[currentIndex + 1])}
+                style={{padding:"9px 12px",background:"#F1F5F9",border:"1px solid #CBD5E1",borderRadius:8,fontSize:".8rem",fontWeight:700,cursor:"pointer"}}
+                title="Next Applicant"
+              >
+                Next ▶ ({currentIndex + 1}/{totalCount})
+              </button>
+            )}
+          </div>
+
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <button
               type="button"
               onClick={handleCopy}
               style={{
-                padding: "9px 16px",
+                padding: "9px 14px",
                 background: copied ? "#DCFCE7" : "white",
                 color: copied ? "#15803D" : "#334155",
                 border: "1px solid #CBD5E1",
@@ -17154,10 +17199,15 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C }) {
 
             <button
               type="button"
-              onClick={handleSendWhatsApp}
+              onClick={() => {
+                handleSendWhatsApp();
+                if (currentIndex >= 0 && currentIndex < totalCount - 1 && onSelectReg) {
+                  setTimeout(() => onSelectReg(allRegs[currentIndex + 1]), 400);
+                }
+              }}
               disabled={sendingApi}
               style={{
-                padding: "9px 20px",
+                padding: "9px 18px",
                 background: sendSuccess ? "#15803D" : "#25D366",
                 color: "white",
                 border: "none",
@@ -17172,7 +17222,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C }) {
               }}
             >
               <span>{sendSuccess ? "✅" : sendingApi ? "⏳" : "🟢"}</span>
-              <span>{sendSuccess ? "Sent Directly via WhatsApp!" : sendingApi ? "Sending in Background..." : (C.whatsAppGateway?.enabled ? "Send Direct (WhatsApp API)" : "Direct WhatsApp Web / App")}</span>
+              <span>{sendSuccess ? "Sent Directly!" : (currentIndex >= 0 && currentIndex < totalCount - 1 ? "Send & Next Student →" : "Send WhatsApp (Same Tab)")}</span>
             </button>
           </div>
         </div>
@@ -18094,6 +18144,8 @@ function AdminRegistrations({ mob, C, setC, auth }) {
           reg={whatsAppModalReg} 
           onClose={() => setWhatsAppModalReg(null)} 
           C={C} 
+          allRegs={filteredRegs}
+          onSelectReg={setWhatsAppModalReg}
         />
       )}
 
