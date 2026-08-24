@@ -17333,6 +17333,282 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }
 
 
 // ── WhatsApp Applicant Communication Modal ───────────────────────────────────────
+
+// ── Workspace-Specific Multi-Template Manager Modal ──────────────────────────────
+function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
+  if (!event) return null;
+
+  // Initialize templates if not present
+  const defaultTemplates = [
+    {
+      id: "tpl_student_pass",
+      name: "Official Student Invitation & Entry Pass",
+      isDefault: true,
+      text: C.whatsAppTplInvite || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026 - Official Invitation*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nWe are pleased to invite you and your family as our esteemed guests of honor to the *Annual Student Education Felicitation 2026*.\n\n📋 *Invitation Pass Details:*\n• *Transaction / Pass ID:* {TXN_ID}\n• *Invitee Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View & Download Official PDF Invitation Letter & Pass:*\n{INVITE_PDF_LINK}\n\nPlease show this digital pass or downloaded invitation letter at the registration desk upon arrival.\n\nWarm regards,\n*Central Working Committee (CWC) & Education Board*\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`
+    },
+    {
+      id: "tpl_vip_guest",
+      name: "VIP / Special Dignitary Invitation",
+      isDefault: false,
+      text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🌟 *Special Dignitary Invitation - Education Felicitation 2026*\n═══════════════════════\nRespected *{STUDENT_NAME}* Ji,\n\nOn behalf of Mumbai Meghwal Panchayat & Vidya Gohil Charitable Trust, we cordially request the honor of your esteemed presence as our *Special Guest of Honor* at our upcoming Annual Education Felicitation Ceremony.\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View Official Digital Invitation Pass:*\n{INVITE_PDF_LINK}\n\nWe look forward to welcoming you and celebrating together.\n\nWarm regards,\n*President & Central Working Committee (CWC)*\n📞 Helpline: {HELPLINE_PHONES}`
+    },
+    {
+      id: "tpl_event_reminder",
+      name: "Event Reminder & Reporting Time Notice",
+      isDefault: false,
+      text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n⏰ *Gentle Reminder: Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nThis is a gentle reminder that the *Annual Student Education Felicitation Ceremony* is scheduled for *02-10-2026 (Friday)*.\n\n• *Invitee Name:* {STUDENT_NAME}\n• *Pass / Txn ID:* {TXN_ID}\n• *Reporting Time:* 09:30 AM Sharp\n• *Venue:* Mumbai, Maharashtra\n\n👉 *Open Your Digital Pass on Mobile:*\n{INVITE_PDF_LINK}\n\nPlease carry your digital pass on your phone for smooth verification at the venue.\n\nWarm regards,\n*Event Management Team*`
+    }
+  ];
+
+  const currentTemplates = (event.whatsAppTemplates && event.whatsAppTemplates.length > 0) 
+    ? event.whatsAppTemplates 
+    : defaultTemplates;
+
+  const [templates, setTemplates] = useState(JSON.parse(JSON.stringify(currentTemplates)));
+  const [activeTplId, setActiveTplId] = useState(templates[0]?.id || "tpl_student_pass");
+  const [saving, setSaving] = useState(false);
+
+  const activeTpl = templates.find(t => t.id === activeTplId) || templates[0];
+
+  const handleUpdateActiveTpl = (field, val) => {
+    setTemplates(prev => prev.map(t => {
+      if (t.id === activeTplId) {
+        return { ...t, [field]: val };
+      }
+      if (field === 'isDefault' && val === true) {
+        return { ...t, isDefault: false };
+      }
+      return t;
+    }));
+  };
+
+  const handleAddNewTemplate = () => {
+    const newId = "tpl_" + Date.now();
+    const newTpl = {
+      id: newId,
+      name: `New Template ${templates.length + 1}`,
+      isDefault: false,
+      text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *{EVENT_NAME}*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\n[Write your custom message here]\n\n👉 *Invitation Pass:* {INVITE_PDF_LINK}\n\n📞 Helpline: {HELPLINE_PHONES}`
+    };
+    setTemplates(prev => [...prev, newTpl]);
+    setActiveTplId(newId);
+  };
+
+  const handleDeleteTemplate = (idToDelete) => {
+    if (templates.length <= 1) {
+      alert("At least one template must remain in this workspace.");
+      return;
+    }
+    const tplToDelete = templates.find(t => t.id === idToDelete);
+    if (tplToDelete?.isDefault) {
+      alert("Cannot delete the default template. Please mark another template as default first.");
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to delete template "${tplToDelete?.name}"?`)) return;
+
+    const remaining = templates.filter(t => t.id !== idToDelete);
+    setTemplates(remaining);
+    setActiveTplId(remaining[0].id);
+  };
+
+  const handleSaveAll = async () => {
+    setSaving(true);
+    try {
+      const updatedEvents = (C.events || []).map(e => {
+        if (e.id === event.id || e.title === event.title) {
+          return { ...e, whatsAppTemplates: templates };
+        }
+        return e;
+      });
+
+      const updatedC = { ...C, events: updatedEvents };
+      if (setC) setC(updatedC);
+      await fbSave(updatedC, auth?.idToken);
+      alert("✅ Workspace WhatsApp Templates saved successfully!");
+      onClose();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save templates: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const insertPlaceholder = (ph) => {
+    if (!activeTpl) return;
+    const cur = activeTpl.text || "";
+    handleUpdateActiveTpl("text", cur + ph);
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100003,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:"white",borderRadius:16,maxWidth:850,width:"100%",maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 25px 50px -12px rgba(0,0,0,0.35)"}} onClick={e=>e.stopPropagation()}>
+        
+        {/* Header */}
+        <div style={{padding:"18px 24px",background:"linear-gradient(135deg, #15803D, #166534)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <h3 style={{fontSize:"1.15rem",fontWeight:800,margin:0,display:"flex",alignItems:"center",gap:8}}>
+              <span>📝</span> WhatsApp Templates for: {event.title || "Workspace"}
+            </h3>
+            <div style={{fontSize:".8rem",opacity:0.9,marginTop:2}}>
+              Create and manage multiple customizable WhatsApp message templates specific to this event.
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:32,height:32,color:"white",cursor:"pointer",fontWeight:800}}>✕</button>
+        </div>
+
+        {/* Body (Split: Sidebar Templates List | Right Editor) */}
+        <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+          
+          {/* Left: Templates List */}
+          <div style={{width:260,borderRight:"1px solid #E2E8F0",background:"#F8FAFC",display:"flex",flexDirection:"column"}}>
+            <div style={{padding:"12px 14px",borderBottom:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:".75rem",fontWeight:700,color:"#475569",textTransform:"uppercase"}}>Templates ({templates.length})</span>
+              <button
+                type="button"
+                onClick={handleAddNewTemplate}
+                style={{padding:"4px 8px",background:"#15803D",color:"white",border:"none",borderRadius:6,fontSize:".75rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+              >
+                <span>+</span> Add New
+              </button>
+            </div>
+
+            <div style={{flex:1,overflowY:"auto",padding:8,display:"flex",flexDirection:"column",gap:6}}>
+              {templates.map(t => {
+                const isActive = t.id === activeTplId;
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => setActiveTplId(t.id)}
+                    style={{
+                      padding:"10px 12px",
+                      borderRadius:8,
+                      border:isActive ? "2px solid #15803D" : "1px solid #E2E8F0",
+                      background:isActive ? "#F0FDF4" : "white",
+                      cursor:"pointer",
+                      display:"flex",
+                      flexDirection:"column",
+                      gap:4,
+                      transition:"all 0.15s"
+                    }}
+                  >
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:".82rem",fontWeight:700,color:isActive ? "#15803D" : "#0F172A",lineHeight:1.3}}>
+                        {t.name}
+                      </span>
+                      {t.isDefault && (
+                        <span style={{background:"#DCFCE7",color:"#15803D",padding:"1px 6px",borderRadius:4,fontSize:".65rem",fontWeight:800}}>
+                          Default
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right: Active Template Editor */}
+          {activeTpl && (
+            <div style={{flex:1,padding:"20px 24px",overflowY:"auto",display:"flex",flexDirection:"column",gap:14}}>
+              
+              {/* Template Name & Default Switch */}
+              <div style={{display:"flex",gap:12,alignItems:"flex-end",flexWrap:"wrap"}}>
+                <div style={{flex:1,minWidth:220}}>
+                  <label style={{display:"block",fontSize:".75rem",fontWeight:700,color:"#475569",marginBottom:4}}>TEMPLATE NAME</label>
+                  <input
+                    type="text"
+                    value={activeTpl.name}
+                    onChange={e => handleUpdateActiveTpl("name", e.target.value)}
+                    style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".88rem",fontWeight:600,boxSizing:"border-box"}}
+                  />
+                </div>
+
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:".82rem",fontWeight:700,color:"#15803D",background:"#F0FDF4",padding:"8px 12px",borderRadius:8,border:"1px solid #BBF7D0"}}>
+                    <input
+                      type="checkbox"
+                      checked={activeTpl.isDefault || false}
+                      onChange={e => handleUpdateActiveTpl("isDefault", e.target.checked)}
+                      style={{cursor:"pointer"}}
+                    />
+                    <span>Set as Default Template</span>
+                  </label>
+
+                  {templates.length > 1 && !activeTpl.isDefault && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTemplate(activeTpl.id)}
+                      style={{padding:"8px 12px",background:"#FEF2F2",border:"1px solid #FECACA",color:"#DC2626",borderRadius:8,fontSize:".8rem",fontWeight:700,cursor:"pointer"}}
+                      title="Delete this template"
+                    >
+                      🗑️ Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Placeholder Pills */}
+              <div>
+                <div style={{fontSize:".75rem",fontWeight:700,color:"#475569",marginBottom:6}}>INSERT PERSONALIZED PLACEHOLDERS:</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {[
+                    '{STUDENT_NAME}',
+                    '{TXN_ID}',
+                    '{INVITE_PDF_LINK}',
+                    '{VIBHAG}',
+                    '{STREAM}',
+                    '{PERCENTAGE}',
+                    '{HELPLINE_PHONES}',
+                    '{PORTAL_URL}'
+                  ].map(ph => (
+                    <button
+                      key={ph}
+                      type="button"
+                      onClick={() => insertPlaceholder(' ' + ph)}
+                      style={{padding:"3px 8px",background:"#F1F5F9",border:"1px solid #CBD5E1",borderRadius:6,fontSize:".74rem",fontWeight:700,color:"#334155",cursor:"pointer"}}
+                    >
+                      + {ph}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Message Textarea */}
+              <div style={{flex:1,display:"flex",flexDirection:"column"}}>
+                <label style={{display:"block",fontSize:".75rem",fontWeight:700,color:"#475569",marginBottom:4}}>MESSAGE CONTENT (WHATSAPP FORMATTED)</label>
+                <textarea
+                  value={activeTpl.text || ""}
+                  onChange={e => handleUpdateActiveTpl("text", e.target.value)}
+                  rows={12}
+                  style={{width:"100%",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",lineHeight:1.5,fontFamily:"monospace",boxSizing:"border-box",background:"white",resize:"vertical"}}
+                />
+              </div>
+
+            </div>
+          )}
+
+        </div>
+
+        {/* Footer */}
+        <div style={{padding:"14px 24px",background:"#F8FAFC",borderTop:"1px solid #E2E8F0",display:"flex",justifyContent:"flex-end",gap:10}}>
+          <button onClick={onClose} style={{padding:"8px 18px",borderRadius:8,background:"white",border:"1px solid #CBD5E1",fontSize:".85rem",cursor:"pointer",fontWeight:600}}>
+            Cancel
+          </button>
+          <button
+            onClick={handleSaveAll}
+            disabled={saving}
+            style={{padding:"8px 24px",borderRadius:8,background:"#15803D",color:"white",border:"none",fontSize:".85rem",fontWeight:700,cursor:saving ? "wait" : "pointer"}}
+          >
+            {saving ? "Saving Templates..." : "💾 Save Workspace Templates"}
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSelectReg }) {
   if (!reg) return null;
 
@@ -17389,9 +17665,62 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
     return processed;
   };
 
-  const [customMessage, setCustomMessage] = useState(() => 
-    buildTemplateForStatus(currentStatus, rawName, rawMobile, txnId, vibhag, stream, percentage, remarks)
-  );
+  // Find workspace event and its templates
+  const evName = reg.eventName || reg.eventTitle || reg.eventId || "Education felicitation 2026";
+  const eventObj = (C.events || []).find(e => e.id === reg.eventId || e.title === evName || e.titleGu === evName);
+  
+  const workspaceTemplates = (eventObj?.whatsAppTemplates && eventObj.whatsAppTemplates.length > 0)
+    ? eventObj.whatsAppTemplates
+    : [
+        {
+          id: "tpl_student_pass",
+          name: "Official Student Invitation & Entry Pass",
+          isDefault: true,
+          text: C.whatsAppTplInvite || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026 - Official Invitation*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nWe are pleased to invite you and your family as our esteemed guests of honor to the *Annual Student Education Felicitation 2026*.\n\n📋 *Invitation Pass Details:*\n• *Transaction / Pass ID:* {TXN_ID}\n• *Invitee Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View & Download Official PDF Invitation Letter & Pass:*\n{INVITE_PDF_LINK}\n\nPlease show this digital pass or downloaded invitation letter at the registration desk upon arrival.\n\nWarm regards,\n*Central Working Committee (CWC) & Education Board*\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`
+        }
+      ];
+
+  const defaultTpl = workspaceTemplates.find(t => t.isDefault) || workspaceTemplates[0];
+  const [selectedTplId, setSelectedTplId] = useState(defaultTpl?.id || "tpl_student_pass");
+
+  const formatTemplateString = (tplString, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks) => {
+    const passUrl = `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}`.replace(/\/?$/, '') + `/?invite=${encodeURIComponent(rTxn || "")}`;
+    
+    let processed = (tplString || "")
+      .replace(/\{STUDENT_NAME\}/g, rName || "Student")
+      .replace(/\{TXN_ID\}/g, rTxn || "N/A")
+      .replace(/\{VIBHAG\}/g, rVibhag || "All Vibhags")
+      .replace(/\{STREAM\}/g, rStream || "N/A")
+      .replace(/\{PERCENTAGE\}/g, rPct || "N/A")
+      .replace(/\{REMARKS\}/g, rRemarks || "Application under review")
+      .replace(/\{MOBILE\}/g, rMobile || "")
+      .replace(/\{PORTAL_URL\}/g, passUrl)
+      .replace(/\{INVITE_PDF_LINK\}/g, passUrl)
+      .replace(/\{PASS_LINK\}/g, passUrl)
+      .replace(/\{WEBSITE_HOME\}/g, C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/")
+      .replace(/\{HELPLINE_PHONES\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209 / +91 9967821964")
+      .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209");
+
+    if (rTxn && rTxn !== 'N/A' && processed.includes("https://pradeepparmar902.github.io/MY_Community_Website/") && !processed.includes("?invite=") && !processed.includes("?pass=")) {
+      processed = processed.replace("https://pradeepparmar902.github.io/MY_Community_Website/", passUrl);
+    }
+    return processed;
+  };
+
+  const [customMessage, setCustomMessage] = useState(() => {
+    if (reg.isInviteMode && defaultTpl) {
+      return formatTemplateString(defaultTpl.text, rawName, rawMobile, txnId, vibhag, stream, percentage, remarks);
+    }
+    return buildTemplateForStatus(currentStatus, rawName, rawMobile, txnId, vibhag, stream, percentage, remarks);
+  });
+
+  const handleTemplateSelectChange = (tplId) => {
+    setSelectedTplId(tplId);
+    const chosen = workspaceTemplates.find(t => t.id === tplId);
+    if (chosen) {
+      setCustomMessage(formatTemplateString(chosen.text, rawName, rawMobile, txnId, vibhag, stream, percentage, remarks));
+    }
+  };
 
   useEffect(() => {
     const freshMobile = String(reg['Mobile Number'] || reg.submitterMob || reg['Alternate Mobile Number'] || reg.phone || '').replace(/\D/g, '').slice(-10);
@@ -19675,6 +20004,7 @@ function AdminInviteLetters({ mob, C, auth }) {
   const [bulkSelectMode, setBulkSelectMode] = useState(null);
   const [selectedWhatsAppReg, setSelectedWhatsAppReg] = useState(null);
   const [showInviteTplModal, setShowInviteTplModal] = useState(false);
+  const [showWorkspaceTplModal, setShowWorkspaceTplModal] = useState(false);
 
   const globalGuests = regs.filter(r => r.isGlobalGuest === true);
 
@@ -20150,7 +20480,17 @@ function AdminInviteLetters({ mob, C, auth }) {
              )}
          </div>
 
-         {/* WhatsApp Invite Letter Template Modal */}
+         {/* Workspace Multi-Template Modal */}
+      {showWorkspaceTplModal && (
+        <WorkspaceWhatsAppTemplateModal
+          event={activeEvent}
+          C={C}
+          setC={setC}
+          auth={auth}
+          onClose={() => setShowWorkspaceTplModal(false)}
+        />
+      )}
+      {/* WhatsApp Invite Letter Template Modal */}
          {showInviteTplModal && (
            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:100002,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowInviteTplModal(false)}>
              <div style={{background:"white",borderRadius:16,maxWidth:700,width:"100%",maxHeight:"90vh",overflowY:"auto",padding:24,boxShadow:"0 20px 40px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
@@ -20232,8 +20572,8 @@ function AdminInviteLetters({ mob, C, auth }) {
             <p style={{fontSize:".85rem",color:"var(--mu)",marginTop:4}}>Manage and release invite letters for: <strong>{activeEvent.title}</strong></p>
           </div>
           <div style={{display:"flex",gap:12,width:mob?"100%":"auto",flexWrap:"wrap"}}>
-            <button onClick={() => setShowInviteTplModal(true)} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:700,display:"flex",alignItems:"center",gap:6,background:"#F0FDF4",border:"1px solid #86EFAC",color:"#15803D",cursor:"pointer",boxShadow:"0 2px 8px rgba(21,128,61,0.15)",whiteSpace:"nowrap"}}>
-              📝 WhatsApp Invite Template
+            <button onClick={() => setShowWorkspaceTplModal(true)} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:700,display:"flex",alignItems:"center",gap:6,background:"#F0FDF4",border:"1px solid #86EFAC",color:"#15803D",cursor:"pointer",boxShadow:"0 2px 8px rgba(21,128,61,0.15)",whiteSpace:"nowrap"}}>
+              📝 Workspace WhatsApp Templates ({((activeEvent?.whatsAppTemplates && activeEvent.whatsAppTemplates.length > 0) ? activeEvent.whatsAppTemplates.length : 3)})
             </button>
             <button onClick={() => setShowImportGuestModal(true)} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:600,display:"flex",alignItems:"center",gap:6,background:"white",border:"1px solid var(--bd)",color:"var(--dt)",cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",whiteSpace:"nowrap"}}>
               + Import Special Guest
