@@ -7245,7 +7245,7 @@ function Admin({ C, setC, setPage, auth, onLogout, onShowLogin }) {
           {tab==="registrations" && hasAccess.includes("registrations") && <AdminRegistrations mob={mob} C={C} setC={setC} auth={auth}/>}
           {tab==="volunteers"&& hasAccess.includes("volunteers") && <Volunteers mob={mob} auth={auth} C={C}/>}
           {tab==="meritlist" && hasAccess.includes("meritlist") && <AdminMeritList mob={mob} C={C} auth={auth}/>}
-          {tab==="inviteletters" && hasAccess.includes("inviteletters") && <AdminInviteLetters mob={mob} C={C} auth={auth}/>}
+          {tab==="inviteletters" && hasAccess.includes("inviteletters") && <AdminInviteLetters mob={mob} C={C} setC={setC} auth={auth}/>}
           {tab==="certificates" && hasAccess.includes("certificates") && <AdminCertificates mob={mob} C={C} auth={auth}/>}
           {tab==="team"      && hasAccess.includes("team") && <AdminTeam mob={mob} C={C} setC={setC} auth={auth}/>}
           {tab==="gallery"   && hasAccess.includes("gallery") && <AdminGallery mob={mob} C={C} setC={setC} auth={auth}/>}
@@ -19976,7 +19976,7 @@ function AdminCertificates({ mob, C, auth }) {
 }
 
 
-function AdminInviteLetters({ mob, C, auth }) {
+function AdminInviteLetters({ mob, C, setC, auth }) {
   const [regs, setRegs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
