@@ -22680,13 +22680,13 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
 
 
 
-// ── Direct 1-Click Personalized Invitation Pass & PDF Downloader ──────────────
+// ── Direct 1-Click Personalized Invitation Pass & Instant PDF Viewer ──────────────
 function DirectInvitePassView({ C, auth }) {
   const [loading, setLoading] = useState(true);
   const [regData, setRegData] = useState(null);
   const [error, setError] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
-  const [pdfDownloaded, setPdfDownloaded] = useState(false);
 
   const searchParams = new URLSearchParams(window.location.search);
   const passId = searchParams.get('invite') || searchParams.get('pass') || searchParams.get('letter') || '';
@@ -22702,7 +22702,6 @@ function DirectInvitePassView({ C, auth }) {
       try {
         let regs = await fbFetchRegistrations(auth?.idToken).catch(() => []);
         if (!regs || regs.length === 0) {
-          // Public fallback fetch from Firestore
           const res = await fetch(`https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/registrations`);
           if (res.ok) {
             const data = await res.json();
@@ -22730,10 +22729,22 @@ function DirectInvitePassView({ C, auth }) {
 
         if (matched) {
           setRegData(matched);
-          // Auto-trigger PDF download on load
-          setTimeout(() => {
-            handleDownloadPDF(matched);
-          }, 800);
+          // Render PDF directly on screen
+          const evName = matched.eventName || matched.eventTitle || matched.eventId || "Education felicitation 2026";
+          const ev = (C.events || []).find(e => e.id === matched.eventId || e.title === evName || e.titleGu === evName) || {
+            title: "Education Felicitation 2026",
+            date: "02 Oct",
+            month: "2026",
+            location: "Mumbai, Maharashtra"
+          };
+          const sName = String(matched['Full Name'] || matched['Submitted By'] || matched['Participant Name'] || matched.name || 'Applicant').replace(/\|/g, ' ').trim();
+          
+          try {
+            const url = await generateCertificatePDF(ev, matched, sName, 'invite', 'url');
+            if (url) setPdfUrl(url);
+          } catch(e) {
+            console.error("Direct PDF render error:", e);
+          }
         } else {
           setError(`No matching registration record found for Pass ID "${passId}".`);
         }
@@ -22748,35 +22759,33 @@ function DirectInvitePassView({ C, auth }) {
     loadAndFetchPass();
   }, [passId]);
 
-  const handleDownloadPDF = async (r = regData) => {
-    if (!r) return;
+  const handleDownloadPDF = async () => {
+    if (!regData) return;
     setGeneratingPdf(true);
     try {
-      const evName = r.eventName || r.eventTitle || r.eventId || "Education felicitation 2026";
-      const ev = (C.events || []).find(e => e.id === r.eventId || e.title === evName || e.titleGu === evName) || {
+      const evName = regData.eventName || regData.eventTitle || regData.eventId || "Education felicitation 2026";
+      const ev = (C.events || []).find(e => e.id === regData.eventId || e.title === evName || e.titleGu === evName) || {
         title: "Education Felicitation 2026",
         date: "02 Oct",
         month: "2026",
         location: "Mumbai, Maharashtra"
       };
 
-      const sName = String(r['Full Name'] || r['Submitted By'] || r['Participant Name'] || r.name || 'Applicant').replace(/\|/g, ' ').trim();
-      const pdfBlob = await generateCertificatePDF(ev, r, sName, 'invite', 'blob');
+      const sName = String(regData['Full Name'] || regData['Submitted By'] || regData['Participant Name'] || regData.name || 'Applicant').replace(/\|/g, ' ').trim();
+      const pdfBlob = await generateCertificatePDF(ev, regData, sName, 'invite', 'blob');
 
       if (pdfBlob) {
         const url = URL.createObjectURL(pdfBlob);
         const link = document.createElement('a');
         link.href = url;
         const safeName = sName.replace(/[^a-z0-9]/gi, '_');
-        link.download = `Invitation_Letter_${safeName}_${r['Transaction ID'] || passId}.pdf`;
+        link.download = `Invitation_Letter_${safeName}_${regData['Transaction ID'] || passId}.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        setPdfDownloaded(true);
       }
     } catch (e) {
-      console.error("PDF generation error:", e);
-      alert("Could not generate PDF directly. You can view your pass details on this screen.");
+      console.error("PDF download error:", e);
     } finally {
       setGeneratingPdf(false);
     }
@@ -22788,31 +22797,60 @@ function DirectInvitePassView({ C, auth }) {
   const sStream = regData ? (regData['Stream / Class'] || regData['Stream'] || regData['Course'] || 'General') : '';
 
   return (
-    <div style={{minHeight:"100vh",background:"linear-gradient(135deg, #0F172A, #1E293B)",padding:"24px 16px",display:"flex",justifyContent:"center",alignItems:"center",fontFamily:"system-ui, -apple-system, sans-serif"}}>
-      <div style={{width:"100%",maxWidth:560,background:"white",borderRadius:20,overflow:"hidden",boxShadow:"0 25px 50px -12px rgba(0,0,0,0.5)"}}>
+    <div style={{minHeight:"100vh",background:"#0F172A",padding:"16px 12px",display:"flex",justifyContent:"center",alignItems:"flex-start",fontFamily:"system-ui, -apple-system, sans-serif"}}>
+      <div style={{width:"100%",maxWidth:680,background:"white",borderRadius:16,overflow:"hidden",boxShadow:"0 25px 50px -12px rgba(0,0,0,0.5)",display:"flex",flexDirection:"column"}}>
         
         {/* Header Branding */}
-        <div style={{background:"linear-gradient(135deg, #15803D, #166534)",color:"white",padding:"24px 20px",textAlign:"center"}}>
-          <div style={{fontSize:"2.4rem",marginBottom:8}}>🏛️</div>
-          <h1 style={{fontSize:"1.25rem",fontWeight:900,margin:0,letterSpacing:"0.5px",textTransform:"uppercase"}}>
-            Mumbai Meghwal Panchayat
-          </h1>
-          <div style={{fontSize:".85rem",opacity:0.9,marginTop:4,fontWeight:600}}>
-            🏆 Education Felicitation 2026 • Official Invitation Pass
+        <div style={{background:"linear-gradient(135deg, #15803D, #166534)",color:"white",padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:"1.8rem"}}>🏛️</span>
+            <div>
+              <h1 style={{fontSize:"1.05rem",fontWeight:900,margin:0,letterSpacing:"0.5px",textTransform:"uppercase"}}>
+                Mumbai Meghwal Panchayat
+              </h1>
+              <div style={{fontSize:".75rem",opacity:0.9,marginTop:2,fontWeight:600}}>
+                🏆 Education Felicitation 2026 • Official Invitation Pass
+              </div>
+            </div>
           </div>
+
+          {regData && (
+            <button
+              type="button"
+              onClick={handleDownloadPDF}
+              disabled={generatingPdf}
+              style={{
+                padding: "8px 14px",
+                background: "white",
+                color: "#15803D",
+                border: "none",
+                borderRadius: 8,
+                fontWeight: 800,
+                fontSize: ".8rem",
+                cursor: generatingPdf ? "wait" : "pointer",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                display: "flex",
+                alignItems: "center",
+                gap: 6
+              }}
+            >
+              <span>{generatingPdf ? "⏳" : "📥"}</span>
+              <span>{generatingPdf ? "Saving..." : "Save PDF File"}</span>
+            </button>
+          )}
         </div>
 
         {/* Content Body */}
-        <div style={{padding:"28px 24px"}}>
+        <div style={{padding:"16px",flex:1,display:"flex",flexDirection:"column",gap:14}}>
           {loading ? (
-            <div style={{textAlign:"center",padding:"40px 20px"}}>
-              <div style={{fontSize:"2.2rem",marginBottom:14,animation:"pulse 1.5s infinite"}}>⏳</div>
-              <div style={{fontSize:"1rem",fontWeight:700,color:"#0F172A"}}>Preparing Your Official Invitation Letter & Pass...</div>
-              <div style={{fontSize:".8rem",color:"#64748B",marginTop:6}}>Generating high-resolution signed PDF document</div>
+            <div style={{textAlign:"center",padding:"50px 20px"}}>
+              <div style={{fontSize:"2.4rem",marginBottom:14}}>⏳</div>
+              <div style={{fontSize:"1.05rem",fontWeight:800,color:"#0F172A"}}>Loading Your Official Invitation Letter...</div>
+              <div style={{fontSize:".82rem",color:"#64748B",marginTop:6}}>Opening high-resolution signed pass</div>
             </div>
           ) : error ? (
             <div style={{textAlign:"center",padding:"30px 16px"}}>
-              <div style={{fontSize:"2rem",marginBottom:12}}>⚠️</div>
+              <div style={{fontSize:"2.2rem",marginBottom:12}}>⚠️</div>
               <h3 style={{fontSize:"1.1rem",color:"#DC2626",margin:"0 0 8px 0"}}>{error}</h3>
               <p style={{fontSize:".85rem",color:"#64748B",marginBottom:20}}>Please check your Transaction ID or contact our helpline for assistance.</p>
               <a href="https://pradeepparmar902.github.io/MY_Community_Website/" style={{display:"inline-block",padding:"10px 20px",background:"#1E293B",color:"white",borderRadius:8,textDecoration:"none",fontSize:".85rem",fontWeight:700}}>
@@ -22820,107 +22858,97 @@ function DirectInvitePassView({ C, auth }) {
               </a>
             </div>
           ) : (
-            <div>
-              
-              {/* Invitee Card */}
-              <div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:14,padding:"18px 20px",marginBottom:20}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",borderBottom:"1px dashed #86EFAC",paddingBottom:12,marginBottom:12}}>
-                  <div>
-                    <span style={{fontSize:".75rem",fontWeight:800,color:"#15803D",textTransform:"uppercase",letterSpacing:"0.5px"}}>Guest of Honor</span>
-                    <div style={{fontSize:"1.2rem",fontWeight:900,color:"#0F172A",marginTop:2}}>
-                      {sName}
-                    </div>
+            <>
+              {/* Invitee Quick Info Banner */}
+              <div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:10,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                <div>
+                  <div style={{fontSize:".95rem",fontWeight:900,color:"#0F172A"}}>
+                    👤 {sName}
                   </div>
-                  <span style={{background:"#DCFCE7",color:"#15803D",padding:"4px 10px",borderRadius:20,fontSize:".75rem",fontWeight:800}}>
-                    Verified Pass
-                  </span>
-                </div>
-
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,fontSize:".82rem"}}>
-                  <div>
-                    <span style={{color:"#64748B",display:"block",fontSize:".72rem"}}>Pass / Txn ID:</span>
-                    <strong style={{color:"#0F172A",fontFamily:"monospace",fontSize:".9rem"}}>{sTxn}</strong>
-                  </div>
-                  <div>
-                    <span style={{color:"#64748B",display:"block",fontSize:".72rem"}}>Vibhag:</span>
-                    <strong style={{color:"#0F172A"}}>{sVibhag}</strong>
-                  </div>
-                  <div>
-                    <span style={{color:"#64748B",display:"block",fontSize:".72rem"}}>Stream / Class:</span>
-                    <strong style={{color:"#0F172A"}}>{sStream}</strong>
-                  </div>
-                  <div>
-                    <span style={{color:"#64748B",display:"block",fontSize:".72rem"}}>Status:</span>
-                    <strong style={{color:"#15803D"}}>🟢 Approved & Invited</strong>
+                  <div style={{fontSize:".74rem",color:"#15803D",fontWeight:700,marginTop:2}}>
+                    Pass ID: {sTxn} • {sVibhag} • {sStream}
                   </div>
                 </div>
+                <span style={{background:"#DCFCE7",color:"#15803D",padding:"3px 8px",borderRadius:12,fontSize:".72rem",fontWeight:800}}>
+                  🟢 Verified Guest of Honor
+                </span>
               </div>
 
-              {/* Event Schedule Info */}
-              <div style={{background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:12,padding:"16px 18px",marginBottom:24,fontSize:".84rem"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                  <span style={{fontSize:"1.1rem"}}>📅</span>
-                  <div>
-                    <strong>Date & Time:</strong> 02-10-2026 (Friday) • 09:30 AM
-                  </div>
+              {/* Direct Full-Screen Visual PDF Viewer / Letter Preview */}
+              {pdfUrl ? (
+                <div style={{border:"1px solid #CBD5E1",borderRadius:12,overflow:"hidden",background:"#F8FAFC",boxShadow:"0 4px 14px rgba(0,0,0,0.06)",position:"relative",minHeight:"60vh"}}>
+                  <object data={pdfUrl} type="application/pdf" style={{width:"100%",height:"100%",minHeight:"75vh",border:"none"}}>
+                    <iframe src={pdfUrl} style={{width:"100%",height:"100%",minHeight:"75vh",border:"none"}} title="Official Invitation Letter" />
+                  </object>
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:"1.1rem"}}>📍</span>
-                  <div>
-                    <strong>Venue:</strong> Mumbai, Maharashtra
-                  </div>
+              ) : (
+                <div style={{border:"2px dashed #CBD5E1",borderRadius:12,padding:30,textAlign:"center",background:"#FAFAFA"}}>
+                  <div style={{fontSize:"1.1rem",fontWeight:800,color:"#0F172A",marginBottom:6}}>🏛️ Official Invitation Details</div>
+                  <p style={{fontSize:".85rem",color:"#475569",lineHeight:1.6,margin:"0 auto 16px auto",maxWidth:480}}>
+                    We are pleased to invite <strong>{sName}</strong> and family to the <strong>Education Felicitation 2026</strong> on <strong>02-10-2026 (Friday) at 09:30 AM</strong> in Mumbai.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleDownloadPDF}
+                    style={{padding:"10px 20px",background:"#15803D",color:"white",borderRadius:8,border:"none",fontWeight:800,fontSize:".88rem",cursor:"pointer"}}
+                  >
+                    📥 Download Signed PDF
+                  </button>
                 </div>
-              </div>
+              )}
 
-              {/* Action Buttons */}
-              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {/* Action Bar */}
+              <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                 <button
                   type="button"
-                  onClick={() => handleDownloadPDF()}
+                  onClick={handleDownloadPDF}
                   disabled={generatingPdf}
                   style={{
-                    width: "100%",
-                    padding: "14px 20px",
+                    flex: 1,
+                    padding: "12px 16px",
                     background: "linear-gradient(135deg, #15803D, #166534)",
                     color: "white",
                     border: "none",
-                    borderRadius: 10,
+                    borderRadius: 8,
                     fontWeight: 800,
-                    fontSize: ".95rem",
-                    cursor: generatingPdf ? "wait" : "pointer",
-                    boxShadow: "0 4px 14px rgba(21,128,61,0.35)",
+                    fontSize: ".88rem",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 8px rgba(21,128,61,0.3)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: 8
+                    gap: 6
                   }}
                 >
-                  <span>{generatingPdf ? "⏳" : "📥"}</span>
-                  <span>{generatingPdf ? "Generating PDF..." : (pdfDownloaded ? "Download PDF Letter Again" : "Download Official PDF Invitation Letter")}</span>
+                  <span>📥</span>
+                  <span>Save PDF to Mobile</span>
                 </button>
 
-                <a 
+                <a
                   href="https://pradeepparmar902.github.io/MY_Community_Website/"
                   style={{
-                    textAlign: "center",
-                    padding: "10px",
-                    color: "#64748B",
+                    padding: "12px 16px",
+                    background: "#F1F5F9",
+                    color: "#334155",
+                    borderRadius: 8,
+                    textDecoration: "none",
+                    fontWeight: 700,
                     fontSize: ".82rem",
-                    fontWeight: 600,
-                    textDecoration: "none"
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
                   }}
                 >
-                  ← Return to Community Portal
+                  Visit Community Portal →
                 </a>
               </div>
-
-            </div>
+            </>
           )}
         </div>
 
         {/* Footer */}
-        <div style={{background:"#F8FAFC",borderTop:"1px solid #E2E8F0",padding:"14px 20px",textAlign:"center",fontSize:".75rem",color:"#64748B"}}>
-          📞 Helpline: +91 9820785209 / +91 9967821964 • Mumbai Meghwal Panchayat
+        <div style={{background:"#F8FAFC",borderTop:"1px solid #E2E8F0",padding:"12px 16px",textAlign:"center",fontSize:".72rem",color:"#64748B"}}>
+          📞 Committee Helpline: +91 9820785209 / +91 9967821964 • Mumbai Meghwal Panchayat
         </div>
 
       </div>
