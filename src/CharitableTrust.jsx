@@ -17364,7 +17364,9 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
       tpl = C.whatsAppTplPending || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nThank you for submitting your registration for *Education Felicitation 2026*.\n\n📋 *Application Summary:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Current Status:* ⏳ *Under Verification / Review*\n\nOur Verification Committee is currently reviewing your submitted details and documents. You will receive an update once the verification is completed.\n\n👉 Track your live application status on your student dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
     }
 
-    return tpl
+    const passUrl = `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}`.replace(/\/?$/, '') + `/?invite=${encodeURIComponent(rTxn || "")}`;
+    
+    let processed = tpl
       .replace(/\{STUDENT_NAME\}/g, rName || "Student")
       .replace(/\{TXN_ID\}/g, rTxn || "N/A")
       .replace(/\{VIBHAG\}/g, rVibhag || "All Vibhags")
@@ -17372,11 +17374,19 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
       .replace(/\{PERCENTAGE\}/g, rPct || "N/A")
       .replace(/\{REMARKS\}/g, rRemarks || "Application under review")
       .replace(/\{MOBILE\}/g, rMobile || "")
-      .replace(/\{PORTAL_URL\}/g, `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}?invite=${encodeURIComponent(rTxn || "")}`)
-      .replace(/\{INVITE_PDF_LINK\}/g, `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}?invite=${encodeURIComponent(rTxn || "")}`)
+      .replace(/\{PORTAL_URL\}/g, passUrl)
+      .replace(/\{INVITE_PDF_LINK\}/g, passUrl)
+      .replace(/\{PASS_LINK\}/g, passUrl)
       .replace(/\{WEBSITE_HOME\}/g, C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/")
       .replace(/\{HELPLINE_PHONES\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209 / +91 9967821964")
       .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209");
+
+    // If template has hardcoded base website URL without ?invite= query parameter, automatically append ?invite=rTxn
+    if (rTxn && rTxn !== 'N/A' && processed.includes("https://pradeepparmar902.github.io/MY_Community_Website/") && !processed.includes("?invite=") && !processed.includes("?pass=")) {
+      processed = processed.replace("https://pradeepparmar902.github.io/MY_Community_Website/", passUrl);
+    }
+
+    return processed;
   };
 
   const [customMessage, setCustomMessage] = useState(() => 
@@ -22690,10 +22700,29 @@ function DirectInvitePassView({ C, auth }) {
       }
 
       try {
-        const regs = await fbFetchRegistrations(auth?.idToken).catch(() => []);
+        let regs = await fbFetchRegistrations(auth?.idToken).catch(() => []);
+        if (!regs || regs.length === 0) {
+          // Public fallback fetch from Firestore
+          const res = await fetch(`https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/registrations`);
+          if (res.ok) {
+            const data = await res.json();
+            regs = (data.documents || []).map(doc => {
+              const f = doc.fields || {};
+              const obj = { id: doc.name.split('/').pop() };
+              Object.keys(f).forEach(k => {
+                const valObj = f[k];
+                if (valObj.stringValue !== undefined) obj[k] = valObj.stringValue;
+                else if (valObj.integerValue !== undefined) obj[k] = parseInt(valObj.integerValue, 10);
+                else if (valObj.booleanValue !== undefined) obj[k] = valObj.booleanValue;
+              });
+              return obj;
+            });
+          }
+        }
+
         const cleanPass = String(passId).trim().toLowerCase();
         
-        const matched = regs.find(r => {
+        const matched = (regs || []).find(r => {
           const tId = String(r['Transaction ID'] || r.transactionId || r.id || '').toLowerCase().trim();
           const mob = String(r['Mobile Number'] || r.submitterMob || r.phone || '').replace(/\D/g, '').slice(-10);
           return tId === cleanPass || tId.endsWith('-' + cleanPass) || mob === cleanPass || r.id === passId;
