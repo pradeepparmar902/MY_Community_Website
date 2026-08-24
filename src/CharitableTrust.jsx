@@ -20702,6 +20702,17 @@ function AdminInviteLetters({ mob, C, auth }) {
         </div>
       )}
 
+      {/* Workspace Multi-Template Modal */}
+      {showWorkspaceTplModal && (
+        <WorkspaceWhatsAppTemplateModal
+          event={activeEvent}
+          C={C}
+          setC={setC}
+          auth={auth}
+          onClose={() => setShowWorkspaceTplModal(false)}
+        />
+      )}
+
       {/* Global Guests Modal */}
       {showGlobalGuestsModal && renderGlobalGuestsModal()}
 
