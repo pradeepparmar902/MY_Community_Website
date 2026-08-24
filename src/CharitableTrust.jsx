@@ -17334,6 +17334,397 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }
 
 // ── WhatsApp Applicant Communication Modal ───────────────────────────────────────
 
+
+// ── Bulk / Broadcast WhatsApp Message Sender Modal ──────────────────────────────
+function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
+  if (!event || recipients.length === 0) return null;
+
+  const defaultWorkspaceTemplates = [
+    {
+      id: "tpl_student_pass",
+      name: "Official Student Invitation & Entry Pass",
+      isDefault: true,
+      text: C.whatsAppTplInvite || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026 - Official Invitation*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nWe are pleased to invite you and your family as our esteemed guests of honor to the *Annual Student Education Felicitation 2026*.\n\n📋 *Invitation Pass Details:*\n• *Transaction / Pass ID:* {TXN_ID}\n• *Invitee Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View & Download Official PDF Invitation Letter & Pass:*\n{INVITE_PDF_LINK}\n\nPlease show this digital pass or downloaded invitation letter at the registration desk upon arrival.\n\nWarm regards,\n*Central Working Committee (CWC) & Education Board*\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`
+    },
+    {
+      id: "tpl_vip_guest",
+      name: "VIP / Special Dignitary Invitation",
+      isDefault: false,
+      text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🌟 *Special Dignitary Invitation - Education Felicitation 2026*\n═══════════════════════\nRespected *{STUDENT_NAME}* Ji,\n\nOn behalf of Mumbai Meghwal Panchayat & Vidya Gohil Charitable Trust, we cordially request the honor of your esteemed presence as our *Special Guest of Honor* at our upcoming Annual Education Felicitation Ceremony.\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View Official Digital Invitation Pass:*\n{INVITE_PDF_LINK}\n\nWe look forward to welcoming you and celebrating together.\n\nWarm regards,\n*President & Central Working Committee (CWC)*\n📞 Helpline: {HELPLINE_PHONES}`
+    },
+    {
+      id: "tpl_event_reminder",
+      name: "Event Reminder & Reporting Time Notice",
+      isDefault: false,
+      text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n⏰ *Gentle Reminder: Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nThis is a gentle reminder that the *Annual Student Education Felicitation Ceremony* is scheduled for *02-10-2026 (Friday)*.\n\n• *Invitee Name:* {STUDENT_NAME}\n• *Pass / Txn ID:* {TXN_ID}\n• *Reporting Time:* 09:30 AM Sharp\n• *Venue:* Mumbai, Maharashtra\n\n👉 *Open Your Digital Pass on Mobile:*\n{INVITE_PDF_LINK}\n\nPlease carry your digital pass on your phone for smooth verification at the venue.\n\nWarm regards,\n*Event Management Team*`
+    }
+  ];
+
+  const workspaceTemplates = (event?.whatsAppTemplates && event.whatsAppTemplates.length > 0)
+    ? event.whatsAppTemplates
+    : defaultWorkspaceTemplates;
+
+  const defaultTpl = workspaceTemplates.find(t => t.isDefault) || workspaceTemplates[0];
+  const [selectedTplId, setSelectedTplId] = useState(defaultTpl?.id || "tpl_student_pass");
+  
+  const activeTemplate = workspaceTemplates.find(t => t.id === selectedTplId) || defaultTpl;
+
+  const gateway = C.whatsAppGateway || {};
+  const isApiEnabled = gateway.enabled && gateway.instanceId && gateway.token;
+
+  // Broadcast execution states
+  const [broadcasting, setBroadcasting] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [sentCount, setSentCount] = useState(0);
+  const [failCount, setFailCount] = useState(0);
+  const [broadcastDone, setBroadcastDone] = useState(false);
+  const [launchMode, setLaunchMode] = useState(() => localStorage.getItem("mmp_wa_launch_mode") || "web");
+
+  const formatMessageForReg = (r) => {
+    const rName = String(r['Full Name'] || r['Submitted By'] || r['Participant Name'] || r.name || 'Applicant').replace(/\|/g, ' ').trim();
+    const rMobile = String(r['Mobile Number'] || r.submitterMob || r['Alternate Mobile Number'] || r.phone || '').replace(/\D/g, '').slice(-10);
+    const rTxn = r['Transaction ID'] || r.transactionId || r.id || 'N/A';
+    const rVibhag = r['Vibhag'] || r.vibhag || r['MMP Vibhag'] || 'All Vibhags';
+    const rStream = r['Stream / Class'] || r['Stream'] || r['Course'] || 'N/A';
+    const rPct = r['% Obtained'] || r.percentage || r['Marks / Percentage'] || 'N/A';
+    const rRemarks = r['Remarks'] || r.remarks || 'Application under review';
+
+    const passUrl = `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}`.replace(/\/?$/, '') + `/?invite=${encodeURIComponent(rTxn || "")}`;
+    
+    let processed = (activeTemplate?.text || "")
+      .replace(/\{STUDENT_NAME\}/g, rName || "Student")
+      .replace(/\{TXN_ID\}/g, rTxn || "N/A")
+      .replace(/\{VIBHAG\}/g, rVibhag || "All Vibhags")
+      .replace(/\{STREAM\}/g, rStream || "N/A")
+      .replace(/\{PERCENTAGE\}/g, rPct || "N/A")
+      .replace(/\{REMARKS\}/g, rRemarks || "Application under review")
+      .replace(/\{MOBILE\}/g, rMobile || "")
+      .replace(/\{PORTAL_URL\}/g, passUrl)
+      .replace(/\{INVITE_PDF_LINK\}/g, passUrl)
+      .replace(/\{PASS_LINK\}/g, passUrl)
+      .replace(/\{WEBSITE_HOME\}/g, C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/")
+      .replace(/\{HELPLINE_PHONES\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209 / +91 9967821964")
+      .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209");
+
+    if (rTxn && rTxn !== 'N/A' && processed.includes("https://pradeepparmar902.github.io/MY_Community_Website/") && !processed.includes("?invite=") && !processed.includes("?pass=")) {
+      processed = processed.replace("https://pradeepparmar902.github.io/MY_Community_Website/", passUrl);
+    }
+    return processed;
+  };
+
+  // Automated API Gateway Broadcast
+  const startApiBroadcast = async () => {
+    setBroadcasting(true);
+    setSentCount(0);
+    setFailCount(0);
+    setBroadcastDone(false);
+
+    for (let i = 0; i < recipients.length; i++) {
+      setCurrentIndex(i);
+      const r = recipients[i];
+      const phone = String(r['Mobile Number'] || r.submitterMob || r['Alternate Mobile Number'] || r.phone || '').replace(/\D/g, '').slice(-10);
+      
+      if (!phone || phone.length < 10) {
+        setFailCount(prev => prev + 1);
+        continue;
+      }
+
+      const msg = formatMessageForReg(r);
+
+      try {
+        let apiUrl = "";
+        let payload = {};
+        let res = null;
+
+        if (gateway.provider === "meta") {
+          apiUrl = `https://graph.facebook.com/v19.0/${gateway.instanceId}/messages`;
+          res = await fetch(apiUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${gateway.token}`
+            },
+            body: JSON.stringify({
+              messaging_product: "whatsapp",
+              recipient_type: "individual",
+              to: `91${phone}`,
+              type: "text",
+              text: { preview_url: true, body: msg }
+            })
+          });
+        } else if (gateway.provider === "greenapi") {
+          apiUrl = `https://api.green-api.com/waInstance${gateway.instanceId}/sendMessage/${gateway.token}`;
+          payload = { chatId: `91${phone}@c.us`, message: msg };
+          res = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+        } else {
+          apiUrl = `https://api.ultramsg.com/${gateway.instanceId}/messages/chat`;
+          payload = { token: gateway.token, to: `+91${phone}`, body: msg };
+          res = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+        }
+
+        if (res && res.ok) {
+          setSentCount(prev => prev + 1);
+        } else {
+          setFailCount(prev => prev + 1);
+        }
+      } catch (err) {
+        setFailCount(prev => prev + 1);
+      }
+
+      // Safe rate-limiting delay between messages
+      await new Promise(resolve => setTimeout(resolve, 800));
+    }
+
+    setBroadcasting(false);
+    setBroadcastDone(true);
+  };
+
+  // Step-by-Step Rapid Sender for Web/App Protocol
+  const currentReg = recipients[currentIndex] || recipients[0];
+  const currentPhone = String(currentReg?.['Mobile Number'] || currentReg?.submitterMob || currentReg?.['Alternate Mobile Number'] || currentReg?.phone || '').replace(/\D/g, '').slice(-10);
+  const currentName = String(currentReg?.['Full Name'] || currentReg?.['Submitted By'] || currentReg?.['Participant Name'] || currentReg?.name || 'Applicant').replace(/\|/g, ' ').trim();
+  const currentMsg = formatMessageForReg(currentReg);
+
+  const sendSingleAndAdvance = () => {
+    if (!currentPhone || currentPhone.length < 10) {
+      alert(`Invalid phone number for ${currentName}`);
+      if (currentIndex < recipients.length - 1) setCurrentIndex(prev => prev + 1);
+      return;
+    }
+
+    try { navigator.clipboard.writeText(currentMsg); } catch(e){}
+
+    if (launchMode === "app") {
+      const appUrl = `whatsapp://send?phone=91${currentPhone}&text=${encodeURIComponent(currentMsg)}`;
+      window.location.href = appUrl;
+    } else {
+      const webUrl = `https://web.whatsapp.com/send?phone=91${currentPhone}&text=${encodeURIComponent(currentMsg)}`;
+      window.open(webUrl, "_blank");
+    }
+
+    setSentCount(prev => prev + 1);
+    if (currentIndex < recipients.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    } else {
+      setBroadcastDone(true);
+    }
+  };
+
+  const samplePreview = formatMessageForReg(recipients[0]);
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100004,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:"white",borderRadius:16,maxWidth:720,width:"100%",maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 25px 50px -12px rgba(0,0,0,0.35)"}} onClick={e=>e.stopPropagation()}>
+        
+        {/* Header */}
+        <div style={{padding:"18px 24px",background:"linear-gradient(135deg, #15803D, #166534)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <h3 style={{fontSize:"1.15rem",fontWeight:800,margin:0,display:"flex",alignItems:"center",gap:8}}>
+              <span>📢</span> Send All WhatsApp Messages ({recipients.length} Recipients)
+            </h3>
+            <div style={{fontSize:".8rem",opacity:0.9,marginTop:2}}>
+              Broadcast personalized invitation passes & letters to all {recipients.length} approved invitees for {event.title}.
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:32,height:32,color:"white",cursor:"pointer",fontWeight:800}}>✕</button>
+        </div>
+
+        {/* Content */}
+        <div style={{padding:"20px 24px",overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:16}}>
+          
+          {/* Template Selection */}
+          <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"14px 16px"}}>
+            <div style={{fontSize:".82rem",fontWeight:800,color:"#15803D",marginBottom:6}}>1. CHOOSE WHATSAPP TEMPLATE TO BROADCAST:</div>
+            <select
+              value={selectedTplId}
+              onChange={e => setSelectedTplId(e.target.value)}
+              disabled={broadcasting}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1.5px solid #15803D",
+                fontSize: ".88rem",
+                fontWeight: 700,
+                color: "#14532D",
+                background: "white",
+                cursor: "pointer"
+              }}
+            >
+              {workspaceTemplates.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.name} {t.isDefault ? "★ (Default)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Mode Info Card */}
+          {isApiEnabled ? (
+            <div style={{background:"#EFF6FF",border:"1px solid #BFDBFE",borderRadius:10,padding:"14px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                <span style={{fontSize:"1.1rem"}}>⚡</span>
+                <strong style={{fontSize:".88rem",color:"#1E40AF"}}>Automated Background API Gateway Active ({gateway.provider?.toUpperCase()})</strong>
+              </div>
+              <p style={{fontSize:".8rem",color:"#3B82F6",margin:0,lineHeight:1.4}}>
+                Messages will be sent silently in the background with zero popups or browser tabs.
+              </p>
+            </div>
+          ) : (
+            <div style={{background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:10,padding:"14px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:6}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:"1.1rem"}}>🚀</span>
+                  <strong style={{fontSize:".86rem",color:"#92400E"}}>Fast Sequential WhatsApp Runner</strong>
+                </div>
+                <div style={{display:"flex",gap:4}}>
+                  <button
+                    type="button"
+                    onClick={() => { setLaunchMode("app"); localStorage.setItem("mmp_wa_launch_mode", "app"); }}
+                    style={{padding:"3px 8px",borderRadius:4,fontSize:".72rem",fontWeight:800,border:"none",background:launchMode==="app"?"#15803D":"#E2E8F0",color:launchMode==="app"?"white":"#475569",cursor:"pointer"}}
+                  >
+                    💻 App (0 Tabs)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setLaunchMode("web"); localStorage.setItem("mmp_wa_launch_mode", "web"); }}
+                    style={{padding:"3px 8px",borderRadius:4,fontSize:".72rem",fontWeight:800,border:"none",background:launchMode==="web"?"#2563EB":"#E2E8F0",color:launchMode==="web"?"white":"#475569",cursor:"pointer"}}
+                  >
+                    🌐 Web Browser
+                  </button>
+                </div>
+              </div>
+              <p style={{fontSize:".78rem",color:"#78350F",margin:0,lineHeight:1.4}}>
+                Click <strong>Send & Advance</strong> below. Each student's phone and personalized invitation will be opened in WhatsApp sequentially.
+              </p>
+            </div>
+          )}
+
+          {/* Progress Bar (When broadcasting or running) */}
+          {(broadcasting || broadcastDone || sentCount > 0) && (
+            <div style={{background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"14px 16px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,fontSize:".82rem"}}>
+                <strong style={{color:"#0F172A"}}>Broadcast Progress:</strong>
+                <span style={{fontWeight:800,color:"#15803D"}}>
+                  {sentCount} of {recipients.length} Sent ({Math.round(((sentCount) / recipients.length) * 100)}%)
+                </span>
+              </div>
+              <div style={{width:"100%",height:10,background:"#E2E8F0",borderRadius:6,overflow:"hidden"}}>
+                <div
+                  style={{
+                    width: `${Math.round(((sentCount) / recipients.length) * 100)}%`,
+                    height: "100%",
+                    background: "linear-gradient(90deg, #22C55E, #15803D)",
+                    transition: "width 0.3s"
+                  }}
+                />
+              </div>
+              {failCount > 0 && (
+                <div style={{fontSize:".74rem",color:"#DC2626",marginTop:6,fontWeight:700}}>
+                  ⚠️ {failCount} recipients skipped due to invalid phone numbers.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sample Message Preview */}
+          <div>
+            <div style={{fontSize:".78rem",fontWeight:700,color:"#475569",marginBottom:6}}>
+              PREVIEW (Sample for 1st recipient: {String(recipients[0]?.['Full Name'] || 'Student')}):
+            </div>
+            <textarea
+              value={samplePreview}
+              readOnly
+              rows={8}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: "1px solid #CBD5E1",
+                fontSize: ".8rem",
+                fontFamily: "monospace",
+                background: "#FAFDF7",
+                color: "#334155",
+                boxSizing: "border-box"
+              }}
+            />
+          </div>
+
+        </div>
+
+        {/* Footer Actions */}
+        <div style={{padding:"16px 24px",background:"#F8FAFC",borderTop:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+          <button onClick={onClose} style={{padding:"9px 16px",borderRadius:8,background:"white",border:"1px solid #CBD5E1",fontSize:".85rem",cursor:"pointer",fontWeight:600}}>
+            {broadcastDone ? "Done / Close" : "Cancel"}
+          </button>
+
+          {isApiEnabled ? (
+            <button
+              type="button"
+              onClick={startApiBroadcast}
+              disabled={broadcasting || broadcastDone}
+              style={{
+                padding: "10px 24px",
+                borderRadius: 8,
+                background: broadcastDone ? "#15803D" : "linear-gradient(135deg, #15803D, #166534)",
+                color: "white",
+                border: "none",
+                fontSize: ".9rem",
+                fontWeight: 800,
+                cursor: broadcasting ? "wait" : "pointer",
+                boxShadow: "0 2px 8px rgba(21,128,61,0.3)",
+                display: "flex",
+                alignItems: "center",
+                gap: 8
+              }}
+            >
+              <span>{broadcasting ? "⏳" : broadcastDone ? "✅" : "🚀"}</span>
+              <span>{broadcasting ? `Broadcasting (${currentIndex + 1}/${recipients.length})...` : broadcastDone ? "All Messages Sent!" : `Send All ${recipients.length} Messages`}</span>
+            </button>
+          ) : (
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:".8rem",color:"#64748B",fontWeight:600}}>
+                Student {currentIndex + 1} of {recipients.length}: <strong>{currentName}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={sendSingleAndAdvance}
+                disabled={broadcastDone}
+                style={{
+                  padding: "10px 20px",
+                  borderRadius: 8,
+                  background: broadcastDone ? "#15803D" : "linear-gradient(135deg, #25D366, #15803D)",
+                  color: "white",
+                  border: "none",
+                  fontSize: ".88rem",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  boxShadow: "0 2px 8px rgba(37,211,102,0.35)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6
+                }}
+              >
+                <span>{broadcastDone ? "✅" : "🟢"}</span>
+                <span>{broadcastDone ? "All Sent!" : `Send to ${currentName.split(' ')[0]} & Next (${currentIndex + 1}/${recipients.length}) →`}</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 // ── Workspace-Specific Multi-Template Manager Modal ──────────────────────────────
 function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
   if (!event) return null;
@@ -20053,6 +20444,7 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   const [selectedWhatsAppReg, setSelectedWhatsAppReg] = useState(null);
   const [showInviteTplModal, setShowInviteTplModal] = useState(false);
   const [showWorkspaceTplModal, setShowWorkspaceTplModal] = useState(false);
+  const [showBulkWhatsAppModal, setShowBulkWhatsAppModal] = useState(false);
 
   const globalGuests = regs.filter(r => r.isGlobalGuest === true);
 
@@ -20528,7 +20920,17 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
              )}
          </div>
 
-         {/* Workspace Multi-Template Modal */}
+         {/* Bulk WhatsApp Broadcast Modal */}
+      {showBulkWhatsAppModal && (
+        <BulkWhatsAppBroadcastModal
+          event={activeEvent}
+          recipients={filteredRegs}
+          C={C}
+          onClose={() => setShowBulkWhatsAppModal(false)}
+        />
+      )}
+
+      {/* Workspace Multi-Template Modal */}
       {showWorkspaceTplModal && (
         <WorkspaceWhatsAppTemplateModal
           event={activeEvent}
@@ -20643,6 +21045,12 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
             </button>
             <button onClick={handleReleaseAll} disabled={releasingAll || refreshing || downloadingBulk || downloadingEnvelopes} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:600,display:"flex",alignItems:"center",gap:6,background:"var(--dt)",color:"white",border:"none",cursor:(releasingAll || refreshing || downloadingBulk || downloadingEnvelopes)?"wait":"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.1)",whiteSpace:"nowrap"}}>
               {releasingAll ? "Releasing..." : "📢 Release All"}
+            </button>
+            <button onClick={() => {
+              if (filteredRegs.length === 0) return alert("No approved invitees available to send.");
+              setShowBulkWhatsAppModal(true);
+            }} style={{padding:"8px 18px",borderRadius:8,fontSize:".85rem",fontWeight:800,display:"flex",alignItems:"center",gap:6,background:"#25D366",color:"white",border:"none",cursor:"pointer",boxShadow:"0 2px 8px rgba(37,211,102,0.35)",whiteSpace:"nowrap"}}>
+              <span>🚀</span> Send All WhatsApp ({filteredRegs.length})
             </button>
             <button onClick={handleBulkDownload} disabled={downloadingBulk || releasingAll || refreshing || downloadingEnvelopes} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:600,display:"flex",alignItems:"center",gap:6,background:"var(--sf)",color:"white",border:"none",cursor:(downloadingBulk || releasingAll || refreshing || downloadingEnvelopes)?"wait":"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.1)",whiteSpace:"nowrap"}}>
               {downloadingBulk ? `Generating ZIP (${downloadProgress}/${filteredRegs.length})...` : "📦 Bulk Download ZIP"}
