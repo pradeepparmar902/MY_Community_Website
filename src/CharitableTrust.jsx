@@ -21158,6 +21158,16 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
         </div>
       )}
 
+      {/* Bulk WhatsApp Broadcast Modal */}
+      {showBulkWhatsAppModal && (
+        <BulkWhatsAppBroadcastModal
+          event={activeEvent}
+          recipients={filteredRegs}
+          C={C}
+          onClose={() => setShowBulkWhatsAppModal(false)}
+        />
+      )}
+
       {/* Workspace Multi-Template Modal */}
       {showWorkspaceTplModal && (
         <WorkspaceWhatsAppTemplateModal
