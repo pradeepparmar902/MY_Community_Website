@@ -17338,7 +17338,6 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }
 function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
   if (!event) return null;
 
-  // Initialize templates if not present
   const defaultTemplates = [
     {
       id: "tpl_student_pass",
@@ -17457,7 +17456,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:32,height:32,color:"white",cursor:"pointer",fontWeight:800}}>✕</button>
         </div>
 
-        {/* Body (Split: Sidebar Templates List | Right Editor) */}
+        {/* Body */}
         <div style={{display:"flex",flex:1,overflow:"hidden"}}>
           
           {/* Left: Templates List */}
@@ -17609,6 +17608,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
   );
 }
 
+// ── WhatsApp Applicant Communication Modal ───────────────────────────────────────
 function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSelectReg }) {
   if (!reg) return null;
 
@@ -17625,60 +17625,33 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
   const currentIndex = allRegs.findIndex(r => r.id === reg.id || (r['Transaction ID'] && r['Transaction ID'] === reg['Transaction ID']));
   const totalCount = allRegs.length;
 
-  const buildTemplateForStatus = (st, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks) => {
-    let tpl = "";
-    if (reg.isInviteMode) {
-      tpl = C.whatsAppTplInvite || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026 - Official Invitation*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nWe are pleased to invite you and your family as our esteemed guests of honor to the *Annual Student Education Felicitation 2026*.\n\n📋 *Invitation Pass Details:*\n• *Transaction / Pass ID:* {TXN_ID}\n• *Invitee Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *Download Official PDF Invitation Letter & Entry Pass:*\n{PORTAL_URL}\n\nPlease show this digital pass or downloaded invitation letter at the registration desk upon arrival.\n\nWarm regards,\n*Central Working Committee (CWC) & Education Board*\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
-    } else if (st === "Approved") {
-      tpl = C.whatsAppTplApproved || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Percentage:* {PERCENTAGE}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai (Official venue, schedule & invitation letter will be shared soon)\n\n👉 View your application & student certificate on your dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
-    } else if (st === "Needs Info") {
-      tpl = C.whatsAppTplNeedsInfo || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nYour application (*{TXN_ID}*) for *Education Felicitation 2026* requires additional information or document correction for verification.\n\n⚠️ *Committee Remarks / Action Required:*\n👉 *{REMARKS}*\n\n📝 *How to Update Your Application:*\n1. Open portal: {PORTAL_URL}\n2. Log in with registered mobile: *+91 {MOBILE}*\n3. Go to *My Dashboard* > *Registrations*\n4. Click *Edit & Resubmit* and update the requested document/details.\n\nPlease complete this at the earliest to confirm your felicitation eligibility.\n\nWarm regards,\n*Education Verification Committee*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
-    } else if (st === "Disapproved") {
-      tpl = C.whatsAppTplDisapproved || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nRegarding your application (*{TXN_ID}*) for *Education Felicitation 2026*.\n\n• *Status:* 🔴 *Not Approved*\n• *Reason / Remarks:* {REMARKS}\n\nIf you believe this is an error or need clarification, please contact your Vibhag Committee Member or our helpline.\n\nWarm regards,\n*Education Committee*\n📞 Helpline: +91 9820785209`;
-    } else {
-      // Default for "Pending" or any unreviewed entry: Under Verification message
-      tpl = C.whatsAppTplPending || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nThank you for submitting your registration for *Education Felicitation 2026*.\n\n📋 *Application Summary:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Current Status:* ⏳ *Under Verification / Review*\n\nOur Verification Committee is currently reviewing your submitted details and documents. You will receive an update once the verification is completed.\n\n👉 Track your live application status on your student dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
-    }
-
-    const passUrl = `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}`.replace(/\/?$/, '') + `/?invite=${encodeURIComponent(rTxn || "")}`;
-    
-    let processed = tpl
-      .replace(/\{STUDENT_NAME\}/g, rName || "Student")
-      .replace(/\{TXN_ID\}/g, rTxn || "N/A")
-      .replace(/\{VIBHAG\}/g, rVibhag || "All Vibhags")
-      .replace(/\{STREAM\}/g, rStream || "N/A")
-      .replace(/\{PERCENTAGE\}/g, rPct || "N/A")
-      .replace(/\{REMARKS\}/g, rRemarks || "Application under review")
-      .replace(/\{MOBILE\}/g, rMobile || "")
-      .replace(/\{PORTAL_URL\}/g, passUrl)
-      .replace(/\{INVITE_PDF_LINK\}/g, passUrl)
-      .replace(/\{PASS_LINK\}/g, passUrl)
-      .replace(/\{WEBSITE_HOME\}/g, C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/")
-      .replace(/\{HELPLINE_PHONES\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209 / +91 9967821964")
-      .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209");
-
-    // If template has hardcoded base website URL without ?invite= query parameter, automatically append ?invite=rTxn
-    if (rTxn && rTxn !== 'N/A' && processed.includes("https://pradeepparmar902.github.io/MY_Community_Website/") && !processed.includes("?invite=") && !processed.includes("?pass=")) {
-      processed = processed.replace("https://pradeepparmar902.github.io/MY_Community_Website/", passUrl);
-    }
-
-    return processed;
-  };
-
-  // Find workspace event and its templates
   const evName = reg.eventName || reg.eventTitle || reg.eventId || "Education felicitation 2026";
   const eventObj = (C.events || []).find(e => e.id === reg.eventId || e.title === evName || e.titleGu === evName);
   
+  const defaultWorkspaceTemplates = [
+    {
+      id: "tpl_student_pass",
+      name: "Official Student Invitation & Entry Pass",
+      isDefault: true,
+      text: C.whatsAppTplInvite || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026 - Official Invitation*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nWe are pleased to invite you and your family as our esteemed guests of honor to the *Annual Student Education Felicitation 2026*.\n\n📋 *Invitation Pass Details:*\n• *Transaction / Pass ID:* {TXN_ID}\n• *Invitee Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View & Download Official PDF Invitation Letter & Pass:*\n{INVITE_PDF_LINK}\n\nPlease show this digital pass or downloaded invitation letter at the registration desk upon arrival.\n\nWarm regards,\n*Central Working Committee (CWC) & Education Board*\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`
+    },
+    {
+      id: "tpl_vip_guest",
+      name: "VIP / Special Dignitary Invitation",
+      isDefault: false,
+      text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🌟 *Special Dignitary Invitation - Education Felicitation 2026*\n═══════════════════════\nRespected *{STUDENT_NAME}* Ji,\n\nOn behalf of Mumbai Meghwal Panchayat & Vidya Gohil Charitable Trust, we cordially request the honor of your esteemed presence as our *Special Guest of Honor* at our upcoming Annual Education Felicitation Ceremony.\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View Official Digital Invitation Pass:*\n{INVITE_PDF_LINK}\n\nWe look forward to welcoming you and celebrating together.\n\nWarm regards,\n*President & Central Working Committee (CWC)*\n📞 Helpline: {HELPLINE_PHONES}`
+    },
+    {
+      id: "tpl_event_reminder",
+      name: "Event Reminder & Reporting Time Notice",
+      isDefault: false,
+      text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n⏰ *Gentle Reminder: Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nThis is a gentle reminder that the *Annual Student Education Felicitation Ceremony* is scheduled for *02-10-2026 (Friday)*.\n\n• *Invitee Name:* {STUDENT_NAME}\n• *Pass / Txn ID:* {TXN_ID}\n• *Reporting Time:* 09:30 AM Sharp\n• *Venue:* Mumbai, Maharashtra\n\n👉 *Open Your Digital Pass on Mobile:*\n{INVITE_PDF_LINK}\n\nPlease carry your digital pass on your phone for smooth verification at the venue.\n\nWarm regards,\n*Event Management Team*`
+    }
+  ];
+
   const workspaceTemplates = (eventObj?.whatsAppTemplates && eventObj.whatsAppTemplates.length > 0)
     ? eventObj.whatsAppTemplates
-    : [
-        {
-          id: "tpl_student_pass",
-          name: "Official Student Invitation & Entry Pass",
-          isDefault: true,
-          text: C.whatsAppTplInvite || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026 - Official Invitation*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nWe are pleased to invite you and your family as our esteemed guests of honor to the *Annual Student Education Felicitation 2026*.\n\n📋 *Invitation Pass Details:*\n• *Transaction / Pass ID:* {TXN_ID}\n• *Invitee Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View & Download Official PDF Invitation Letter & Pass:*\n{INVITE_PDF_LINK}\n\nPlease show this digital pass or downloaded invitation letter at the registration desk upon arrival.\n\nWarm regards,\n*Central Working Committee (CWC) & Education Board*\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`
-        }
-      ];
+    : defaultWorkspaceTemplates;
 
   const defaultTpl = workspaceTemplates.find(t => t.isDefault) || workspaceTemplates[0];
   const [selectedTplId, setSelectedTplId] = useState(defaultTpl?.id || "tpl_student_pass");
@@ -17707,6 +17680,26 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
     return processed;
   };
 
+  const buildTemplateForStatus = (st, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks) => {
+    if (reg.isInviteMode) {
+      const activeTpl = workspaceTemplates.find(t => t.id === selectedTplId) || defaultTpl;
+      return formatTemplateString(activeTpl ? activeTpl.text : (C.whatsAppTplInvite || ""), rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks);
+    }
+
+    let tpl = "";
+    if (st === "Approved") {
+      tpl = C.whatsAppTplApproved || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Percentage:* {PERCENTAGE}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai (Official venue, schedule & invitation letter will be shared soon)\n\n👉 View your application & student certificate on your dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
+    } else if (st === "Needs Info") {
+      tpl = C.whatsAppTplNeedsInfo || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nYour application (*{TXN_ID}*) for *Education Felicitation 2026* requires additional information or document correction for verification.\n\n⚠️ *Committee Remarks / Action Required:*\n👉 *{REMARKS}*\n\n📝 *How to Update Your Application:*\n1. Open portal: {PORTAL_URL}\n2. Log in with registered mobile: *+91 {MOBILE}*\n3. Go to *My Dashboard* > *Registrations*\n4. Click *Edit & Resubmit* and update the requested document/details.\n\nPlease complete this at the earliest to confirm your felicitation eligibility.\n\nWarm regards,\n*Education Verification Committee*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
+    } else if (st === "Disapproved") {
+      tpl = C.whatsAppTplDisapproved || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nRegarding your application (*{TXN_ID}*) for *Education Felicitation 2026*.\n\n• *Status:* 🔴 *Not Approved*\n• *Reason / Remarks:* {REMARKS}\n\nIf you believe this is an error or need clarification, please contact your Vibhag Committee Member or our helpline.\n\nWarm regards,\n*Education Committee*\n📞 Helpline: +91 9820785209`;
+    } else {
+      tpl = C.whatsAppTplPending || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nThank you for submitting your registration for *Education Felicitation 2026*.\n\n📋 *Application Summary:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Current Status:* ⏳ *Under Verification / Review*\n\nOur Verification Committee is currently reviewing your submitted details and documents. You will receive an update once the verification is completed.\n\n👉 Track your live application status on your student dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
+    }
+
+    return formatTemplateString(tpl, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks);
+  };
+
   const [customMessage, setCustomMessage] = useState(() => {
     if (reg.isInviteMode && defaultTpl) {
       return formatTemplateString(defaultTpl.text, rawName, rawMobile, txnId, vibhag, stream, percentage, remarks);
@@ -17718,7 +17711,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
     setSelectedTplId(tplId);
     const chosen = workspaceTemplates.find(t => t.id === tplId);
     if (chosen) {
-      setCustomMessage(formatTemplateString(chosen.text, rawName, rawMobile, txnId, vibhag, stream, percentage, remarks));
+      setCustomMessage(formatTemplateString(chosen.text, rawName, recipientMobile, txnId, vibhag, stream, percentage, remarks));
     }
   };
 
@@ -17733,8 +17726,18 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
     const freshStream = reg['Stream / Class'] || reg['Stream'] || reg['Course'] || 'N/A';
     const freshPct = reg['% Obtained'] || reg.percentage || reg['Marks / Percentage'] || 'N/A';
 
-    setCustomMessage(buildTemplateForStatus(freshStatus, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks));
-  }, [reg]);
+    if (reg.isInviteMode) {
+      const activeDef = workspaceTemplates.find(t => t.isDefault) || workspaceTemplates[0];
+      const targetId = activeDef?.id || selectedTplId;
+      setSelectedTplId(targetId);
+      const chosen = workspaceTemplates.find(t => t.id === targetId) || activeDef;
+      if (chosen) {
+        setCustomMessage(formatTemplateString(chosen.text, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks));
+      }
+    } else {
+      setCustomMessage(buildTemplateForStatus(freshStatus, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks));
+    }
+  }, [reg, C.events]);
 
   const [copied, setCopied] = useState(false);
   const [launchMode, setLaunchMode] = useState(() => localStorage.getItem("mmp_wa_launch_mode") || "web");
@@ -17755,7 +17758,6 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
       return;
     }
 
-    // 1. If WhatsApp Gateway API is configured in Admin (UltraMsg, GreenAPI, or Meta Cloud API)
     const gateway = C.whatsAppGateway || {};
     if (gateway.enabled && gateway.instanceId && gateway.token) {
       try {
@@ -17789,7 +17791,6 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
             body: JSON.stringify(payload)
           });
         } else {
-          // Default: UltraMsg / Standard Gateway
           apiUrl = `https://api.ultramsg.com/${gateway.instanceId}/messages/chat`;
           payload = { token: gateway.token, to: `+91${cleanPhone}`, body: customMessage };
           res = await fetch(apiUrl, {
@@ -17814,7 +17815,6 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
       }
     }
 
-    // Auto-copy text to clipboard so user can also Ctrl+V anytime
     try { navigator.clipboard.writeText(customMessage); } catch(e){}
 
     if (launchMode === "app") {
@@ -17823,7 +17823,6 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
       return;
     }
 
-    // Direct WhatsApp Web Link
     const webUrl = `https://web.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
     window.open(webUrl, "_blank");
   };
@@ -17908,51 +17907,100 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
             </div>
           </div>
 
-          {/* Auto Status Binding Banner */}
-          <div style={{
-            background: currentStatus === "Approved" ? "#F0FDF4" : currentStatus === "Needs Info" ? "#FFFBEB" : currentStatus === "Disapproved" ? "#FEF2F2" : "#F8FAFC",
-            border: currentStatus === "Approved" ? "1px solid #BBF7D0" : currentStatus === "Needs Info" ? "1px solid #FDE68A" : currentStatus === "Disapproved" ? "1px solid #FECACA" : "1px solid #E2E8F0",
-            borderRadius: 8,
-            padding: "10px 14px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 8
-          }}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:"1.1rem"}}>
-                {currentStatus === "Approved" ? "🟢" : currentStatus === "Needs Info" ? "⚠️" : currentStatus === "Disapproved" ? "🔴" : "⏳"}
-              </span>
-              <div>
-                <div style={{fontSize:".82rem",fontWeight:800,color:"#0F172A"}}>
-                  Application Status: {currentStatus === "Approved" ? "Approved & Verified" : currentStatus === "Needs Info" ? "Needs Info / Action Required" : currentStatus === "Disapproved" ? "Disapproved" : "Under Verification (Pending)"}
-                </div>
-                <div style={{fontSize:".72rem",color:"#64748B"}}>
-                  Message template is automatically connected to this verified status.
+          {/* Template Selector for Invite Mode OR Status Binding for Registration Verification */}
+          {reg.isInviteMode ? (
+            <div style={{
+              background: "#F0FDF4",
+              border: "1.5px solid #86EFAC",
+              borderRadius: 10,
+              padding: "12px 14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 10
+            }}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:250}}>
+                <span style={{fontSize:".84rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>📝 Choose Template:</span>
+                <select
+                  value={selectedTplId}
+                  onChange={e => handleTemplateSelectChange(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: "7px 12px",
+                    borderRadius: 6,
+                    border: "1.5px solid #15803D",
+                    fontSize: ".84rem",
+                    fontWeight: 700,
+                    color: "#14532D",
+                    background: "white",
+                    cursor: "pointer",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+                  }}
+                >
+                  {workspaceTemplates.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} {t.isDefault ? "★ (Default)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleTemplateSelectChange(selectedTplId)}
+                style={{background:"white",border:"1px solid #86EFAC",color:"#15803D",padding:"6px 12px",borderRadius:6,fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
+                title="Reset to selected template content"
+              >
+                ↺ Reset Draft
+              </button>
+            </div>
+          ) : (
+            <div style={{
+              background: currentStatus === "Approved" ? "#F0FDF4" : currentStatus === "Needs Info" ? "#FFFBEB" : currentStatus === "Disapproved" ? "#FEF2F2" : "#F8FAFC",
+              border: currentStatus === "Approved" ? "1px solid #BBF7D0" : currentStatus === "Needs Info" ? "1px solid #FDE68A" : currentStatus === "Disapproved" ? "1px solid #FECACA" : "1px solid #E2E8F0",
+              borderRadius: 8,
+              padding: "10px 14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 8
+            }}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:"1.1rem"}}>
+                  {currentStatus === "Approved" ? "🟢" : currentStatus === "Needs Info" ? "⚠️" : currentStatus === "Disapproved" ? "🔴" : "⏳"}
+                </span>
+                <div>
+                  <div style={{fontSize:".82rem",fontWeight:800,color:"#0F172A"}}>
+                    Application Status: {currentStatus === "Approved" ? "Approved & Verified" : currentStatus === "Needs Info" ? "Needs Info / Action Required" : currentStatus === "Disapproved" ? "Disapproved" : "Under Verification (Pending)"}
+                  </div>
+                  <div style={{fontSize:".72rem",color:"#64748B"}}>
+                    Message template is automatically connected to this verified status.
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                const freshMobile = String(reg['Mobile Number'] || reg.submitterMob || reg['Alternate Mobile Number'] || reg.phone || '').replace(/\D/g, '').slice(-10);
-                const freshStatus = reg['Status'] || reg.status || 'Pending';
-                const freshRemarks = reg['Remarks'] || reg.remarks || 'Application under review';
-                const freshName = String(reg['Full Name'] || reg['Submitted By'] || reg['Participant Name'] || reg.name || 'Applicant').replace(/\|/g, ' ').trim();
-                const freshTxn = reg['Transaction ID'] || reg.transactionId || reg.id || 'N/A';
-                const freshVibhag = reg['Vibhag'] || reg.vibhag || reg['MMP Vibhag'] || 'All Vibhags';
-                const freshStream = reg['Stream / Class'] || reg['Stream'] || reg['Course'] || 'N/A';
-                const freshPct = reg['% Obtained'] || reg.percentage || reg['Marks / Percentage'] || 'N/A';
-                setCustomMessage(buildTemplateForStatus(freshStatus, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks));
-              }}
-              style={{background:"white",border:"1px solid #CBD5E1",color:"#334155",padding:"4px 10px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
-              title="Reset message to official default draft"
-            >
-              ↺ Reset Draft
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const freshMobile = String(reg['Mobile Number'] || reg.submitterMob || reg['Alternate Mobile Number'] || reg.phone || '').replace(/\D/g, '').slice(-10);
+                  const freshStatus = reg['Status'] || reg.status || 'Pending';
+                  const freshRemarks = reg['Remarks'] || reg.remarks || 'Application under review';
+                  const freshName = String(reg['Full Name'] || reg['Submitted By'] || reg['Participant Name'] || reg.name || 'Applicant').replace(/\|/g, ' ').trim();
+                  const freshTxn = reg['Transaction ID'] || reg.transactionId || reg.id || 'N/A';
+                  const freshVibhag = reg['Vibhag'] || reg.vibhag || reg['MMP Vibhag'] || 'All Vibhags';
+                  const freshStream = reg['Stream / Class'] || reg['Stream'] || reg['Course'] || 'N/A';
+                  const freshPct = reg['% Obtained'] || reg.percentage || reg['Marks / Percentage'] || 'N/A';
+                  setCustomMessage(buildTemplateForStatus(freshStatus, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks));
+                }}
+                style={{background:"white",border:"1px solid #CBD5E1",color:"#334155",padding:"4px 10px",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                title="Reset message to official default draft"
+              >
+                ↺ Reset Draft
+              </button>
+            </div>
+          )}
 
           {/* Formatted Message Editor */}
           <div>
