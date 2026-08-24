@@ -17372,7 +17372,9 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
       .replace(/\{PERCENTAGE\}/g, rPct || "N/A")
       .replace(/\{REMARKS\}/g, rRemarks || "Application under review")
       .replace(/\{MOBILE\}/g, rMobile || "")
-      .replace(/\{PORTAL_URL\}/g, C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/")
+      .replace(/\{PORTAL_URL\}/g, `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}?invite=${encodeURIComponent(rTxn || "")}`)
+      .replace(/\{INVITE_PDF_LINK\}/g, `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}?invite=${encodeURIComponent(rTxn || "")}`)
+      .replace(/\{WEBSITE_HOME\}/g, C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/")
       .replace(/\{HELPLINE_PHONES\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209 / +91 9967821964")
       .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209");
   };
@@ -22667,6 +22669,236 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
 }
 
 
+
+// ── Direct 1-Click Personalized Invitation Pass & PDF Downloader ──────────────
+function DirectInvitePassView({ C, auth }) {
+  const [loading, setLoading] = useState(true);
+  const [regData, setRegData] = useState(null);
+  const [error, setError] = useState(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [pdfDownloaded, setPdfDownloaded] = useState(false);
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const passId = searchParams.get('invite') || searchParams.get('pass') || searchParams.get('letter') || '';
+
+  useEffect(() => {
+    const loadAndFetchPass = async () => {
+      if (!passId) {
+        setError("Invalid or missing invitation pass ID.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const regs = await fbFetchRegistrations(auth?.idToken).catch(() => []);
+        const cleanPass = String(passId).trim().toLowerCase();
+        
+        const matched = regs.find(r => {
+          const tId = String(r['Transaction ID'] || r.transactionId || r.id || '').toLowerCase().trim();
+          const mob = String(r['Mobile Number'] || r.submitterMob || r.phone || '').replace(/\D/g, '').slice(-10);
+          return tId === cleanPass || tId.endsWith('-' + cleanPass) || mob === cleanPass || r.id === passId;
+        });
+
+        if (matched) {
+          setRegData(matched);
+          // Auto-trigger PDF download on load
+          setTimeout(() => {
+            handleDownloadPDF(matched);
+          }, 800);
+        } else {
+          setError(`No matching registration record found for Pass ID "${passId}".`);
+        }
+      } catch (err) {
+        console.error("Error loading pass:", err);
+        setError("Failed to load invitation pass. Please verify your connection.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAndFetchPass();
+  }, [passId]);
+
+  const handleDownloadPDF = async (r = regData) => {
+    if (!r) return;
+    setGeneratingPdf(true);
+    try {
+      const evName = r.eventName || r.eventTitle || r.eventId || "Education felicitation 2026";
+      const ev = (C.events || []).find(e => e.id === r.eventId || e.title === evName || e.titleGu === evName) || {
+        title: "Education Felicitation 2026",
+        date: "02 Oct",
+        month: "2026",
+        location: "Mumbai, Maharashtra"
+      };
+
+      const sName = String(r['Full Name'] || r['Submitted By'] || r['Participant Name'] || r.name || 'Applicant').replace(/\|/g, ' ').trim();
+      const pdfBlob = await generateCertificatePDF(ev, r, sName, 'invite', 'blob');
+
+      if (pdfBlob) {
+        const url = URL.createObjectURL(pdfBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        const safeName = sName.replace(/[^a-z0-9]/gi, '_');
+        link.download = `Invitation_Letter_${safeName}_${r['Transaction ID'] || passId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setPdfDownloaded(true);
+      }
+    } catch (e) {
+      console.error("PDF generation error:", e);
+      alert("Could not generate PDF directly. You can view your pass details on this screen.");
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
+  const sName = regData ? String(regData['Full Name'] || regData['Submitted By'] || regData['Participant Name'] || regData.name || 'Applicant').replace(/\|/g, ' ').trim() : '';
+  const sTxn = regData ? (regData['Transaction ID'] || regData.transactionId || passId) : passId;
+  const sVibhag = regData ? (regData['Vibhag'] || regData.vibhag || regData['MMP Vibhag'] || 'All Vibhags') : '';
+  const sStream = regData ? (regData['Stream / Class'] || regData['Stream'] || regData['Course'] || 'General') : '';
+
+  return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg, #0F172A, #1E293B)",padding:"24px 16px",display:"flex",justifyContent:"center",alignItems:"center",fontFamily:"system-ui, -apple-system, sans-serif"}}>
+      <div style={{width:"100%",maxWidth:560,background:"white",borderRadius:20,overflow:"hidden",boxShadow:"0 25px 50px -12px rgba(0,0,0,0.5)"}}>
+        
+        {/* Header Branding */}
+        <div style={{background:"linear-gradient(135deg, #15803D, #166534)",color:"white",padding:"24px 20px",textAlign:"center"}}>
+          <div style={{fontSize:"2.4rem",marginBottom:8}}>🏛️</div>
+          <h1 style={{fontSize:"1.25rem",fontWeight:900,margin:0,letterSpacing:"0.5px",textTransform:"uppercase"}}>
+            Mumbai Meghwal Panchayat
+          </h1>
+          <div style={{fontSize:".85rem",opacity:0.9,marginTop:4,fontWeight:600}}>
+            🏆 Education Felicitation 2026 • Official Invitation Pass
+          </div>
+        </div>
+
+        {/* Content Body */}
+        <div style={{padding:"28px 24px"}}>
+          {loading ? (
+            <div style={{textAlign:"center",padding:"40px 20px"}}>
+              <div style={{fontSize:"2.2rem",marginBottom:14,animation:"pulse 1.5s infinite"}}>⏳</div>
+              <div style={{fontSize:"1rem",fontWeight:700,color:"#0F172A"}}>Preparing Your Official Invitation Letter & Pass...</div>
+              <div style={{fontSize:".8rem",color:"#64748B",marginTop:6}}>Generating high-resolution signed PDF document</div>
+            </div>
+          ) : error ? (
+            <div style={{textAlign:"center",padding:"30px 16px"}}>
+              <div style={{fontSize:"2rem",marginBottom:12}}>⚠️</div>
+              <h3 style={{fontSize:"1.1rem",color:"#DC2626",margin:"0 0 8px 0"}}>{error}</h3>
+              <p style={{fontSize:".85rem",color:"#64748B",marginBottom:20}}>Please check your Transaction ID or contact our helpline for assistance.</p>
+              <a href="https://pradeepparmar902.github.io/MY_Community_Website/" style={{display:"inline-block",padding:"10px 20px",background:"#1E293B",color:"white",borderRadius:8,textDecoration:"none",fontSize:".85rem",fontWeight:700}}>
+                ← Go to Community Website
+              </a>
+            </div>
+          ) : (
+            <div>
+              
+              {/* Invitee Card */}
+              <div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:14,padding:"18px 20px",marginBottom:20}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",borderBottom:"1px dashed #86EFAC",paddingBottom:12,marginBottom:12}}>
+                  <div>
+                    <span style={{fontSize:".75rem",fontWeight:800,color:"#15803D",textTransform:"uppercase",letterSpacing:"0.5px"}}>Guest of Honor</span>
+                    <div style={{fontSize:"1.2rem",fontWeight:900,color:"#0F172A",marginTop:2}}>
+                      {sName}
+                    </div>
+                  </div>
+                  <span style={{background:"#DCFCE7",color:"#15803D",padding:"4px 10px",borderRadius:20,fontSize:".75rem",fontWeight:800}}>
+                    Verified Pass
+                  </span>
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,fontSize:".82rem"}}>
+                  <div>
+                    <span style={{color:"#64748B",display:"block",fontSize:".72rem"}}>Pass / Txn ID:</span>
+                    <strong style={{color:"#0F172A",fontFamily:"monospace",fontSize:".9rem"}}>{sTxn}</strong>
+                  </div>
+                  <div>
+                    <span style={{color:"#64748B",display:"block",fontSize:".72rem"}}>Vibhag:</span>
+                    <strong style={{color:"#0F172A"}}>{sVibhag}</strong>
+                  </div>
+                  <div>
+                    <span style={{color:"#64748B",display:"block",fontSize:".72rem"}}>Stream / Class:</span>
+                    <strong style={{color:"#0F172A"}}>{sStream}</strong>
+                  </div>
+                  <div>
+                    <span style={{color:"#64748B",display:"block",fontSize:".72rem"}}>Status:</span>
+                    <strong style={{color:"#15803D"}}>🟢 Approved & Invited</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Event Schedule Info */}
+              <div style={{background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:12,padding:"16px 18px",marginBottom:24,fontSize:".84rem"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                  <span style={{fontSize:"1.1rem"}}>📅</span>
+                  <div>
+                    <strong>Date & Time:</strong> 02-10-2026 (Friday) • 09:30 AM
+                  </div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:"1.1rem"}}>📍</span>
+                  <div>
+                    <strong>Venue:</strong> Mumbai, Maharashtra
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadPDF()}
+                  disabled={generatingPdf}
+                  style={{
+                    width: "100%",
+                    padding: "14px 20px",
+                    background: "linear-gradient(135deg, #15803D, #166534)",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 10,
+                    fontWeight: 800,
+                    fontSize: ".95rem",
+                    cursor: generatingPdf ? "wait" : "pointer",
+                    boxShadow: "0 4px 14px rgba(21,128,61,0.35)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8
+                  }}
+                >
+                  <span>{generatingPdf ? "⏳" : "📥"}</span>
+                  <span>{generatingPdf ? "Generating PDF..." : (pdfDownloaded ? "Download PDF Letter Again" : "Download Official PDF Invitation Letter")}</span>
+                </button>
+
+                <a 
+                  href="https://pradeepparmar902.github.io/MY_Community_Website/"
+                  style={{
+                    textAlign: "center",
+                    padding: "10px",
+                    color: "#64748B",
+                    fontSize: ".82rem",
+                    fontWeight: 600,
+                    textDecoration: "none"
+                  }}
+                >
+                  ← Return to Community Portal
+                </a>
+              </div>
+
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{background:"#F8FAFC",borderTop:"1px solid #E2E8F0",padding:"14px 20px",textAlign:"center",fontSize:".75rem",color:"#64748B"}}>
+          📞 Helpline: +91 9820785209 / +91 9967821964 • Mumbai Meghwal Panchayat
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [page,    setPage]    = useState("public");
   const [lang,    setLang]    = useState("en");
@@ -22801,14 +23033,17 @@ export default function App() {
     </div>
   );
 
-  // ── Standalone Form Mode (for QR Code scanning) ──────────────────────────
+  // ── Direct Invitation Pass & Standalone Form Routing ─────────────────────
   const href = window.location.href;
+  const isInviteLetterPass = href.includes('invite=') || href.includes('pass=') || href.includes('letter=');
   const isStandaloneForm = href.includes('event=') || href.includes('register=');
 
   return (
     <div id="app-root" className={C?.theme || "classic"}>
       <G theme={C?.theme || "classic"} />
-      {isStandaloneForm ? (
+      {isInviteLetterPass ? (
+        <DirectInvitePassView C={C} auth={auth} />
+      ) : isStandaloneForm ? (
         <div style={{minHeight:"100vh",background:"#F4F7FB",padding:"20px 12px",display:"flex",justifyContent:"center",alignItems:"flex-start"}}>
           <div style={{width:"100%",maxWidth:550}}>
             <div style={{textAlign:"center",marginBottom:20}}>
