@@ -17347,6 +17347,18 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
       text: C.whatsAppTplInvite || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026 - Official Invitation*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nWe are pleased to invite you and your family as our esteemed guests of honor to the *Annual Student Education Felicitation 2026*.\n\n📋 *Invitation Pass Details:*\n• *Transaction / Pass ID:* {TXN_ID}\n• *Invitee Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View & Download Official PDF Invitation Letter & Pass:*\n{INVITE_PDF_LINK}\n\nPlease show this digital pass or downloaded invitation letter at the registration desk upon arrival.\n\nWarm regards,\n*Central Working Committee (CWC) & Education Board*\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`
     },
     {
+      id: "tpl_approved_notice",
+      name: "Application Approved & Verified Notice",
+      isDefault: false,
+      text: C.whatsAppTplApproved || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Percentage:* {PERCENTAGE}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai\n\n👉 View your application on your dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`
+    },
+    {
+      id: "tpl_needs_info_notice",
+      name: "Needs Info / Document Correction Notice",
+      isDefault: false,
+      text: C.whatsAppTplNeedsInfo || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nYour application (*{TXN_ID}*) for *Education Felicitation 2026* requires additional information or document correction for verification.\n\n⚠️ *Committee Remarks / Action Required:*\n👉 *{REMARKS}*\n\n📝 *How to Update Your Application:*\n1. Open portal: {PORTAL_URL}\n2. Log in with registered mobile: *+91 {MOBILE}*\n3. Go to *My Dashboard* > *Registrations*\n4. Click *Edit & Resubmit* and update the requested document/details.\n\nPlease complete this at the earliest.\n\nWarm regards,\n*Education Verification Committee*\n📞 Committee Helpline: {HELPLINE_PHONES}`
+    },
+    {
       id: "tpl_vip_guest",
       name: "VIP / Special Dignitary Invitation",
       isDefault: false,
@@ -18684,6 +18696,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
   const [showBulkTools, setShowBulkTools] = useState(false);
   const [historyModalReg, setHistoryModalReg] = useState(null);
   const [whatsAppModalReg, setWhatsAppModalReg] = useState(null);
+  const [showBulkWhatsAppModal, setShowBulkWhatsAppModal] = useState(false);
 
   const saveToFb = async (newC) => {
     try {
@@ -19255,6 +19268,30 @@ function AdminRegistrations({ mob, C, setC, auth }) {
             <button onClick={handleExportCSV} className="bt" style={{padding:"6px 12px",borderRadius:8,fontSize:".8rem",fontWeight:600,display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>
               <span>📥</span> Export CSV
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (filteredRegs.length === 0) return alert("No registrations found to broadcast.");
+                setShowBulkWhatsAppModal(true);
+              }}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 8,
+                fontSize: ".82rem",
+                fontWeight: 800,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: "#25D366",
+                color: "white",
+                border: "none",
+                cursor: "pointer",
+                boxShadow: "0 2px 8px rgba(37,211,102,0.35)",
+                whiteSpace: "nowrap"
+              }}
+            >
+              <span>🚀</span> Broadcast WhatsApp ({filteredRegs.length})
+            </button>
             <button onClick={() => setShowBulkTools(!showBulkTools)} style={{padding:"6px 12px",borderRadius:8,fontSize:".8rem",fontWeight:600,display:"flex",alignItems:"center",gap:4,background:showBulkTools?"#E8650A":"#F5F5F5",color:showBulkTools?"white":"var(--dt)",border:"1px solid var(--bd)",cursor:"pointer",whiteSpace:"nowrap"}}>
               ⚡ Bulk Tools {showBulkTools ? "▲" : "▼"}
             </button>
@@ -19576,6 +19613,15 @@ function AdminRegistrations({ mob, C, setC, auth }) {
 
       {viewing && (
         <VerificationModal viewing={viewing} setViewing={setViewing} allRegs={regs} saveVerification={saveVerification} C={C} />
+      )}
+
+      {showBulkWhatsAppModal && (
+        <BulkWhatsAppBroadcastModal
+          event={(C.events || []).find(e => e.title === filteredRegs[0]?.eventName || e.title === filteredRegs[0]?.eventTitle || e.id === filteredRegs[0]?.eventId) || (C.events || [])[0] || { title: "Event Registrations" }}
+          recipients={filteredRegs}
+          C={C}
+          onClose={() => setShowBulkWhatsAppModal(false)}
+        />
       )}
 
       {whatsAppModalReg && (
