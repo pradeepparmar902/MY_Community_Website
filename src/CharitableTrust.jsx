@@ -17557,16 +17557,26 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
     }
   };
 
-  // Auto-Pilot continuous timer runner effect
+  const [countdown, setCountdown] = useState(autoPilotDelay);
+
+  // Auto-Pilot continuous timer runner effect with live countdown
   useEffect(() => {
-    let timer = null;
+    let interval = null;
     if (autoPilotActive && !broadcastDone && currentIndex < recipients.length) {
-      timer = setTimeout(() => {
-        sendSingleAndAdvance(currentIndex);
-      }, autoPilotDelay * 1000);
+      interval = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            sendSingleAndAdvance(currentIndex);
+            return autoPilotDelay;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      setCountdown(autoPilotDelay);
     }
     return () => {
-      if (timer) clearTimeout(timer);
+      if (interval) clearInterval(interval);
     };
   }, [autoPilotActive, currentIndex, broadcastDone, autoPilotDelay]);
 
@@ -17712,26 +17722,45 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
                   Automatically queues up each student's chat every {autoPilotDelay} seconds so you just stay in WhatsApp and press send!
                 </p>
                 <div style={{display:"flex",gap:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                   <button
                     type="button"
-                    onClick={() => setAutoPilotActive(!autoPilotActive)}
+                    onClick={() => {
+                      if (!autoPilotActive) {
+                        setCountdown(autoPilotDelay);
+                        // Trigger immediate first student if starting from scratch
+                        sendSingleAndAdvance(currentIndex);
+                      }
+                      setAutoPilotActive(!autoPilotActive);
+                    }}
                     disabled={broadcastDone}
                     style={{
-                      padding: "8px 16px",
+                      padding: "10px 20px",
                       borderRadius: 8,
                       background: autoPilotActive ? "#DC2626" : "linear-gradient(135deg, #15803D, #166534)",
                       color: "white",
                       border: "none",
-                      fontSize: ".85rem",
-                      fontWeight: 700,
+                      fontSize: ".88rem",
+                      fontWeight: 800,
                       cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
-                      gap: 6
+                      gap: 8,
+                      boxShadow: "0 2px 8px rgba(21,128,61,0.3)"
                     }}
                   >
                     <span>{autoPilotActive ? "⏸ Pause Auto-Pilot" : "▶ Start Hands-Free Auto-Pilot"}</span>
                   </button>
+
+                  {autoPilotActive && !broadcastDone && (
+                    <div style={{display:"flex",alignItems:"center",gap:6,background:"white",padding:"6px 12px",borderRadius:8,border:"1.5px solid #F59E0B"}}>
+                      <span style={{fontSize:".9rem"}}>⏳</span>
+                      <span style={{fontSize:".82rem",fontWeight:700,color:"#B45309"}}>
+                        Next chat opening in: <strong>{countdown}s</strong> ({currentName})
+                      </span>
+                    </div>
+                  )}
+                </div>
                 </div>
               </div>
 
