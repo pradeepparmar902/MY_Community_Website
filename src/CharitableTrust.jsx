@@ -2630,7 +2630,7 @@ function Events({ C, lang, globalAuthToken, globalProfile, onPublicLogin, forceS
           <button className="bt" style={{padding:"9px 18px",borderRadius:8,fontWeight:600,fontSize:".85rem",flexShrink:0}}>View All</button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:16}}>
-          {C.events.map((ev,i)=>(
+          {(C.events || []).filter(e => !e.isInternalOnly && !e.hideFromPublicWebsite).map((ev,i)=>(
             <div key={i} className="ch" style={{background:"white",borderRadius:16,border:"1px solid var(--bd)",overflow:"hidden",display:"flex"}}>
               <div style={{background:"linear-gradient(180deg,var(--dt),var(--tm))",color:"white",padding:"18px 16px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minWidth:72,flexShrink:0}}>
                 <div style={{fontSize:"1.6rem",fontWeight:700,fontFamily:"'Playfair Display',serif",lineHeight:1}}>{(lang==="gu"&&ev.dateGu?ev.dateGu:ev.date)?.split(" ")[0]}</div>
@@ -6205,7 +6205,7 @@ function ContentEditor({ C, setC, setPage, auth, hasAccess, master }) {
 
       {showSec("events") && <Sec id="events" icon="📅" label="Events"
         onAdd={()=>addItem("events",{date:"Jan 01",month:"2025",title:"New Event",location:"Location",tag:"Health",color:"#E8F4F8"})} addLabel="Add Event">
-        {draft.events.map((ev,i)=>(
+        {(draft.events || []).filter(e => !e.isInternalOnly && !e.hideFromPublicWebsite).map((ev,i)=>(
           <div key={i} style={{border:"1px solid var(--bd)",borderRadius:12,padding:"16px",marginBottom:14,background:"#FAFAFA"}}>
             <RowBar arrPath="events" idx={i} total={draft.events.length} label="Event"/>
             <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:"0 14px"}}>
@@ -10219,6 +10219,22 @@ function AdminEvents({ mob, C, setC, auth }) {
                   {ev.certBgUrl && <div style={{fontSize:".7rem",color:"var(--sf)",marginTop:6}}>✅ Template mapped successfully.</div>}
                 </div>
                 
+                {/* Internal Admin Workspace Checkbox */}
+                <div style={{gridColumn:"1/-1", marginTop: 8, padding: 10, background: ev.isInternalOnly ? "#EFF6FF" : "#F8FAFC", borderRadius: 8, border: ev.isInternalOnly ? "1.5px solid #60A5FA" : "1px solid #E2E8F0"}}>
+                  <label style={{fontSize:".78rem",fontWeight:800,display:"flex",alignItems:"center",gap:8,cursor:"pointer",color:ev.isInternalOnly ? "#1D4ED8" : "#334155"}}>
+                    <input 
+                      type="checkbox" 
+                      checked={ev.isInternalOnly || false} 
+                      onChange={e=>updateItem(i,"isInternalOnly",e.target.checked)} 
+                      style={{width:16,height:16,accentColor:"#2563EB"}}
+                    />
+                    <span>🔒 Internal Admin Workspace Only</span>
+                    <span style={{fontSize:".7rem",fontWeight:600,color:ev.isInternalOnly ? "#2563EB" : "#64748B"}}>
+                      (Hidden from public frontend website & visitor registration — used for committee invites, staff passes, circulars)
+                    </span>
+                  </label>
+                </div>
+
                 <div style={{gridColumn:"1/-1", marginTop: 8, padding: 12, background: "#FDF5E6", borderRadius: 8, border: "1px solid #F5DEB3"}}>
                   <h4 style={{fontSize:".85rem",marginBottom:8,color:"#D2691E",fontWeight:700}}>Official Invite Letters</h4>
                   <div style={{display:"flex", alignItems:"center", gap: 16}}>
@@ -22201,7 +22217,7 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   const globalGuests = regs.filter(r => r.isGlobalGuest === true);
 
   const inviteEvents = (C.events || []).filter(e => {
-    if (e.issueInviteLetters === true || e.issueInviteLetters === "true") return true;
+    if (e.issueInviteLetters === true || e.issueInviteLetters === "true" || e.isInternalOnly) return true;
     return regs.some(r => r.eventId === e.id || r.eventName === e.title || r.eventTitle === e.title);
   });
 
