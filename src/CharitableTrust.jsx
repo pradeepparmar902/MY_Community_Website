@@ -18885,6 +18885,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
                   {[
                     '{EVENT_NAME}',
+                    '{PORTAL_NAME}',
                     '{STUDENT_NAME}',
                     '{TXN_ID}',
                     '{DATE}',
@@ -19065,13 +19066,17 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
     const certUrl = `${baseUrl}/?cert=${encodeURIComponent(rTxn || "")}`;
     const inviteUrl = `${baseUrl}/?invite=${encodeURIComponent(rTxn || "")}`;
     const docUrl = reg.customDocId ? `${baseUrl}/?doc=${encodeURIComponent(reg.customDocId)}&pass=${encodeURIComponent(rTxn || "")}` : null;
-    const defaultUrl = docUrl || (reg.isCertMode ? certUrl : inviteUrl);
+    const portalName = C.trust?.name || "Mumbai Meghwal Panchayat & Vidya Gohil Trust";
 
     const evTitle = eventObj?.title || reg.eventName || reg.eventTitle || reg.eventId || "Event";
     const evDate = eventObj?.date ? `${eventObj.date} ${eventObj.month || ''}`.trim() : (reg.Date || reg.eventDate || "2026");
     const evVenue = eventObj?.location || reg.location || reg.venue || "Mumbai";
 
     let processed = (tplString || "")
+      .replace(/\{PORTAL_NAME\}/g, portalName)
+      .replace(/\{WEBSITE_NAME\}/g, portalName)
+      .replace(/\{TRUST_NAME\}/g, portalName)
+      .replace(/\{PORTAL_TITLE\}/g, portalName)
       .replace(/\{EVENT_NAME\}/g, evTitle)
       .replace(/\{EVENT_TITLE\}/g, evTitle)
       .replace(/\{EVENT\}/g, evTitle)
@@ -19091,15 +19096,13 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
       .replace(/\{CERTIFICATE_URL\}/g, certUrl)
       .replace(/\{INVITE_PDF_LINK\}/g, inviteUrl)
       .replace(/\{INVITE_LINK\}/g, inviteUrl)
-      .replace(/\{PASS_LINK\}/g, inviteUrl)
-      .replace(/\{PORTAL_URL\}/g, defaultUrl)
+      .replace(/\{PASS_LINK\}/g, docUrl || inviteUrl)
+      .replace(/\{PORTAL_URL\}/g, baseUrl)
+      .replace(/\{WEBSITE_URL\}/g, baseUrl)
       .replace(/\{WEBSITE_HOME\}/g, baseUrl)
       .replace(/\{HELPLINE_PHONES\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209 / +91 9967821964")
       .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209");
 
-    if (rTxn && rTxn !== 'N/A' && processed.includes("https://pradeepparmar902.github.io/MY_Community_Website/") && !processed.includes("?invite=") && !processed.includes("?pass=") && !processed.includes("?cert=")) {
-      processed = processed.replace("https://pradeepparmar902.github.io/MY_Community_Website/", defaultUrl);
-    }
     return processed;
   };
 
