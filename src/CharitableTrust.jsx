@@ -4376,11 +4376,20 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
       actualType = 'cert';
     }
 
+    let customTpl = null;
+    if (typeof actualType === 'object' && actualType !== null) {
+      customTpl = actualType;
+    } else if (actualType !== 'cert' && actualType !== 'invite') {
+      const allCustom = certConfig?.pdfTemplates || [];
+      customTpl = allCustom.find(t => t.id === actualType || t.name === actualType);
+    }
+
     const isInvite = actualType === 'invite';
-    let srcUrl = isInvite ? certConfig?.inviteBgUrl : certConfig?.certBgUrl;
+    let srcUrl = customTpl ? customTpl.bgUrl : isInvite ? certConfig?.inviteBgUrl : (certConfig?.certBgUrl || certConfig?.bgUrl);
 
     if (!srcUrl) {
-      reject(new Error(`No ${isInvite ? 'Invite' : 'Certificate'} Template background image has been uploaded for this event. Please go to Admin -> Content Editor -> Events -> Edit Event -> '${isInvite ? '✉️ Configure Template' : '⚙️ Configure Template'}' to upload a background image.`));
+      const tplName = customTpl ? customTpl.name : isInvite ? 'Invite Letter' : 'Certificate';
+      reject(new Error(`No ${tplName} Template background image has been uploaded for this event. Please go to Admin -> Content Editor -> Events -> Edit Event -> '${tplName} Configure Template' to upload a background image.`));
       return;
     }
 
@@ -4400,14 +4409,14 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
           const doc = new jsPDF({ orientation: img.width > img.height ? 'landscape' : 'portrait', unit: 'px', format: [img.width, img.height] });
           doc.addImage(img, 'JPEG', 0, 0, img.width, img.height);
           
-          const fontSize = isInvite ? certConfig.inviteFontSize : certConfig.certFontSize;
-          const fontColor = isInvite ? certConfig.inviteFontColor : certConfig.certFontColor;
+          const fontSize = customTpl ? (customTpl.fontSize || 30) : isInvite ? certConfig.inviteFontSize : certConfig.certFontSize;
+          const fontColor = customTpl ? (customTpl.fontColor || "#000000") : isInvite ? certConfig.inviteFontColor : certConfig.certFontColor;
           
           doc.setFontSize(fontSize || 30);
           doc.setTextColor(fontColor || "#000000");
           doc.setFont("helvetica", "bold");
 
-          const m = (isInvite ? certConfig.inviteMap : certConfig.certMap) || {};
+          const m = (customTpl ? (customTpl.map || customTpl.fieldMap) : isInvite ? certConfig.inviteMap : certConfig.certMap) || {};
 
           Object.entries(m).forEach(([key, pos]) => {
             if (pos.visible) {
@@ -4444,7 +4453,8 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
               const link = document.createElement("a");
               link.href = url;
               const outName = fallbackName ? fallbackName.replace(/\s+/g, '_') : "Student";
-              link.download = `${isInvite ? 'Invite' : 'Certificate'}_${outName}.pdf`;
+              const prefix = customTpl ? (customTpl.name || "Document").replace(/[^a-zA-Z0-9]/g, '_') : isInvite ? 'Invite' : 'Certificate';
+              link.download = `${prefix}_${outName}.pdf`;
               link.click();
           }
           
@@ -9563,10 +9573,18 @@ function CertificateTemplateMapper({ imgUrl, mapData, fontSize, fontColor, onCha
   );
 }
 
-function CertificateConfigModal({ ev, onSave, onClose, auth, forms, type = 'cert' }) {
+function CertificateConfigModal({ ev, onSave, onClose, auth, forms, type = 'cert', customTpl = null }) {
   const isInvite = type === 'invite';
-  const [certBgUrl, setCertBgUrl] = useState(isInvite ? (ev.inviteBgUrl || "") : (ev.certBgUrl || ""));
-  const [certMap, setCertMap] = useState(isInvite ? (ev.inviteMap || null) : (ev.certMap || null));
+  const isCustom = type === 'custom' || !!customTpl;
+  const initialBgUrl = isCustom ? (customTpl?.bgUrl || "") : isInvite ? (ev.inviteBgUrl || "") : (ev.certBgUrl || "");
+  const initialMap = isCustom ? (customTpl?.map || customTpl?.fieldMap || null) : isInvite ? (ev.inviteMap || null) : (ev.certMap || null);
+  const initialFontSize = isCustom ? (customTpl?.fontSize || 30) : isInvite ? (ev.inviteFontSize || 30) : (ev.certFontSize || 30);
+  const initialFontColor = isCustom ? (customTpl?.fontColor || "#000000") : isInvite ? (ev.inviteFontColor || "#000000") : (ev.certFontColor || "#000000");
+
+  const [certBgUrl, setCertBgUrl] = useState(initialBgUrl);
+  const [certMap, setCertMap] = useState(initialMap);
+  const [certFontSize, setCertFontSize] = useState(initialFontSize);
+  const [certFontColor, setCertFontColor] = useState(initialFontColor);
   const [customText, setCustomText] = useState("");
   
   const [availableFields, setAvailableFields] = useState(["Event Name", "Date", "Group", "Serial Number"]);
@@ -9604,8 +9622,6 @@ function CertificateConfigModal({ ev, onSave, onClose, auth, forms, type = 'cert
     };
     fetchRegKeys();
   }, [ev.formId, forms, ev.id, ev.title, auth?.idToken]);
-  const [certFontSize, setCertFontSize] = useState(isInvite ? (ev.inviteFontSize || 30) : (ev.certFontSize || 30));
-  const [certFontColor, setCertFontColor] = useState(isInvite ? (ev.inviteFontColor || "#000000") : (ev.certFontColor || "#000000"));
   const [uploading, setUploading] = useState(false);
 
   const handleUpload = async (e) => {
@@ -9643,7 +9659,7 @@ function CertificateConfigModal({ ev, onSave, onClose, auth, forms, type = 'cert
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"white",width:"100%",maxWidth:900,borderRadius:12,padding:24,maxHeight:"90vh",overflowY:"auto"}}>
-        <h3 style={{marginBottom:16,fontFamily:"'Playfair Display',serif",fontSize:"1.3rem"}}>Configure {isInvite ? 'Invite Letter' : 'Certificate'} for {ev.title}</h3>
+        <h3 style={{marginBottom:16,fontFamily:"'Playfair Display',serif",fontSize:"1.3rem"}}>Configure {isCustom ? (customTpl?.name || 'Custom PDF Template') : isInvite ? 'Invite Letter' : 'Certificate'} for {ev.title}</h3>
         
         <div style={{display:"flex",gap:16,marginBottom:20, flexWrap: "wrap"}}>
           <div style={{flex:1, minWidth: 300}}>
@@ -9780,6 +9796,7 @@ function AdminEvents({ mob, C, setC, auth }) {
           forms={C.forms}
           type={configModal.type || 'cert'}
           onClose={() => setConfigModal(null)} 
+          customTpl={configModal.customTpl}
           onSave={(conf) => {
             const newArr = [...items];
             if (configModal.type === 'invite') {
@@ -9789,6 +9806,22 @@ function AdminEvents({ mob, C, setC, auth }) {
                 inviteMap: conf.map,
                 inviteFontSize: conf.fontSize,
                 inviteFontColor: conf.fontColor
+              };
+            } else if (configModal.type === 'custom') {
+              const currentPdfTemplates = [...(newArr[configModal.idx].pdfTemplates || [])];
+              const tplIdx = configModal.tplIndex !== undefined ? configModal.tplIndex : currentPdfTemplates.findIndex(t => t.id === configModal.customTpl?.id);
+              if (tplIdx >= 0 && tplIdx < currentPdfTemplates.length) {
+                currentPdfTemplates[tplIdx] = {
+                  ...currentPdfTemplates[tplIdx],
+                  bgUrl: conf.bgUrl,
+                  map: conf.map,
+                  fontSize: conf.fontSize,
+                  fontColor: conf.fontColor
+                };
+              }
+              newArr[configModal.idx] = {
+                ...newArr[configModal.idx],
+                pdfTemplates: currentPdfTemplates
               };
             } else {
               newArr[configModal.idx] = {
@@ -10032,6 +10065,113 @@ function AdminEvents({ mob, C, setC, auth }) {
                     <button onClick={()=>setConfigModal({ev, idx: i, type: 'invite'})} className="bs" style={{padding:"5px 12px",borderRadius:6,fontSize:".75rem",fontWeight:600,background:"#D2691E",border:"none",color:"white"}}>✉️ Configure Template</button>
                   </div>
                   {ev.inviteBgUrl && <div style={{fontSize:".7rem",color:"#2E8B57",marginTop:6}}>✅ Template mapped successfully.</div>}
+                </div>
+
+                {/* Additional Dynamic PDF Passes & Documents (Multi-Template Workspace) */}
+                <div style={{gridColumn:"1/-1", marginTop: 8, padding: 12, background: "#F0FDF4", borderRadius: 8, border: "1.5px solid #86EFAC"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:8}}>
+                    <div>
+                      <h4 style={{fontSize:".85rem",margin:0,color:"#15803D",fontWeight:800,display:"flex",alignItems:"center",gap:6}}>
+                        <span>📑</span> Additional Custom PDF Templates & Passes ({(ev.pdfTemplates || []).length})
+                      </h4>
+                      <div style={{fontSize:".72rem",color:"#166534",marginTop:2}}>
+                        Create unlimited extra PDF passes (e.g. Food Coupons, Gate Passes, ID Cards, Parent Passes) with direct WhatsApp URL links.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const name = prompt("Enter Name for new PDF Template (e.g. Food Coupon & Dinner Pass, Gate Entry Pass):");
+                        if (name && name.trim()) {
+                          const cleanName = name.trim();
+                          const tplId = "doc_" + Date.now();
+                          const newTpl = {
+                            id: tplId,
+                            name: cleanName,
+                            bgUrl: "",
+                            map: {},
+                            fontSize: 30,
+                            fontColor: "#000000"
+                          };
+                          const updatedTpls = [...(ev.pdfTemplates || []), newTpl];
+                          updateItem(i, "pdfTemplates", updatedTpls);
+                          setConfigModal({ ev, idx: i, type: 'custom', tplIndex: updatedTpls.length - 1, customTpl: newTpl });
+                        }
+                      }}
+                      style={{padding:"6px 12px",borderRadius:6,fontSize:".75rem",fontWeight:800,background:"#15803D",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                    >
+                      <span>➕</span> Add New PDF Template
+                    </button>
+                  </div>
+
+                  {/* List of Custom Templates */}
+                  <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:10}}>
+                    {(ev.pdfTemplates || []).map((tpl, tplIdx) => {
+                      const directUrl = `https://pradeepparmar902.github.io/MY_Community_Website/?doc=${tpl.id}&pass={TXN_ID}`;
+                      return (
+                        <div key={tpl.id} style={{background:"white",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1",display:"flex",flexDirection:"column",gap:6}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:6}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:"1.1rem"}}>📄</span>
+                              <strong style={{fontSize:".82rem",color:"#0F172A"}}>{tpl.name}</strong>
+                              {tpl.bgUrl ? (
+                                <span style={{fontSize:".68rem",background:"#DCFCE7",color:"#15803D",padding:"1px 6px",borderRadius:4,fontWeight:700}}>
+                                  ✓ Configured
+                                </span>
+                              ) : (
+                                <span style={{fontSize:".68rem",background:"#FEF3C7",color:"#B45309",padding:"1px 6px",borderRadius:4,fontWeight:700}}>
+                                  ⚠️ Needs Background Image
+                                </span>
+                              )}
+                            </div>
+                            <div style={{display:"flex",gap:6}}>
+                              <button
+                                type="button"
+                                onClick={() => setConfigModal({ ev, idx: i, type: 'custom', tplIndex: tplIdx, customTpl: tpl })}
+                                style={{padding:"4px 10px",borderRadius:6,fontSize:".72rem",fontWeight:700,background:"#0D4B5E",color:"white",border:"none",cursor:"pointer"}}
+                              >
+                                ⚙️ Configure Template
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm(`Delete PDF template "${tpl.name}"?`)) {
+                                    const updated = (ev.pdfTemplates || []).filter((_, k) => k !== tplIdx);
+                                    updateItem(i, "pdfTemplates", updated);
+                                  }
+                                }}
+                                style={{padding:"4px 8px",borderRadius:6,fontSize:".72rem",fontWeight:700,background:"#FEE2E2",color:"#DC2626",border:"1px solid #FCA5A5",cursor:"pointer"}}
+                              >
+                                🗑️ Delete
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Direct URL Tag & Copy Assistant */}
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:"#F8FAFC",padding:"4px 8px",borderRadius:6,border:"1px dashed #CBD5E1"}}>
+                            <span style={{fontSize:".7rem",color:"#475569",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                              🔗 <strong>URL:</strong> {directUrl}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(directUrl);
+                                alert(`Copied direct URL for "${tpl.name}"!`);
+                              }}
+                              style={{padding:"2px 8px",background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #BFDBFE",borderRadius:4,fontSize:".68rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
+                            >
+                              📋 Copy URL
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {(!ev.pdfTemplates || ev.pdfTemplates.length === 0) && (
+                      <div style={{fontSize:".75rem",color:"#64748B",fontStyle:"italic",padding:"8px 0"}}>
+                        No custom PDF templates added yet. Click "+ Add New PDF Template" to create Food Passes, Gate Passes, etc.
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div style={{gridColumn:"1/-1",display:"flex",justifyContent:"flex-end",gap:7,marginTop:8}}>
                   <button onClick={saveEdit} className="bt" style={{padding:"6px 14px",borderRadius:6,fontWeight:600,fontSize:".75rem"}}>Save Changes</button>
@@ -18391,7 +18531,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
                   ))}
                 </div>
 
-                {/* Interactive Direct URL Builder & Copy Helper */}
+                {/* Interactive Direct URL Builder & Copy Helper (Supports all Custom PDF Templates) */}
                 <div style={{background:"#F8FAFC",border:"1px solid #CBD5E1",borderRadius:8,padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
                   <div style={{fontSize:".74rem",fontWeight:800,color:"#334155"}}>🔗 DIRECT URL GENERATOR HELPER:</div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:"white",padding:"6px 10px",borderRadius:6,border:"1px solid #E2E8F0"}}>
@@ -18425,6 +18565,28 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
                       + Insert in Template
                     </button>
                   </div>
+
+                  {/* List each custom PDF template created for this event */}
+                  {(event?.pdfTemplates || []).map(tpl => {
+                    const customLink = `https://pradeepparmar902.github.io/MY_Community_Website/?doc=${tpl.id}&pass={TXN_ID}`;
+                    return (
+                      <div key={tpl.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:"#F0FDF4",padding:"6px 10px",borderRadius:6,border:"1px solid #86EFAC"}}>
+                        <span style={{fontSize:".75rem",color:"#166534",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          📄 <strong>${tpl.name}:</strong> ${customLink}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            insertPlaceholder(` ${customLink}`);
+                            alert(`Inserted "${tpl.name}" URL into template!`);
+                          }}
+                          style={{padding:"3px 8px",background:"#15803D",color:"white",border:"none",borderRadius:4,fontSize:".7rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
+                        >
+                          + Insert in Template
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -25148,8 +25310,9 @@ function DirectInvitePassView({ C, auth }) {
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const searchParams = new URLSearchParams(window.location.search);
-  const isCert = !!(searchParams.get('cert') || searchParams.get('certificate'));
-  const passId = searchParams.get('cert') || searchParams.get('certificate') || searchParams.get('invite') || searchParams.get('pass') || searchParams.get('letter') || '';
+  const customDocId = searchParams.get('doc') || searchParams.get('template');
+  const isCert = !customDocId && !!(searchParams.get('cert') || searchParams.get('certificate'));
+  const passId = searchParams.get('pass') || searchParams.get('cert') || searchParams.get('certificate') || searchParams.get('invite') || searchParams.get('letter') || '';
 
   useEffect(() => {
     const loadAndFetchPass = async () => {
@@ -25252,8 +25415,9 @@ function DirectInvitePassView({ C, auth }) {
           };
           const sName = String(matched['Full Name'] || matched['Submitted By'] || matched['Participant Name'] || matched.name || 'Applicant').replace(/\|/g, ' ').trim();
           
-          // Generate on-screen visual image (Certificate or Invite Letter)
-          const targetBgUrl = isCert ? (ev.certBgUrl || ev.bgUrl || ev.inviteBgUrl) : ev.inviteBgUrl;
+          const customTpl = customDocId ? (ev.pdfTemplates || []).find(t => t.id === customDocId || t.name?.toLowerCase() === customDocId?.toLowerCase()) : null;
+          // Generate on-screen visual image (Custom PDF Document, Certificate or Invite Letter)
+          const targetBgUrl = customTpl ? customTpl.bgUrl : isCert ? (ev.certBgUrl || ev.bgUrl || ev.inviteBgUrl) : ev.inviteBgUrl;
           if (targetBgUrl) {
             try {
               const img = new Image();
@@ -25265,12 +25429,12 @@ function DirectInvitePassView({ C, auth }) {
                 const ctx = canvas.getContext("2d");
                 ctx.drawImage(img, 0, 0);
 
-                const fontSize = isCert ? (ev.certFontSize || ev.fontSize || 30) : (ev.inviteFontSize || 30);
+                const fontSize = customTpl ? (customTpl.fontSize || 30) : isCert ? (ev.certFontSize || ev.fontSize || 30) : (ev.inviteFontSize || 30);
                 ctx.font = `bold ${fontSize}px sans-serif`;
-                ctx.fillStyle = isCert ? (ev.certFontColor || ev.fontColor || "#000000") : (ev.inviteFontColor || "#000000");
+                ctx.fillStyle = customTpl ? (customTpl.fontColor || "#000000") : isCert ? (ev.certFontColor || ev.fontColor || "#000000") : (ev.inviteFontColor || "#000000");
                 ctx.textBaseline = "middle";
 
-                const m = isCert ? (ev.certMap || ev.fieldMap || ev.inviteMap || {}) : (ev.inviteMap || {});
+                const m = customTpl ? (customTpl.map || customTpl.fieldMap || {}) : isCert ? (ev.certMap || ev.fieldMap || ev.inviteMap || {}) : (ev.inviteMap || {});
                 Object.entries(m).forEach(([key, pos]) => {
                   if (pos && pos.visible) {
                     const xPx = (parseFloat(pos.x) / 100) * img.width;
@@ -25317,7 +25481,8 @@ function DirectInvitePassView({ C, auth }) {
       };
 
       const sName = String(regData['Full Name'] || regData['Submitted By'] || regData['Participant Name'] || regData.name || 'Applicant').replace(/\|/g, ' ').trim();
-      const docType = isCert ? 'cert' : 'invite';
+      const customTpl = customDocId ? (ev.pdfTemplates || []).find(t => t.id === customDocId || t.name?.toLowerCase() === customDocId?.toLowerCase()) : null;
+      const docType = customTpl || (isCert ? 'cert' : 'invite');
       const pdfBlob = await generateCertificatePDF(ev, regData, sName, docType, 'blob');
 
       if (pdfBlob) {
@@ -25325,9 +25490,8 @@ function DirectInvitePassView({ C, auth }) {
         const link = document.createElement('a');
         link.href = url;
         const safeName = sName.replace(/[^a-z0-9]/gi, '_');
-        link.download = isCert 
-          ? `Certificate_${safeName}_${regData['Transaction ID'] || passId}.pdf`
-          : `Invitation_Letter_${safeName}_${regData['Transaction ID'] || passId}.pdf`;
+        const docNamePrefix = customTpl ? (customTpl.name || 'Document').replace(/[^a-z0-9]/gi, '_') : isCert ? 'Certificate' : 'Invitation_Letter';
+        link.download = `${docNamePrefix}_${safeName}_${regData['Transaction ID'] || passId}.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
