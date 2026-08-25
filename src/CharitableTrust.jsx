@@ -14370,61 +14370,108 @@ function UserDashboard({ C, globalProfile, globalAuthToken, onClose }) {
                                 <div style={{fontSize:".7rem",color:"var(--mu)",fontWeight:600,textTransform:"uppercase"}}>Transaction ID</div>
                                 <div style={{fontSize:".85rem",fontWeight:600,color:"var(--dt)",fontFamily:"monospace"}}>{a.reg['Transaction ID'] || a.reg.id || "N/A"}</div>
                               </div>
-                              <div style={{marginTop:"auto", display:"flex", gap:8, width:"100%"}}>
-                                <button 
-                                  disabled={!a.ev.inviteBgUrl}
-                                  onClick={async (e) => {
-                                    const btn = e.currentTarget;
-                                    const orig = btn.innerHTML;
-                                    btn.disabled = true;
-                                    btn.innerText = "...";
-                                    try {
-                                      const evtName = a.ev.title || "Event";
-                                      const evtDate = a.ev.date ? `${a.ev.date} ${a.ev.month}` : "2025";
-                                      const fieldsData = { "Event Name": evtName, "Date": evtDate, ...a.reg };
-                                      if (globalAuthToken) {
-                                        const cleanData = { ...a.reg, inviteLetterViewed: true, inviteViewDate: new Date().toISOString() };
-                                        delete cleanData.id; delete cleanData._submittedAt;
-                                        await fbUpdateRegistration(a.reg.id, cleanData, globalAuthToken);
+                              <div style={{marginTop:"auto", display:"flex", flexDirection:"column", gap:8, width:"100%"}}>
+                                <div style={{display:"flex", gap:8, width:"100%"}}>
+                                  <button 
+                                    disabled={!a.ev.inviteBgUrl}
+                                    onClick={async (e) => {
+                                      const btn = e.currentTarget;
+                                      const orig = btn.innerHTML;
+                                      btn.disabled = true;
+                                      btn.innerText = "...";
+                                      try {
+                                        const evtName = a.ev.title || "Event";
+                                        const evtDate = a.ev.date ? `${a.ev.date} ${a.ev.month}` : "2025";
+                                        const fieldsData = { "Event Name": evtName, "Date": evtDate, ...a.reg };
+                                        if (globalAuthToken) {
+                                          const cleanData = { ...a.reg, inviteLetterViewed: true, inviteViewDate: new Date().toISOString() };
+                                          delete cleanData.id; delete cleanData._submittedAt;
+                                          await fbUpdateRegistration(a.reg.id, cleanData, globalAuthToken);
+                                        }
+                                        const url = await generateCertificatePDF(a.ev, fieldsData, sName, 'invite', 'url'); if(url) setPreviewFile({ url, type: 'pdf', title: `Invite Letter - ${sName}` });
+                                      } catch(err) {
+                                        alert(err.message);
                                       }
-                                      const url = await generateCertificatePDF(a.ev, fieldsData, sName, 'invite', 'url'); if(url) setPreviewFile({ url, type: 'pdf', title: `Invite Letter - ${sName}` });
-                                    } catch(err) {
-                                      alert(err.message);
-                                    }
-                                    btn.disabled = false;
-                                    btn.innerHTML = orig;
-                                  }} 
-                                  style={{flex:1, padding:"10px",borderRadius:8,background:(!a.ev.inviteBgUrl) ? "#ccc" : "#f5f5f5",color:(!a.ev.inviteBgUrl) ? "white" : "#D2691E",border:"1px solid " + ((!a.ev.inviteBgUrl) ? "#ccc" : "#D2691E"),fontWeight:600,cursor:(!a.ev.inviteBgUrl) ? "not-allowed" : "pointer",display:"flex",justifyContent:"center",alignItems:"center"}}
-                                >
-                                  👁 Preview
-                                </button>
-                                <button 
-                                  disabled={!a.ev.inviteBgUrl}
-                                  onClick={async (e) => {
-                                    const btn = e.currentTarget;
-                                    const orig = btn.innerHTML;
-                                    btn.disabled = true;
-                                    btn.innerText = "...";
-                                    try {
-                                      const evtName = a.ev.title || "Event";
-                                      const evtDate = a.ev.date ? `${a.ev.date} ${a.ev.month}` : "2025";
-                                      const fieldsData = { "Event Name": evtName, "Date": evtDate, ...a.reg };
-                                      if (globalAuthToken && !a.reg.inviteLetterDownloaded) {
-                                        const cleanData = { ...a.reg, inviteLetterDownloaded: true, inviteDownloadDate: new Date().toISOString() };
-                                        delete cleanData.id; delete cleanData._submittedAt;
-                                        await fbUpdateRegistration(a.reg.id, cleanData, globalAuthToken);
+                                      btn.disabled = false;
+                                      btn.innerHTML = orig;
+                                    }} 
+                                    style={{flex:1, padding:"10px",borderRadius:8,background:(!a.ev.inviteBgUrl) ? "#ccc" : "#f5f5f5",color:(!a.ev.inviteBgUrl) ? "white" : "#D2691E",border:"1px solid " + ((!a.ev.inviteBgUrl) ? "#ccc" : "#D2691E"),fontWeight:600,cursor:(!a.ev.inviteBgUrl) ? "not-allowed" : "pointer",display:"flex",justifyContent:"center",alignItems:"center"}}
+                                  >
+                                    👁 Preview
+                                  </button>
+                                  <button 
+                                    disabled={!a.ev.inviteBgUrl}
+                                    onClick={async (e) => {
+                                      const btn = e.currentTarget;
+                                      const orig = btn.innerHTML;
+                                      btn.disabled = true;
+                                      btn.innerText = "...";
+                                      try {
+                                        const evtName = a.ev.title || "Event";
+                                        const evtDate = a.ev.date ? `${a.ev.date} ${a.ev.month}` : "2025";
+                                        const fieldsData = { "Event Name": evtName, "Date": evtDate, ...a.reg };
+                                        if (globalAuthToken && !a.reg.inviteLetterDownloaded) {
+                                          const cleanData = { ...a.reg, inviteLetterDownloaded: true, inviteDownloadDate: new Date().toISOString() };
+                                          delete cleanData.id; delete cleanData._submittedAt;
+                                          await fbUpdateRegistration(a.reg.id, cleanData, globalAuthToken);
+                                        }
+                                        await generateCertificatePDF(a.ev, fieldsData, sName, 'invite', 'download');
+                                      } catch(err) {
+                                        alert(err.message);
                                       }
-                                      await generateCertificatePDF(a.ev, fieldsData, sName, 'invite', 'download');
-                                    } catch(err) {
-                                      alert(err.message);
-                                    }
-                                    btn.disabled = false;
-                                    btn.innerHTML = orig;
-                                  }} 
-                                  style={{flex:1, padding:"10px",borderRadius:8,background:(!a.ev.inviteBgUrl) ? "#ccc" : "#D2691E",color:"white",border:"none",fontWeight:600,cursor:(!a.ev.inviteBgUrl) ? "not-allowed" : "pointer",display:"flex",justifyContent:"center",alignItems:"center",boxShadow:"0 2px 6px rgba(0,0,0,0.15)"}}
-                                >
-                                  ⬇ Download
-                                </button>
+                                      btn.disabled = false;
+                                      btn.innerHTML = orig;
+                                    }} 
+                                    style={{flex:1, padding:"10px",borderRadius:8,background:(!a.ev.inviteBgUrl) ? "#ccc" : "#D2691E",color:"white",border:"none",fontWeight:600,cursor:(!a.ev.inviteBgUrl) ? "not-allowed" : "pointer",display:"flex",justifyContent:"center",alignItems:"center",boxShadow:"0 2px 6px rgba(0,0,0,0.15)"}}
+                                  >
+                                    ⬇ Download
+                                  </button>
+                                </div>
+
+                                {/* Custom PDF Template Passes (e.g. Token Number, Food Coupon, Gate Pass) */}
+                                {(a.ev.pdfTemplates || []).length > 0 && (
+                                  <div style={{display:"flex",flexDirection:"column",gap:6,borderTop:"1px dashed #CBD5E1",paddingTop:8}}>
+                                    {(a.ev.pdfTemplates || []).map(tpl => (
+                                      <button
+                                        key={tpl.id}
+                                        disabled={!tpl.bgUrl}
+                                        onClick={async (e) => {
+                                          const btn = e.currentTarget;
+                                          const orig = btn.innerHTML;
+                                          btn.disabled = true;
+                                          btn.innerText = "...";
+                                          try {
+                                            const evtName = a.ev.title || "Event";
+                                            const evtDate = a.ev.date ? `${a.ev.date} ${a.ev.month}` : "2025";
+                                            const fieldsData = { "Event Name": evtName, "Date": evtDate, ...a.reg };
+                                            await generateCertificatePDF(a.ev, fieldsData, sName, tpl, 'download');
+                                          } catch(err) {
+                                            alert(err.message);
+                                          }
+                                          btn.disabled = false;
+                                          btn.innerHTML = orig;
+                                        }}
+                                        style={{
+                                          width:"100%",
+                                          padding:"7px 10px",
+                                          borderRadius:6,
+                                          background: (!tpl.bgUrl) ? "#F1F5F9" : "#F0FDF4",
+                                          color: (!tpl.bgUrl) ? "#94A3B8" : "#15803D",
+                                          border: (!tpl.bgUrl) ? "1px solid #E2E8F0" : "1px solid #86EFAC",
+                                          fontSize:".75rem",
+                                          fontWeight:700,
+                                          cursor: (!tpl.bgUrl) ? "not-allowed" : "pointer",
+                                          display:"flex",
+                                          alignItems:"center",
+                                          justifyContent:"center",
+                                          gap:4
+                                        }}
+                                      >
+                                        <span>🎟️</span> Download {tpl.name} (PDF)
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
