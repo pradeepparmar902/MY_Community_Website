@@ -18896,6 +18896,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
   const [historyModalReg, setHistoryModalReg] = useState(null);
   const [whatsAppModalReg, setWhatsAppModalReg] = useState(null);
   const [showBulkWhatsAppModal, setShowBulkWhatsAppModal] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
 
   const saveToFb = async (newC) => {
     try {
@@ -19467,10 +19468,33 @@ function AdminRegistrations({ mob, C, setC, auth }) {
             <button onClick={handleExportCSV} className="bt" style={{padding:"6px 12px",borderRadius:8,fontSize:".8rem",fontWeight:600,display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>
               <span>📥</span> Export CSV
             </button>
+            {selectedIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedIds([])}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  fontSize: ".78rem",
+                  fontWeight: 700,
+                  background: "#F1F5F9",
+                  color: "#475569",
+                  border: "1px solid #CBD5E1",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap"
+                }}
+                title="Clear selected rows"
+              >
+                ✕ Clear ({selectedIds.length})
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
-                if (filteredRegs.length === 0) return alert("No registrations found to broadcast.");
+                const targetList = selectedIds.length > 0
+                  ? filteredRegs.filter(r => selectedIds.includes(r.id || r['Transaction ID']))
+                  : filteredRegs;
+                if (targetList.length === 0) return alert("No registrations selected or found to broadcast.");
                 setShowBulkWhatsAppModal(true);
               }}
               style={{
@@ -19481,7 +19505,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                background: "#25D366",
+                background: selectedIds.length > 0 ? "linear-gradient(135deg, #15803D, #166534)" : "#25D366",
                 color: "white",
                 border: "none",
                 cursor: "pointer",
@@ -19489,7 +19513,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                 whiteSpace: "nowrap"
               }}
             >
-              <span>🚀</span> Broadcast WhatsApp ({filteredRegs.length})
+              <span>🚀</span> Broadcast WhatsApp {selectedIds.length > 0 ? `(${selectedIds.length} Selected)` : `(${filteredRegs.length})`}
             </button>
             <button onClick={() => setShowBulkTools(!showBulkTools)} style={{padding:"6px 12px",borderRadius:8,fontSize:".8rem",fontWeight:600,display:"flex",alignItems:"center",gap:4,background:showBulkTools?"#E8650A":"#F5F5F5",color:showBulkTools?"white":"var(--dt)",border:"1px solid var(--bd)",cursor:"pointer",whiteSpace:"nowrap"}}>
               ⚡ Bulk Tools {showBulkTools ? "▲" : "▼"}
@@ -19652,6 +19676,22 @@ function AdminRegistrations({ mob, C, setC, auth }) {
           <table className="admin-table" style={{width:"100%",borderCollapse:"collapse",fontSize:".85rem",minWidth:1200}}>
             <thead>
               <tr>
+                <th style={{padding:"14px 8px",textAlign:"center",width:36}}>
+                  <input
+                    type="checkbox"
+                    checked={filteredRegs.length > 0 && filteredRegs.every(r => selectedIds.includes(r.id || r['Transaction ID']))}
+                    onChange={() => {
+                      const allVisibleSelected = filteredRegs.length > 0 && filteredRegs.every(r => selectedIds.includes(r.id || r['Transaction ID']));
+                      if (allVisibleSelected) {
+                        setSelectedIds([]);
+                      } else {
+                        setSelectedIds(filteredRegs.map(r => r.id || r['Transaction ID']));
+                      }
+                    }}
+                    title="Select / Unselect All Filtered Rows"
+                    style={{cursor:"pointer",width:16,height:16,accentColor:"#15803D"}}
+                  />
+                </th>
                 <th style={{padding:"14px 12px",textAlign:"center",whiteSpace:"nowrap"}}>View</th>
                 <th style={{padding:"14px 12px",textAlign:"left",whiteSpace:"nowrap"}}>Date</th>
                 <th style={{padding:"14px 12px",textAlign:"left",whiteSpace:"nowrap"}}>Event</th>
@@ -19665,6 +19705,13 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                 <th style={{padding:"14px 12px",textAlign:"left"}}>Delete</th>
               </tr>
               <tr style={{background:"#FAFAFA", borderBottom:"2px solid #E0E0E0"}}>
+                <th style={{textAlign:"center"}}>
+                  {selectedIds.length > 0 && (
+                    <span style={{fontSize:".7rem",color:"#15803D",fontWeight:800}}>
+                      {selectedIds.length}✓
+                    </span>
+                  )}
+                </th>
                 <th></th>
                 {["Date", "Event", "Transaction ID", "Status", "Remarks", "Updated By", ...allKeys].map(k => {
                   const uniqueVals = getUniqueValues(k);
@@ -19697,13 +19744,26 @@ function AdminRegistrations({ mob, C, setC, auth }) {
             <tbody>
               {filteredRegs.map((r, i) => {
                 if(!r) return null;
+                const rowId = r.id || r['Transaction ID'];
+                const isSelected = selectedIds.includes(rowId);
                 let date = "-";
                 try { if(r._submittedAt) date = new Date(r._submittedAt).toLocaleString(); } catch(e){}
                 let evName = r.eventName || r.eventTitle || r.eventId || "Unknown Event";
                 const ev = C.events?.find(e => e.title === r.eventTitle || e.title === r.eventName || e.title === r.eventId || e.id === r.eventId);
 
                 return (
-                  <tr key={i}>
+                  <tr key={i} style={{background: isSelected ? "#F0FDF4" : "transparent", transition: "background 0.2s"}}>
+                    <td style={{padding:"12px 8px",textAlign:"center"}}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {
+                          setSelectedIds(prev => prev.includes(rowId) ? prev.filter(x => x !== rowId) : [...prev, rowId]);
+                        }}
+                        style={{cursor:"pointer",width:16,height:16,accentColor:"#15803D"}}
+                        title="Select this student to include/exclude in bulk operations"
+                      />
+                    </td>
                     <td style={{padding:"12px",textAlign:"center",whiteSpace:"nowrap"}}>
                       <div style={{display:"flex",gap:4,justifyContent:"center",alignItems:"center"}}>
                         <button onClick={()=>setViewing(r)} style={{padding:"6px 10px",borderRadius:6,fontSize:".75rem",background:"var(--dt)",color:"white",border:"none",cursor:"pointer",fontWeight:600,boxShadow:"0 2px 4px rgba(0,0,0,0.1)"}}>
@@ -19817,7 +19877,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
       {showBulkWhatsAppModal && (
         <BulkWhatsAppBroadcastModal
           event={(C.events || []).find(e => e.title === filteredRegs[0]?.eventName || e.title === filteredRegs[0]?.eventTitle || e.id === filteredRegs[0]?.eventId) || (C.events || [])[0] || { title: "Event Registrations" }}
-          recipients={filteredRegs}
+          recipients={selectedIds.length > 0 ? filteredRegs.filter(r => selectedIds.includes(r.id || r['Transaction ID'])) : filteredRegs}
           C={C}
           onClose={() => setShowBulkWhatsAppModal(false)}
         />
