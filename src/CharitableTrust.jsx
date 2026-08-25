@@ -23059,137 +23059,143 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
           })()}
         </div>
 
-        {/* Document Template Tabs Bar (Multi-Template Workspace) */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14,borderBottom:"2px solid #CBD5E1",paddingBottom:8,overflowX:"auto",flexWrap:"wrap"}}>
-          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-            <span style={{fontSize:".78rem",fontWeight:800,color:"#334155",textTransform:"uppercase",display:"flex",alignItems:"center",gap:4,marginRight:4}}>
-              <span>📑</span> ACTIVE DOCUMENT TEMPLATE:
-            </span>
-            {availableDocTemplates.map(tab => {
-              const isActive = tab.id === (currentDocTpl?.id || 'invite');
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveDocType(tab.id);
-                    setPreviewCertUrl(null);
-                    setPreviewCertRegId(null);
-                  }}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "8px 8px 0 0",
-                    border: isActive ? "2px solid #15803D" : "1px solid #CBD5E1",
-                    borderBottom: isActive ? "3px solid #15803D" : "1px solid #CBD5E1",
-                    background: isActive ? "#F0FDF4" : "white",
-                    color: isActive ? "#15803D" : "#334155",
-                    fontSize: ".84rem",
-                    fontWeight: isActive ? 800 : 600,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    boxShadow: isActive ? "0 2px 8px rgba(21,128,61,0.15)" : "none",
-                    whiteSpace: "nowrap",
-                    transform: isActive ? "translateY(-1px)" : "none",
-                    transition: "all 0.15s"
-                  }}
-                >
-                  <span style={{fontSize:"1rem"}}>{tab.icon || '📄'}</span>
-                  <span>{tab.name}</span>
+        {/* Document Template Tabs Bar with Inline Placement Dropdowns on Each Tab */}
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,borderBottom:"2px solid #CBD5E1",paddingBottom:10,overflowX:"auto",flexWrap:"wrap"}}>
+          <div style={{fontSize:".78rem",fontWeight:800,color:"#334155",textTransform:"uppercase",display:"flex",alignItems:"center",gap:4,marginRight:4}}>
+            <span>📑</span> TEMPLATES & PASSES:
+          </div>
+          
+          {availableDocTemplates.map(tab => {
+            const isActive = tab.id === (currentDocTpl?.id || 'invite');
+            return (
+              <div
+                key={tab.id}
+                onClick={() => {
+                  setActiveDocType(tab.id);
+                  setPreviewCertUrl(null);
+                  setPreviewCertRegId(null);
+                }}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: "10px",
+                  border: isActive ? "2.5px solid #15803D" : "1.5px solid #CBD5E1",
+                  background: isActive ? "#F0FDF4" : "white",
+                  color: isActive ? "#15803D" : "#334155",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                  boxShadow: isActive ? "0 3px 10px rgba(21,128,61,0.18)" : "0 1px 3px rgba(0,0,0,0.04)",
+                  minWidth: 175,
+                  transition: "all 0.15s"
+                }}
+              >
+                {/* Tab Header */}
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:"1.1rem"}}>{tab.icon || '📄'}</span>
+                    <strong style={{fontSize:".86rem",color: isActive ? "#15803D" : "#0F172A"}}>{tab.name}</strong>
+                  </div>
                   {tab.bgUrl ? (
-                    <span style={{fontSize:".68rem",background:"#DCFCE7",color:"#15803D",padding:"1px 6px",borderRadius:4,fontWeight:800}}>
+                    <span style={{fontSize:".65rem",background:"#DCFCE7",color:"#15803D",padding:"1px 5px",borderRadius:4,fontWeight:800}}>
                       ✓ Configured
                     </span>
                   ) : (
-                    <span style={{fontSize:".68rem",background:"#FEF3C7",color:"#B45309",padding:"1px 6px",borderRadius:4,fontWeight:800}}>
+                    <span style={{fontSize:".65rem",background:"#FEF3C7",color:"#B45309",padding:"1px 5px",borderRadius:4,fontWeight:800}}>
                       ⚠️ Needs Image
                     </span>
                   )}
-                </button>
-              );
-            })}
-          </div>
-
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            {/* Interactive Member Portal Placement Selector */}
-            <div style={{background:"#F8FAFC",border:"1.5px solid #94A3B8",borderRadius:8,padding:"6px 12px",display:"flex",alignItems:"center",gap:8,fontSize:".78rem"}}>
-              <span style={{fontWeight:800,color:"#1E293B",display:"flex",alignItems:"center",gap:4}}>
-                <span>🎯</span> Appears in Member Dashboard Under:
-              </span>
-              {currentDocTpl?.id === 'invite' ? (
-                <span style={{fontWeight:800,color:"#D2691E",background:"#FFF7ED",padding:"3px 10px",borderRadius:6,border:"1.5px solid #FDBA74",fontSize:".76rem"}}>
-                  💌 Special Invites (Fixed for Invitation Letters)
-                </span>
-              ) : currentDocTpl?.id === 'cert' ? (
-                <span style={{fontWeight:800,color:"#15803D",background:"#F0FDF4",padding:"3px 10px",borderRadius:6,border:"1.5px solid #86EFAC",fontSize:".76rem"}}>
-                  🎓 Education Awards (Fixed for Merit Certificates)
-                </span>
-              ) : (
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <select
-                    value={currentDocTpl?.customTpl?.targetSection || "invites"}
-                    onChange={(e) => {
-                      const newSection = e.target.value;
-                      const updatedTpls = (activeEvent.pdfTemplates || []).map(t => t.id === currentDocTpl.id ? { ...t, targetSection: newSection } : t);
-                      const updatedEvents = (C.events || []).map(ev => (ev.id === activeEvent.id || ev.title === activeEvent.title) ? { ...ev, pdfTemplates: updatedTpls } : ev);
-                      const updatedC = { ...C, events: updatedEvents };
-                      if (setC) setC(updatedC);
-                      fbSave(updatedC, auth?.idToken);
-                      alert(`Saved! "${currentDocTpl.name}" will now appear under "${newSection === 'awards' ? '🎓 Education Awards' : '💌 Special Invites'}" in the Student's My Portal!`);
-                    }}
-                    style={{
-                      padding:"4px 10px",
-                      borderRadius:6,
-                      border:"2px solid #2563EB",
-                      fontSize:".78rem",
-                      fontWeight:800,
-                      background:"white",
-                      color:"#1D4ED8",
-                      cursor:"pointer",
-                      boxShadow:"0 1px 4px rgba(37,99,235,0.2)"
-                    }}
-                  >
-                    <option value="invites">💌 Special Invites (Passes, Coupons & Letters)</option>
-                    <option value="awards">🎓 Education Awards (Certificates & Honors)</option>
-                  </select>
-                  <span style={{fontSize:".7rem",color:"#64748B",fontStyle:"italic"}}>
-                    (Select where released pass appears for student)
-                  </span>
                 </div>
-              )}
-            </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                const name = prompt("Enter Name for new PDF Template (e.g. Food Coupon & Dinner Pass, Token Number, Gate Pass):");
-                if (name && name.trim()) {
-                  const cleanName = name.trim();
-                  const tplId = "doc_" + Date.now();
-                  const newTpl = {
-                    id: tplId,
-                    name: cleanName,
-                    targetSection: "invites",
-                    bgUrl: "",
-                    map: {},
-                    fontSize: 30,
-                    fontColor: "#000000"
-                  };
-                  const updatedTpls = [...(activeEvent.pdfTemplates || []), newTpl];
-                  const updatedEvents = (C.events || []).map(e => (e.id === activeEvent.id || e.title === activeEvent.title) ? { ...e, pdfTemplates: updatedTpls } : e);
-                  const updatedC = { ...C, events: updatedEvents };
-                  if (setC) setC(updatedC);
-                  fbSave(updatedC, auth?.idToken);
-                  setActiveDocType(tplId);
-                  alert(`Created "${cleanName}"! You can configure its background image in Content Editor -> Events.`);
-                }
-              }}
-              style={{padding:"6px 12px",borderRadius:6,fontSize:".75rem",fontWeight:800,background:"#15803D",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}
-            >
-              <span>➕</span> + Add New Template
-            </button>
-          </div>
+                {/* Inline Placement Dropdown / Tag directly inside each tab */}
+                <div style={{marginTop: 2}} onClick={e => e.stopPropagation()}>
+                  {tab.id === 'invite' ? (
+                    <span style={{fontSize:".68rem",fontWeight:700,color:"#D2691E",background:"#FFF7ED",padding:"2px 6px",borderRadius:4,border:"1px solid #FFEDD5",display:"inline-block"}}>
+                      📍 Portal: 💌 Special Invites
+                    </span>
+                  ) : tab.id === 'cert' ? (
+                    <span style={{fontSize:".68rem",fontWeight:700,color:"#15803D",background:"#DCFCE7",padding:"2px 6px",borderRadius:4,border:"1px solid #BBF7D0",display:"inline-block"}}>
+                      📍 Portal: 🎓 Education Awards
+                    </span>
+                  ) : (
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{fontSize:".68rem",fontWeight:800,color:"#475569"}}>📍 Portal:</span>
+                      <select
+                        value={tab.customTpl?.targetSection || "invites"}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          const newSection = e.target.value;
+                          const updatedTpls = (activeEvent.pdfTemplates || []).map(t => t.id === tab.id ? { ...t, targetSection: newSection } : t);
+                          const updatedEvents = (C.events || []).map(ev => (ev.id === activeEvent.id || ev.title === activeEvent.title) ? { ...ev, pdfTemplates: updatedTpls } : ev);
+                          const updatedC = { ...C, events: updatedEvents };
+                          if (setC) setC(updatedC);
+                          fbSave(updatedC, auth?.idToken);
+                        }}
+                        style={{
+                          fontSize: ".7rem",
+                          fontWeight: 800,
+                          padding: "2px 6px",
+                          borderRadius: 4,
+                          border: "1.5px solid #2563EB",
+                          background: (tab.customTpl?.targetSection === 'awards') ? "#F0FDF4" : "#FFF7ED",
+                          color: (tab.customTpl?.targetSection === 'awards') ? "#15803D" : "#D2691E",
+                          cursor: "pointer"
+                        }}
+                      >
+                        <option value="invites">💌 Special Invites</option>
+                        <option value="awards">🎓 Education Awards</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Add New Template Button */}
+          <button
+            type="button"
+            onClick={() => {
+              const name = prompt("Enter Name for new PDF Template (e.g. Food Coupon & Dinner Pass, Token Number, Gate Pass):");
+              if (name && name.trim()) {
+                const cleanName = name.trim();
+                const tplId = "doc_" + Date.now();
+                const newTpl = {
+                  id: tplId,
+                  name: cleanName,
+                  targetSection: "invites",
+                  bgUrl: "",
+                  map: {},
+                  fontSize: 30,
+                  fontColor: "#000000"
+                };
+                const updatedTpls = [...(activeEvent.pdfTemplates || []), newTpl];
+                const updatedEvents = (C.events || []).map(e => (e.id === activeEvent.id || e.title === activeEvent.title) ? { ...e, pdfTemplates: updatedTpls } : e);
+                const updatedC = { ...C, events: updatedEvents };
+                if (setC) setC(updatedC);
+                fbSave(updatedC, auth?.idToken);
+                setActiveDocType(tplId);
+                alert(`Created "${cleanName}"! You can configure its background image in Content Editor -> Events.`);
+              }
+            }}
+            style={{
+              padding:"12px 16px",
+              borderRadius:10,
+              fontSize:".8rem",
+              fontWeight:800,
+              background:"#15803D",
+              color:"white",
+              border:"none",
+              cursor:"pointer",
+              display:"flex",
+              alignItems:"center",
+              gap:6,
+              boxShadow:"0 2px 8px rgba(21,128,61,0.25)",
+              whiteSpace:"nowrap"
+            }}
+          >
+            <span>➕</span> + Add New Template
+          </button>
         </div>
 
         {loading ? <p>Loading inviteLetters...</p> : (
