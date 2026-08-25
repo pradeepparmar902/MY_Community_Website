@@ -14429,9 +14429,9 @@ function UserDashboard({ C, globalProfile, globalAuthToken, onClose }) {
                                 </div>
 
                                 {/* Custom PDF Template Passes (e.g. Token Number, Food Coupon, Gate Pass) */}
-                                {(a.ev.pdfTemplates || []).length > 0 && (
+                                {(a.ev.pdfTemplates || []).filter(tpl => a.reg.releasedDocs && a.reg.releasedDocs[tpl.id] && (!a.reg.heldDocs || !a.reg.heldDocs[tpl.id])).length > 0 && (
                                   <div style={{display:"flex",flexDirection:"column",gap:6,borderTop:"1px dashed #CBD5E1",paddingTop:8}}>
-                                    {(a.ev.pdfTemplates || []).map(tpl => (
+                                    {(a.ev.pdfTemplates || []).filter(tpl => a.reg.releasedDocs && a.reg.releasedDocs[tpl.id] && (!a.reg.heldDocs || !a.reg.heldDocs[tpl.id])).map(tpl => (
                                       <button
                                         key={tpl.id}
                                         disabled={!tpl.bgUrl}
@@ -22163,6 +22163,25 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   ];
   const currentDocTpl = availableDocTemplates.find(d => d.id === activeDocType) || availableDocTemplates[0];
 
+  const getDocReleaseStatus = (r, docId) => {
+    if (!r) return { isReleased: false, isHeld: false };
+    if (docId === 'cert') {
+      return { 
+        isReleased: Boolean(r.certificateReleased && !r.certificateHold), 
+        isHeld: Boolean(r.certificateHold) 
+      };
+    }
+    if (docId === 'invite') {
+      return { 
+        isReleased: Boolean(r.inviteLetterReleased && !r.inviteLetterHold), 
+        isHeld: Boolean(r.inviteLetterHold) 
+      };
+    }
+    const isHeld = Boolean(r.heldDocs && r.heldDocs[docId]);
+    const isReleased = Boolean(r.releasedDocs && r.releasedDocs[docId] && !isHeld);
+    return { isReleased, isHeld };
+  };
+
   const inviteRegs = regs.filter(r => {
     if (!selectedEventId) return false;
     // Only Approved registrations (same as Certificates — exclude Pending/Rejected)
@@ -22371,10 +22390,24 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   };
 
   const toggleRelease = async (r) => {
-    const newVal = !r.inviteLetterReleased;
-    setRegs(prev => prev.map(x => x.id === r.id ? { ...x, inviteLetterReleased: newVal } : x));
+    const docId = currentDocTpl?.id || 'invite';
+    const status = getDocReleaseStatus(r, docId);
+    const newVal = !status.isReleased;
+    let updatedR = { ...r };
+
+    if (docId === 'cert') {
+      updatedR.certificateReleased = newVal;
+    } else if (docId === 'invite') {
+      updatedR.inviteLetterReleased = newVal;
+    } else {
+      const currentReleased = { ...(r.releasedDocs || {}) };
+      currentReleased[docId] = newVal;
+      updatedR.releasedDocs = currentReleased;
+    }
+
+    setRegs(prev => prev.map(x => x.id === r.id ? updatedR : x));
     try {
-      const cleanData = { ...r, inviteLetterReleased: newVal };
+      const cleanData = { ...updatedR };
       delete cleanData.id; delete cleanData._submittedAt;
       await fbUpdateRegistration(r.id, cleanData, auth?.idToken);
     } catch (e) {
@@ -22384,10 +22417,24 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   };
 
   const toggleHold = async (r) => {
-    const newVal = !r.inviteLetterHold;
-    setRegs(prev => prev.map(x => x.id === r.id ? { ...x, inviteLetterHold: newVal } : x));
+    const docId = currentDocTpl?.id || 'invite';
+    const status = getDocReleaseStatus(r, docId);
+    const newVal = !status.isHeld;
+    let updatedR = { ...r };
+
+    if (docId === 'cert') {
+      updatedR.certificateHold = newVal;
+    } else if (docId === 'invite') {
+      updatedR.inviteLetterHold = newVal;
+    } else {
+      const currentHeld = { ...(r.heldDocs || {}) };
+      currentHeld[docId] = newVal;
+      updatedR.heldDocs = currentHeld;
+    }
+
+    setRegs(prev => prev.map(x => x.id === r.id ? updatedR : x));
     try {
-      const cleanData = { ...r, inviteLetterHold: newVal };
+      const cleanData = { ...updatedR };
       delete cleanData.id; delete cleanData._submittedAt;
       await fbUpdateRegistration(r.id, cleanData, auth?.idToken);
     } catch (e) {
@@ -22397,26 +22444,39 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   };
 
   const handleReleaseAll = async () => {
-    const unreleased = filteredRegs.filter(r => !r.inviteLetterReleased && !r.inviteLetterHold);
+    const docId = currentDocTpl?.id || 'invite';
+    const unreleased = filteredRegs.filter(r => {
+      const st = getDocReleaseStatus(r, docId);
+      return !st.isReleased && !st.isHeld;
+    });
     if (unreleased.length === 0) {
-      alert("All visible invite letters are already released or on hold!");
+      alert(`All visible ${currentDocTpl?.name || 'documents'} are already released or on hold!`);
       return;
     }
-    if (!window.confirm(`Are you sure you want to release ${unreleased.length} invite letters?`)) return;
+    if (!window.confirm(`Are you sure you want to release ${unreleased.length} ${currentDocTpl?.name || 'documents'}?`)) return;
     
     setReleasingAll(true);
     let successCount = 0;
     try {
       for (const r of unreleased) {
-        const cleanData = { ...r, inviteLetterReleased: true };
-        delete cleanData.id; delete cleanData._submittedAt;
-        await fbUpdateRegistration(r.id, cleanData, auth?.idToken);
-        setRegs(prev => prev.map(x => x.id === r.id ? { ...x, inviteLetterReleased: true } : x));
+        let updatedR = { ...r };
+        if (docId === 'cert') {
+          updatedR.certificateReleased = true;
+        } else if (docId === 'invite') {
+          updatedR.inviteLetterReleased = true;
+        } else {
+          const currentReleased = { ...(r.releasedDocs || {}) };
+          currentReleased[docId] = true;
+          updatedR.releasedDocs = currentReleased;
+        }
+        delete updatedR.id; delete updatedR._submittedAt;
+        await fbUpdateRegistration(r.id, updatedR, auth?.idToken);
+        setRegs(prev => prev.map(x => x.id === r.id ? { ...x, ...updatedR } : x));
         successCount++;
       }
-      alert(`Successfully released ${successCount} invite letters!`);
+      alert(`Successfully released ${successCount} ${currentDocTpl?.name || 'documents'}!`);
     } catch (e) {
-      alert(`Error after releasing ${successCount} invite letters: ` + e.message);
+      alert(`Error after releasing ${successCount} ${currentDocTpl?.name || 'documents'}: ` + e.message);
     }
     setReleasingAll(false);
   };
@@ -22811,10 +22871,11 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
               return Object.values(r).some(v => String(v).toLowerCase().includes(q));
             });
 
+            const activeDocId = currentDocTpl?.id || 'invite';
             const cOpened = basePool.filter(r => r.passOpenCount && r.passOpenCount > 0).length;
             const cUnopened = basePool.filter(r => !r.passOpenCount || r.passOpenCount === 0).length;
-            const cReleased = basePool.filter(r => r.inviteLetterReleased && !r.inviteLetterHold).length;
-            const cPendingRel = basePool.filter(r => !r.inviteLetterReleased && !r.inviteLetterHold).length;
+            const cReleased = basePool.filter(r => getDocReleaseStatus(r, activeDocId).isReleased).length;
+            const cPendingRel = basePool.filter(r => !getDocReleaseStatus(r, activeDocId).isReleased && !getDocReleaseStatus(r, activeDocId).isHeld).length;
 
             const isAnyFilterActive = inviteOpenPillFilter !== null || inviteReleasePillFilter !== null;
 
@@ -23112,27 +23173,39 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
                           <button onClick={(e)=>{e.stopPropagation(); setHistoryModalReg(r);}} style={{padding:"5px 7px",borderRadius:6,fontSize:".74rem",background:"#FFF4EC",color:"var(--sf)",border:"1px solid #FDDBB8",cursor:"pointer",fontWeight:700}} title="View Audit Logs & Pass Open History">
                             📜 Logs {r.logHistory && r.logHistory.length > 0 ? `(${r.logHistory.length})` : ""}
                           </button>
-                          <button onClick={(e)=>{e.stopPropagation(); toggleRelease(r);}} disabled={r.inviteLetterHold} style={{padding:"5px 8px",borderRadius:6,fontSize:".74rem",background:r.inviteLetterHold?"#eaeaea":r.inviteLetterReleased?"#f5f5f5":"var(--dt)",color:r.inviteLetterHold?"#aaa":r.inviteLetterReleased?"#333":"white",border:r.inviteLetterReleased?"1px solid #ccc":"none",cursor:r.inviteLetterHold?"not-allowed":"pointer",fontWeight:600}}>
-                            {r.inviteLetterReleased ? "Revoke" : "Release"}
-                          </button>
-                          <button onClick={(e)=>{e.stopPropagation(); toggleHold(r);}} style={{padding:"5px 8px",borderRadius:6,fontSize:".74rem",background:r.inviteLetterHold?"#FEE2E2":"#f5f5f5",color:r.inviteLetterHold?"#991B1B":"#666",border:r.inviteLetterHold?"1px solid #FCA5A5":"1px solid #ccc",cursor:"pointer",fontWeight:600}}>
-                            {r.inviteLetterHold ? "Unhold" : "Hold"}
-                          </button>
+                          {(() => {
+                            const activeDocId = currentDocTpl?.id || 'invite';
+                            const { isReleased: docIsReleased, isHeld: docIsHeld } = getDocReleaseStatus(r, activeDocId);
+                            return (
+                              <>
+                                <button onClick={(e)=>{e.stopPropagation(); toggleRelease(r);}} disabled={docIsHeld} style={{padding:"5px 8px",borderRadius:6,fontSize:".74rem",background:docIsHeld?"#eaeaea":docIsReleased?"#f5f5f5":"var(--dt)",color:docIsHeld?"#aaa":docIsReleased?"#333":"white",border:docIsReleased?"1px solid #ccc":"none",cursor:docIsHeld?"not-allowed":"pointer",fontWeight:600}}>
+                                  {docIsReleased ? "Revoke" : "Release"}
+                                </button>
+                                <button onClick={(e)=>{e.stopPropagation(); toggleHold(r);}} style={{padding:"5px 8px",borderRadius:6,fontSize:".74rem",background:docIsHeld?"#FEE2E2":"#f5f5f5",color:docIsHeld?"#991B1B":"#666",border:docIsHeld?"1px solid #FCA5A5":"1px solid #ccc",cursor:"pointer",fontWeight:600}}>
+                                  {docIsHeld ? "Unhold" : "Hold"}
+                                </button>
+                              </>
+                            );
+                          })()}
                         </div>
                       </td>
                       <td style={{padding:"12px"}}>{date}</td>
                       <td style={{padding:"12px"}}>{evName}</td>
                       <td style={{padding:"12px",fontWeight:600}}>{pName}</td>
                       <td style={{padding:"12px",textAlign:"center"}}>
-                        {r.inviteLetterHold ? (
-                          <span style={{padding:"4px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700,background:"#FEE2E2",color:"#991B1B",display:"inline-block"}}>
-                            Hold
-                          </span>
-                        ) : (
-                          <span style={{padding:"4px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700,background:r.inviteLetterReleased?"#EDFAF1":"#FEF9EC",color:r.inviteLetterReleased?"#1A7A3E":"#C8860A"}}>
-                            {r.inviteLetterReleased ? "Released" : "Pending"}
-                          </span>
-                        )}
+                        {(() => {
+                          const activeDocId = currentDocTpl?.id || 'invite';
+                          const { isReleased: docIsReleased, isHeld: docIsHeld } = getDocReleaseStatus(r, activeDocId);
+                          return docIsHeld ? (
+                            <span style={{padding:"4px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700,background:"#FEE2E2",color:"#991B1B",display:"inline-block"}}>
+                              Hold
+                            </span>
+                          ) : (
+                            <span style={{padding:"4px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700,background:docIsReleased?"#EDFAF1":"#FEF9EC",color:docIsReleased?"#1A7A3E":"#C8860A"}}>
+                              {docIsReleased ? "Released" : "Pending"}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td style={{padding:"12px",textAlign:"center",color:"var(--mu)",fontSize:".75rem"}}>{vDate}</td>
                       <td style={{padding:"12px",textAlign:"center",color:"var(--mu)",fontSize:".75rem"}}>{dDate}</td>
