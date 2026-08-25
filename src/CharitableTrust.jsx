@@ -19351,8 +19351,31 @@ function AdminRegistrations({ mob, C, setC, auth }) {
       const q = searchQuery.toLowerCase();
       if (!Object.values(r).some(val => String(val).toLowerCase().includes(q))) return false;
     }
+
+    // 2. Interactive Status Pill Filter (Single or Combined)
+    if (statusPillFilter) {
+      const st = r.Status || r.status || 'Pending';
+      if (statusPillFilter === "Pending") {
+        if (st !== "Pending" && st !== "") return false;
+      } else {
+        if (st !== statusPillFilter) return false;
+      }
+    }
+
+    // 3. Interactive Pass Open / Unopened Pill Filter (Single or Combined)
+    if (openPillFilter) {
+      const hasOpened = r.passOpenCount && r.passOpenCount > 0;
+      if (openPillFilter === "opened" && !hasOpened) return false;
+      if (openPillFilter === "unopened" && hasOpened) return false;
+    }
+
+    // 4. Show Only Selected Rows Toggle
+    if (selectedOnlyFilter) {
+      const rowId = r.id || r['Transaction ID'];
+      if (!selectedIds.includes(rowId)) return false;
+    }
     
-    // 2. Column filters
+    // 5. Column filters
     for (const [colKey, filterVal] of Object.entries(columnFilters)) {
       if(!filterVal) continue;
       
@@ -19508,64 +19531,184 @@ function AdminRegistrations({ mob, C, setC, auth }) {
           {/* Right: Search + Refresh + Export + Bulk Tools Toggle */}
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
             {/* Quick Status Checkbox Selectors */}
-            <div style={{display:"flex",alignItems:"center",gap:4,background:"#F1F5F9",padding:"3px 6px",borderRadius:8,border:"1px solid #CBD5E1",flexWrap:"wrap"}}>
-              <span style={{fontSize:".72rem",fontWeight:800,color:"#475569",paddingLeft:2}}>☑ Select:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  const matches = filteredRegs.filter(r => r.passOpenCount && r.passOpenCount > 0);
-                  setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
-                }}
-                style={{padding:"3px 8px",borderRadius:6,border:"1px solid #BFDBFE",background:"#EFF6FF",color:"#1D4ED8",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
-                title="Select all applicants who have opened their invitation pass"
-              >
-                👁️ Opened ({filteredRegs.filter(r => r.passOpenCount && r.passOpenCount > 0).length})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const matches = filteredRegs.filter(r => !r.passOpenCount || r.passOpenCount === 0);
-                  setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
-                }}
-                style={{padding:"3px 8px",borderRadius:6,border:"1px solid #E2E8F0",background:"white",color:"#64748B",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
-                title="Select all applicants who have NOT opened their pass yet"
-              >
-                ⚪ Unopened ({filteredRegs.filter(r => !r.passOpenCount || r.passOpenCount === 0).length})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const matches = filteredRegs.filter(r => (r.Status || r.status) === "Needs Info");
-                  setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
-                }}
-                style={{padding:"3px 8px",borderRadius:6,border:"1px solid #FDE68A",background:"#FFFBEB",color:"#92400E",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
-                title="Select all Needs Info students"
-              >
-                ⚠️ Needs Info ({filteredRegs.filter(r => (r.Status || r.status) === "Needs Info").length})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const matches = filteredRegs.filter(r => (r.Status || r.status) === "Approved");
-                  setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
-                }}
-                style={{padding:"3px 8px",borderRadius:6,border:"1px solid #BBF7D0",background:"#F0FDF4",color:"#166534",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
-                title="Select all Approved students"
-              >
-                🟢 Approved ({filteredRegs.filter(r => (r.Status || r.status) === "Approved").length})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const matches = filteredRegs.filter(r => (!r.Status && !r.status) || (r.Status || r.status) === "Pending");
-                  setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
-                }}
-                style={{padding:"3px 8px",borderRadius:6,border:"1px solid #E2E8F0",background:"white",color:"#334155",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
-                title="Select all Pending students"
-              >
-                ⏳ Pending ({filteredRegs.filter(r => (!r.Status && !r.status) || (r.Status || r.status) === "Pending").length})
-              </button>
-            </div>
+            {(() => {
+              // Base candidates before status / open pill filters to show accurate bucket counts
+              const basePool = activeRegsList.filter(r => {
+                const ev = (C.events || []).find(e => e.id === r.eventId || e.title === r.eventName || e.titleGu === r.eventName);
+                const evSection = ev?.section || "Default";
+                if (selectedSection !== "All") {
+                  if (selectedSection === "Default") {
+                    if (evSection !== "Default" && evSection !== "") return false;
+                  } else {
+                    if (evSection !== selectedSection) return false;
+                  }
+                }
+                if (searchQuery) {
+                  const q = searchQuery.toLowerCase();
+                  if (!Object.values(r).some(val => String(val).toLowerCase().includes(q))) return false;
+                }
+                return true;
+              });
+
+              const cOpened = basePool.filter(r => r.passOpenCount && r.passOpenCount > 0).length;
+              const cUnopened = basePool.filter(r => !r.passOpenCount || r.passOpenCount === 0).length;
+              const cNeedsInfo = basePool.filter(r => (r.Status || r.status) === "Needs Info").length;
+              const cApproved = basePool.filter(r => (r.Status || r.status) === "Approved").length;
+              const cPending = basePool.filter(r => (!r.Status && !r.status) || (r.Status || r.status) === "Pending").length;
+
+              const isAnyFilterActive = statusPillFilter !== null || openPillFilter !== null || selectedOnlyFilter;
+
+              return (
+                <div style={{display:"flex",alignItems:"center",gap:4,background:"#F8FAFC",padding:"4px 8px",borderRadius:10,border:"1.5px solid #CBD5E1",flexWrap:"wrap"}}>
+                  <span style={{fontSize:".72rem",fontWeight:800,color:"#334155",paddingRight:2,display:"flex",alignItems:"center",gap:3}}>
+                    <span>🎯</span> Filter Rows:
+                  </span>
+                  
+                  {/* Opened Pill */}
+                  <button
+                    type="button"
+                    onClick={() => setOpenPillFilter(prev => prev === "opened" ? null : "opened")}
+                    style={{
+                      padding: "4px 9px",
+                      borderRadius: 6,
+                      border: openPillFilter === "opened" ? "2px solid #1E40AF" : "1px solid #BFDBFE",
+                      background: openPillFilter === "opened" ? "#1D4ED8" : "#EFF6FF",
+                      color: openPillFilter === "opened" ? "white" : "#1D4ED8",
+                      fontSize: ".74rem",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      boxShadow: openPillFilter === "opened" ? "0 2px 6px rgba(29,78,216,0.35)" : "none"
+                    }}
+                    title={openPillFilter === "opened" ? "Click to remove filter" : "Filter ONLY applicants who have opened their invitation pass"}
+                  >
+                    <span>👁️</span> Opened ({cOpened}) {openPillFilter === "opened" && "✓"}
+                  </button>
+
+                  {/* Unopened Pill */}
+                  <button
+                    type="button"
+                    onClick={() => setOpenPillFilter(prev => prev === "unopened" ? null : "unopened")}
+                    style={{
+                      padding: "4px 9px",
+                      borderRadius: 6,
+                      border: openPillFilter === "unopened" ? "2px solid #475569" : "1px solid #CBD5E1",
+                      background: openPillFilter === "unopened" ? "#475569" : "white",
+                      color: openPillFilter === "unopened" ? "white" : "#64748B",
+                      fontSize: ".74rem",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      boxShadow: openPillFilter === "unopened" ? "0 2px 6px rgba(71,85,105,0.35)" : "none"
+                    }}
+                    title={openPillFilter === "unopened" ? "Click to remove filter" : "Filter ONLY applicants who have NOT opened their pass"}
+                  >
+                    <span>⚪</span> Unopened ({cUnopened}) {openPillFilter === "unopened" && "✓"}
+                  </button>
+
+                  <span style={{color:"#CBD5E1",fontSize:".8rem",margin:"0 2px"}}>|</span>
+
+                  {/* Needs Info Pill */}
+                  <button
+                    type="button"
+                    onClick={() => setStatusPillFilter(prev => prev === "Needs Info" ? null : "Needs Info")}
+                    style={{
+                      padding: "4px 9px",
+                      borderRadius: 6,
+                      border: statusPillFilter === "Needs Info" ? "2px solid #B45309" : "1px solid #FDE68A",
+                      background: statusPillFilter === "Needs Info" ? "#D97706" : "#FFFBEB",
+                      color: statusPillFilter === "Needs Info" ? "white" : "#92400E",
+                      fontSize: ".74rem",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      boxShadow: statusPillFilter === "Needs Info" ? "0 2px 6px rgba(217,119,6,0.35)" : "none"
+                    }}
+                    title={statusPillFilter === "Needs Info" ? "Click to remove filter" : "Filter ONLY Needs Info / Pending Query students"}
+                  >
+                    <span>⚠️</span> Needs Info ({cNeedsInfo}) {statusPillFilter === "Needs Info" && "✓"}
+                  </button>
+
+                  {/* Approved Pill */}
+                  <button
+                    type="button"
+                    onClick={() => setStatusPillFilter(prev => prev === "Approved" ? null : "Approved")}
+                    style={{
+                      padding: "4px 9px",
+                      borderRadius: 6,
+                      border: statusPillFilter === "Approved" ? "2px solid #15803D" : "1px solid #BBF7D0",
+                      background: statusPillFilter === "Approved" ? "#15803D" : "#F0FDF4",
+                      color: statusPillFilter === "Approved" ? "white" : "#166534",
+                      fontSize: ".74rem",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      boxShadow: statusPillFilter === "Approved" ? "0 2px 6px rgba(21,128,61,0.35)" : "none"
+                    }}
+                    title={statusPillFilter === "Approved" ? "Click to remove filter" : "Filter ONLY Approved students"}
+                  >
+                    <span>🟢</span> Approved ({cApproved}) {statusPillFilter === "Approved" && "✓"}
+                  </button>
+
+                  {/* Pending Pill */}
+                  <button
+                    type="button"
+                    onClick={() => setStatusPillFilter(prev => prev === "Pending" ? null : "Pending")}
+                    style={{
+                      padding: "4px 9px",
+                      borderRadius: 6,
+                      border: statusPillFilter === "Pending" ? "2px solid #334155" : "1px solid #E2E8F0",
+                      background: statusPillFilter === "Pending" ? "#334155" : "white",
+                      color: statusPillFilter === "Pending" ? "white" : "#334155",
+                      fontSize: ".74rem",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      boxShadow: statusPillFilter === "Pending" ? "0 2px 6px rgba(51,65,85,0.35)" : "none"
+                    }}
+                    title={statusPillFilter === "Pending" ? "Click to remove filter" : "Filter ONLY Under Review / Pending students"}
+                  >
+                    <span>⏳</span> Pending ({cPending}) {statusPillFilter === "Pending" && "✓"}
+                  </button>
+
+                  {/* Reset Filters */}
+                  {isAnyFilterActive && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatusPillFilter(null);
+                        setOpenPillFilter(null);
+                        setSelectedOnlyFilter(false);
+                      }}
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: 6,
+                        border: "1px solid #FECACA",
+                        background: "#FEF2F2",
+                        color: "#DC2626",
+                        fontSize: ".72rem",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        marginLeft: 4
+                      }}
+                      title="Clear all active status and open filters"
+                    >
+                      ✕ Reset ({filteredRegs.length} shown)
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
 
             <input 
               type="text" 
@@ -21189,6 +21332,8 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   const [showBulkWhatsAppModal, setShowBulkWhatsAppModal] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [historyModalReg, setHistoryModalReg] = useState(null);
+  const [inviteOpenPillFilter, setInviteOpenPillFilter] = useState(null);
+  const [inviteReleasePillFilter, setInviteReleasePillFilter] = useState(null);
 
   const globalGuests = regs.filter(r => r.isGlobalGuest === true);
 
@@ -21210,9 +21355,20 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   });
 
   const filteredRegs = inviteRegs.filter(r => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return Object.values(r).some(v => String(v).toLowerCase().includes(q));
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!Object.values(r).some(v => String(v).toLowerCase().includes(q))) return false;
+    }
+    if (inviteOpenPillFilter) {
+      const hasOpened = r.passOpenCount && r.passOpenCount > 0;
+      if (inviteOpenPillFilter === "opened" && !hasOpened) return false;
+      if (inviteOpenPillFilter === "unopened" && hasOpened) return false;
+    }
+    if (inviteReleasePillFilter) {
+      if (inviteReleasePillFilter === "released" && (!r.inviteLetterReleased || r.inviteLetterHold)) return false;
+      if (inviteReleasePillFilter === "pending" && (r.inviteLetterReleased || r.inviteLetterHold)) return false;
+    }
+    return true;
   });
 
   const fetchRegs = async () => {
@@ -21825,53 +21981,147 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
         <div style={{marginBottom: 16, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap"}}>
           <input type="text" placeholder="Search students/guests..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} style={{padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",fontSize:".85rem",width:240,outline:"none",fontFamily:"inherit"}} />
           
-          {/* Quick Select Filter Pills */}
-          <div style={{display:"flex",alignItems:"center",gap:6,background:"#F1F5F9",padding:"4px 8px",borderRadius:8,border:"1px solid #CBD5E1"}}>
-            <span style={{fontSize:".75rem",fontWeight:800,color:"#475569"}}>☑ Select:</span>
-            <button
-              type="button"
-              onClick={() => {
-                const matches = filteredRegs.filter(r => r.passOpenCount && r.passOpenCount > 0);
-                setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
-              }}
-              style={{padding:"3px 8px",borderRadius:6,border:"1px solid #BFDBFE",background:"#EFF6FF",color:"#1D4ED8",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
-              title="Select all invitees who have opened their pass"
-            >
-              👁️ Opened ({filteredRegs.filter(r => r.passOpenCount && r.passOpenCount > 0).length})
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const matches = filteredRegs.filter(r => !r.passOpenCount || r.passOpenCount === 0);
-                setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
-              }}
-              style={{padding:"3px 8px",borderRadius:6,border:"1px solid #E2E8F0",background:"white",color:"#64748B",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
-              title="Select all invitees who have NOT opened their pass yet"
-            >
-              ⚪ Unopened ({filteredRegs.filter(r => !r.passOpenCount || r.passOpenCount === 0).length})
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const matches = filteredRegs.filter(r => r.inviteLetterReleased && !r.inviteLetterHold);
-                setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
-              }}
-              style={{padding:"3px 8px",borderRadius:6,border:"1px solid #BBF7D0",background:"#F0FDF4",color:"#166534",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
-              title="Select all released invitees"
-            >
-              📢 Released ({filteredRegs.filter(r => r.inviteLetterReleased && !r.inviteLetterHold).length})
-            </button>
-            {selectedIds.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setSelectedIds([])}
-                style={{padding:"3px 8px",borderRadius:6,border:"1px solid #CBD5E1",background:"#FEF2F2",color:"#DC2626",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
-                title="Clear selected checkboxes"
-              >
-                ✕ Clear ({selectedIds.length})
-              </button>
-            )}
-          </div>
+{(() => {
+            const basePool = inviteRegs.filter(r => {
+              if (!searchQuery) return true;
+              const q = searchQuery.toLowerCase();
+              return Object.values(r).some(v => String(v).toLowerCase().includes(q));
+            });
+
+            const cOpened = basePool.filter(r => r.passOpenCount && r.passOpenCount > 0).length;
+            const cUnopened = basePool.filter(r => !r.passOpenCount || r.passOpenCount === 0).length;
+            const cReleased = basePool.filter(r => r.inviteLetterReleased && !r.inviteLetterHold).length;
+            const cPendingRel = basePool.filter(r => !r.inviteLetterReleased && !r.inviteLetterHold).length;
+
+            const isAnyFilterActive = inviteOpenPillFilter !== null || inviteReleasePillFilter !== null;
+
+            return (
+              <div style={{display:"flex",alignItems:"center",gap:6,background:"#F8FAFC",padding:"4px 8px",borderRadius:10,border:"1.5px solid #CBD5E1",flexWrap:"wrap"}}>
+                <span style={{fontSize:".75rem",fontWeight:800,color:"#334155",display:"flex",alignItems:"center",gap:3}}>
+                  <span>🎯</span> Filter Rows:
+                </span>
+                
+                {/* Opened Pill */}
+                <button
+                  type="button"
+                  onClick={() => setInviteOpenPillFilter(prev => prev === "opened" ? null : "opened")}
+                  style={{
+                    padding: "4px 9px",
+                    borderRadius: 6,
+                    border: inviteOpenPillFilter === "opened" ? "2px solid #1E40AF" : "1px solid #BFDBFE",
+                    background: inviteOpenPillFilter === "opened" ? "#1D4ED8" : "#EFF6FF",
+                    color: inviteOpenPillFilter === "opened" ? "white" : "#1D4ED8",
+                    fontSize: ".74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    boxShadow: inviteOpenPillFilter === "opened" ? "0 2px 6px rgba(29,78,216,0.35)" : "none"
+                  }}
+                  title={inviteOpenPillFilter === "opened" ? "Click to remove filter" : "Filter ONLY invitees who have opened their pass"}
+                >
+                  <span>👁️</span> Opened ({cOpened}) {inviteOpenPillFilter === "opened" && "✓"}
+                </button>
+
+                {/* Unopened Pill */}
+                <button
+                  type="button"
+                  onClick={() => setInviteOpenPillFilter(prev => prev === "unopened" ? null : "unopened")}
+                  style={{
+                    padding: "4px 9px",
+                    borderRadius: 6,
+                    border: inviteOpenPillFilter === "unopened" ? "2px solid #475569" : "1px solid #CBD5E1",
+                    background: inviteOpenPillFilter === "unopened" ? "#475569" : "white",
+                    color: inviteOpenPillFilter === "unopened" ? "white" : "#64748B",
+                    fontSize: ".74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    boxShadow: inviteOpenPillFilter === "unopened" ? "0 2px 6px rgba(71,85,105,0.35)" : "none"
+                  }}
+                  title={inviteOpenPillFilter === "unopened" ? "Click to remove filter" : "Filter ONLY invitees who have NOT opened their pass"}
+                >
+                  <span>⚪</span> Unopened ({cUnopened}) {inviteOpenPillFilter === "unopened" && "✓"}
+                </button>
+
+                <span style={{color:"#CBD5E1",fontSize:".8rem",margin:"0 2px"}}>|</span>
+
+                {/* Released Pill */}
+                <button
+                  type="button"
+                  onClick={() => setInviteReleasePillFilter(prev => prev === "released" ? null : "released")}
+                  style={{
+                    padding: "4px 9px",
+                    borderRadius: 6,
+                    border: inviteReleasePillFilter === "released" ? "2px solid #15803D" : "1px solid #BBF7D0",
+                    background: inviteReleasePillFilter === "released" ? "#15803D" : "#F0FDF4",
+                    color: inviteReleasePillFilter === "released" ? "white" : "#166534",
+                    fontSize: ".74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    boxShadow: inviteReleasePillFilter === "released" ? "0 2px 6px rgba(21,128,61,0.35)" : "none"
+                  }}
+                  title={inviteReleasePillFilter === "released" ? "Click to remove filter" : "Filter ONLY released invite letters"}
+                >
+                  <span>📢</span> Released ({cReleased}) {inviteReleasePillFilter === "released" && "✓"}
+                </button>
+
+                {/* Pending Release Pill */}
+                <button
+                  type="button"
+                  onClick={() => setInviteReleasePillFilter(prev => prev === "pending" ? null : "pending")}
+                  style={{
+                    padding: "4px 9px",
+                    borderRadius: 6,
+                    border: inviteReleasePillFilter === "pending" ? "2px solid #D97706" : "1px solid #FDE68A",
+                    background: inviteReleasePillFilter === "pending" ? "#D97706" : "#FFFBEB",
+                    color: inviteReleasePillFilter === "pending" ? "white" : "#92400E",
+                    fontSize: ".74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    boxShadow: inviteReleasePillFilter === "pending" ? "0 2px 6px rgba(217,119,6,0.35)" : "none"
+                  }}
+                  title={inviteReleasePillFilter === "pending" ? "Click to remove filter" : "Filter ONLY pending release invite letters"}
+                >
+                  <span>⏳</span> Pending ({cPendingRel}) {inviteReleasePillFilter === "pending" && "✓"}
+                </button>
+
+                {/* Reset Filters */}
+                {isAnyFilterActive && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInviteOpenPillFilter(null);
+                      setInviteReleasePillFilter(null);
+                    }}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #FECACA",
+                      background: "#FEF2F2",
+                      color: "#DC2626",
+                      fontSize: ".72rem",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      marginLeft: 4
+                    }}
+                    title="Clear all active filters"
+                  >
+                    ✕ Reset ({filteredRegs.length} shown)
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {loading ? <p>Loading inviteLetters...</p> : (
