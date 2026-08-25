@@ -18884,14 +18884,17 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
                 <div style={{fontSize:".75rem",fontWeight:700,color:"#475569",marginBottom:6}}>INSERT PERSONALIZED PLACEHOLDERS:</div>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
                   {[
+                    '{EVENT_NAME}',
                     '{STUDENT_NAME}',
                     '{TXN_ID}',
-                    '{CERTIFICATE_LINK}',
+                    '{DATE}',
+                    '{VENUE}',
                     '{INVITE_PDF_LINK}',
+                    '{CERTIFICATE_LINK}',
                     '{PORTAL_URL}',
-                    '{PERCENTAGE}',
-                    '{STREAM}',
                     '{VIBHAG}',
+                    '{STREAM}',
+                    '{PERCENTAGE}',
                     '{HELPLINE_PHONES}'
                   ].map(ph => (
                     <button
@@ -18899,14 +18902,15 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
                       type="button"
                       onClick={() => insertPlaceholder(' ' + ph)}
                       style={{
-                        padding:"4px 9px",
-                        background: ph.includes('CERTIFICATE') ? "#EFF6FF" : ph.includes('INVITE') ? "#F0FDF4" : "#F1F5F9",
-                        border: ph.includes('CERTIFICATE') ? "1px solid #93C5FD" : ph.includes('INVITE') ? "1px solid #86EFAC" : "1px solid #CBD5E1",
-                        color: ph.includes('CERTIFICATE') ? "#1D4ED8" : ph.includes('INVITE') ? "#15803D" : "#334155",
+                        padding:"5px 10px",
+                        background: ph.includes('EVENT') ? "#FEF3C7" : ph.includes('CERTIFICATE') ? "#EFF6FF" : ph.includes('INVITE') ? "#F0FDF4" : "#F1F5F9",
+                        border: ph.includes('EVENT') ? "1.5px solid #F59E0B" : ph.includes('CERTIFICATE') ? "1px solid #93C5FD" : ph.includes('INVITE') ? "1px solid #86EFAC" : "1px solid #CBD5E1",
+                        color: ph.includes('EVENT') ? "#92400E" : ph.includes('CERTIFICATE') ? "#1D4ED8" : ph.includes('INVITE') ? "#15803D" : "#334155",
                         borderRadius:6,
                         fontSize:".75rem",
-                        fontWeight:700,
-                        cursor:"pointer"
+                        fontWeight:800,
+                        cursor:"pointer",
+                        boxShadow: ph.includes('EVENT') ? "0 1px 4px rgba(245,158,11,0.2)" : "none"
                       }}
                     >
                       + {ph}
@@ -19063,7 +19067,19 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
     const docUrl = reg.customDocId ? `${baseUrl}/?doc=${encodeURIComponent(reg.customDocId)}&pass=${encodeURIComponent(rTxn || "")}` : null;
     const defaultUrl = docUrl || (reg.isCertMode ? certUrl : inviteUrl);
 
+    const evTitle = eventObj?.title || reg.eventName || reg.eventTitle || reg.eventId || "Event";
+    const evDate = eventObj?.date ? `${eventObj.date} ${eventObj.month || ''}`.trim() : (reg.Date || reg.eventDate || "2026");
+    const evVenue = eventObj?.location || reg.location || reg.venue || "Mumbai";
+
     let processed = (tplString || "")
+      .replace(/\{EVENT_NAME\}/g, evTitle)
+      .replace(/\{EVENT_TITLE\}/g, evTitle)
+      .replace(/\{EVENT\}/g, evTitle)
+      .replace(/\{DATE\}/g, evDate)
+      .replace(/\{EVENT_DATE\}/g, evDate)
+      .replace(/\{VENUE\}/g, evVenue)
+      .replace(/\{LOCATION\}/g, evVenue)
+      .replace(/\{MEMBER_NAME\}/g, rName || "Member")
       .replace(/\{STUDENT_NAME\}/g, rName || "Student")
       .replace(/\{TXN_ID\}/g, rTxn || "N/A")
       .replace(/\{VIBHAG\}/g, rVibhag || "All Vibhags")
