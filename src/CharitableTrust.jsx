@@ -22335,10 +22335,7 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
 
   const globalGuests = regs.filter(r => r.isGlobalGuest === true);
 
-  const inviteEvents = (C.events || []).filter(e => {
-    if (e.issueInviteLetters === true || e.issueInviteLetters === "true" || e.isInternalOnly) return true;
-    return regs.some(r => r.eventId === e.id || r.eventName === e.title || r.eventTitle === e.title);
-  });
+  const inviteEvents = C.events || [];
 
   const activeEvent = inviteEvents.find(e => e.id === selectedEventId) || {};
 
