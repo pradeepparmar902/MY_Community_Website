@@ -21635,7 +21635,7 @@ function AdminCertificates({ mob, C, setC, auth }) {
               <span>🚀</span> Send All WhatsApp {selectedIds.length > 0 ? `(${selectedIds.length} Selected)` : `(${filteredRegs.length})`}
             </button>
             <button onClick={handleBulkDownload} disabled={downloadingBulk || releasingAll || refreshing} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:600,display:"flex",alignItems:"center",gap:6,background:"var(--sf)",color:"white",border:"none",cursor:(downloadingBulk || releasingAll || refreshing)?"wait":"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.1)",whiteSpace:"nowrap"}}>
-              {downloadingBulk ? `Generating ZIP (${downloadProgress}/${filteredRegs.length})...` : `📦 Bulk Download (${currentDocTpl?.name || 'ZIP'})`}
+              {downloadingBulk ? `Generating ZIP (${downloadProgress}/${filteredRegs.length})...` : "📦 Bulk Download ZIP"}
             </button>
           </div>
         </div>
