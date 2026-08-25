@@ -22752,7 +22752,50 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
              <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",margin:0}}>Letters & Certificates Workspaces</h2>
              <p style={{fontSize:".85rem",color:"var(--mu)",marginTop:4}}>Select an event below to manage invite letters, certificates, token passes, and custom PDF templates in one unified hub.</p>
            </div>
-           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+           <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+             <button 
+               onClick={() => {
+                 const title = prompt("Enter Title for Internal Admin Workspace (e.g. Local Committee Member Invites, Trustee Meeting & Circulars, Volunteer Duty Passes):");
+                 if (title && title.trim()) {
+                   const cleanTitle = title.trim();
+                   const newEvId = "ev_internal_" + Date.now();
+                   const newInternalEv = {
+                     id: newEvId,
+                     title: cleanTitle,
+                     isInternalOnly: true,
+                     issueInviteLetters: true,
+                     date: "Ongoing",
+                     month: "2026",
+                     location: "Internal Committee",
+                     tag: "Internal Admin",
+                     color: "#EFF6FF",
+                     formId: ""
+                   };
+                   const updatedEvents = [newInternalEv, ...(C.events || [])];
+                   const updatedC = { ...C, events: updatedEvents };
+                   if (setC) setC(updatedC);
+                   fbSave(updatedC, auth?.idToken);
+                   setSelectedEventId(newEvId);
+                   alert(`Created internal workspace "${cleanTitle}"! You can now import committee members/guests and configure PDF passes.`);
+                 }
+               }}
+               style={{
+                 padding:"10px 18px",
+                 borderRadius:8,
+                 fontSize:".85rem",
+                 fontWeight:800,
+                 display:"flex",
+                 alignItems:"center",
+                 gap:8,
+                 background:"linear-gradient(135deg, #0D4B5E, #135D74)",
+                 border:"none",
+                 color:"white",
+                 cursor:"pointer",
+                 boxShadow:"0 2px 8px rgba(13,75,94,0.25)"
+               }}
+             >
+               <span>➕</span> Create Internal Workspace
+             </button>
              <button onClick={() => setShowInviteTplModal(true)} style={{padding:"10px 18px",borderRadius:8,fontSize:".85rem",fontWeight:700,display:"flex",alignItems:"center",gap:8,background:"#DCFCE7",border:"1px solid #86EFAC",color:"#15803D",cursor:"pointer",boxShadow:"0 2px 8px rgba(21,128,61,0.15)"}}>
                <span style={{fontSize:"1.1rem"}}>📝</span> WhatsApp Invite Template
              </button>
@@ -22769,16 +22812,40 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
                      let evName = r.eventName || r.eventTitle || r.eventId;
                      return r.eventId === ev.id || evName === ev.title || evName === ev.titleGu;
                  }).length;
+                 const isInternal = Boolean(ev.isInternalOnly || ev.hideFromPublicWebsite);
                  return (
-                     <div key={ev.id} onClick={() => setSelectedEventId(ev.id)} style={{background:"white",border:"1px solid var(--bd)",borderRadius:12,padding:24,cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.04)",transition:"transform 0.2s, box-shadow 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-4px)"; e.currentTarget.style.boxShadow="0 8px 24px rgba(0,0,0,0.08)"}} onMouseLeave={e=>{e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow="0 4px 12px rgba(0,0,0,0.04)"}}>
-                          <div style={{fontSize:"2.5rem",marginBottom:12}}>💌</div>
-                          <h3 style={{margin:"0 0 8px 0",color:"#333"}}>{ev.title || "Unnamed Event"}</h3>
-                          <p style={{margin:0,fontSize:".85rem",color:"var(--mu)"}}>{count} approved registrants</p>
+                     <div 
+                       key={ev.id} 
+                       onClick={() => setSelectedEventId(ev.id)} 
+                       style={{
+                         background: isInternal ? "linear-gradient(135deg, #FFFFFF, #F0F9FF)" : "white",
+                         border: isInternal ? "1.5px solid #BAE6FD" : "1px solid var(--bd)",
+                         borderRadius: 12,
+                         padding: 24,
+                         cursor: "pointer",
+                         boxShadow: isInternal ? "0 4px 14px rgba(2,132,199,0.08)" : "0 4px 12px rgba(0,0,0,0.04)",
+                         transition: "transform 0.2s, box-shadow 0.2s",
+                         position: "relative",
+                         overflow: "hidden"
+                       }} 
+                       onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-4px)"; e.currentTarget.style.boxShadow="0 8px 24px rgba(0,0,0,0.08)"}} 
+                       onMouseLeave={e=>{e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow=isInternal?"0 4px 14px rgba(2,132,199,0.08)":"0 4px 12px rgba(0,0,0,0.04)"}}
+                     >
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+                            <div style={{fontSize:"2.5rem"}}>{isInternal ? "🔒" : "💌"}</div>
+                            {isInternal && (
+                              <span style={{fontSize:".68rem",fontWeight:800,background:"#E0F2FE",color:"#0369A1",padding:"3px 8px",borderRadius:6,border:"1px solid #BAE6FD"}}>
+                                🔒 Internal Committee
+                              </span>
+                            )}
+                          </div>
+                          <h3 style={{margin:"0 0 8px 0",color:"#1E293B",fontSize:"1.05rem",fontWeight:800}}>{ev.title || "Unnamed Event"}</h3>
+                          <p style={{margin:0,fontSize:".85rem",color:"var(--mu)",fontWeight:600}}>{count} {isInternal ? 'members / invitees' : 'approved registrants'}</p>
                      </div>
                  );
              })}
              {inviteEvents.length === 0 && (
-                 <p style={{color:"var(--mu)"}}>No events have Invite Letters enabled yet. Enable them in Content Editor {">"} Events.</p>
+                 <p style={{color:"var(--mu)"}}>No events have Invite Letters enabled yet. Click "+ Create Internal Workspace" above or enable them in Content Editor {">"} Events.</p>
              )}
          </div>
 
