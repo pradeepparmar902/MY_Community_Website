@@ -9958,6 +9958,15 @@ function AdminEvents({ mob, C, setC, auth }) {
     setEditIdx(newArr.length - 1);
   };
 
+  const moveEvent = (fromIdx, toIdx) => {
+    if (toIdx < 0 || toIdx >= items.length) return;
+    const copy = [...items];
+    const [moved] = copy.splice(fromIdx, 1);
+    copy.splice(toIdx, 0, moved);
+    upd(copy);
+    if (editIdx !== null) setEditIdx(null);
+  };
+
   const remove = (idx) => {
     if (!window.confirm("Delete this event?")) return;
     const newArr = [...items];
@@ -10391,6 +10400,19 @@ function AdminEvents({ mob, C, setC, auth }) {
               <>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                   <div style={{flex:1,paddingRight:10}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                      <span style={{fontSize:".72rem",fontFamily:"monospace",fontWeight:800,background:"#0D4B5E",color:"white",padding:"2px 8px",borderRadius:4}}>
+                        Index #{i}
+                      </span>
+                      <span style={{fontSize:".68rem",fontWeight:800,background:"#EFF6FF",color:"#1D4ED8",padding:"2px 6px",borderRadius:4,border:"1px solid #BFDBFE"}}>
+                        🔗 ?event={i}
+                      </span>
+                      {ev.isInternalOnly && (
+                        <span style={{fontSize:".68rem",fontWeight:800,background:"#FEF3C7",color:"#92400E",padding:"2px 6px",borderRadius:4,border:"1px solid #FDE68A"}}>
+                          🔒 Internal Workspace
+                        </span>
+                      )}
+                    </div>
                     <span style={{fontSize:".7rem",fontWeight:700,color:"var(--sf)",textTransform:"uppercase"}}>{ev.tag}</span>
                     <h4 style={{fontFamily:"'Playfair Display',serif",fontSize:".95rem",fontWeight:700,color:"var(--dt)",marginTop:3}}>{ev.title}</h4>
                   </div>
@@ -10400,23 +10422,47 @@ function AdminEvents({ mob, C, setC, auth }) {
                   </div>
                 </div>
                 <p style={{fontSize:".78rem",color:"var(--mu)",marginBottom:12}}>{ev.location}</p>
-                <div style={{display:"flex",gap:7}}>
-                  <button onClick={()=>setEditIdx(i)} style={{padding:"5px 11px",borderRadius:6,background:"var(--tl)",border:"none",color:"var(--dt)",cursor:"pointer",fontSize:".75rem",fontWeight:600}}>Edit</button>
-                  <button onClick={()=>{
-                    if (!ev.id) {
-                      const newEv = {...ev, id: "ev_" + Date.now()};
-                      const newArr = [...items];
-                      newArr[i] = newEv;
-                      setItems(newArr);
-                      const newC = {...C, events: newArr};
-                      setC(newC);
-                      if (typeof saveToFb === 'function') saveToFb(newC);
-                      setQrModal({ev: newEv, idx: i});
-                    } else {
-                      setQrModal({ev, idx: i});
-                    }
-                  }} style={{padding:"5px 11px",borderRadius:6,background:"#F0F4F8",border:"1px solid #D0E1F9",color:"#2B6CB0",cursor:"pointer",fontSize:".75rem",fontWeight:600}}>QR Code</button>
-                  <button onClick={()=>remove(i)} style={{padding:"5px 11px",borderRadius:6,background:"#FEF0EF",border:"none",color:"#C0392B",cursor:"pointer",fontSize:".75rem",fontWeight:600}}>Delete</button>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:7,flexWrap:"wrap",marginTop:8,borderTop:"1px solid #F1F5F9",paddingTop:8}}>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>setEditIdx(i)} style={{padding:"5px 11px",borderRadius:6,background:"var(--tl)",border:"none",color:"var(--dt)",cursor:"pointer",fontSize:".75rem",fontWeight:700}}>Edit</button>
+                    <button onClick={()=>{
+                      if (!ev.id) {
+                        const newEv = {...ev, id: "ev_" + Date.now()};
+                        const newArr = [...items];
+                        newArr[i] = newEv;
+                        setItems(newArr);
+                        const newC = {...C, events: newArr};
+                        setC(newC);
+                        if (typeof saveToFb === 'function') saveToFb(newC);
+                        setQrModal({ev: newEv, idx: i});
+                      } else {
+                        setQrModal({ev, idx: i});
+                      }
+                    }} style={{padding:"5px 11px",borderRadius:6,background:"#F0F4F8",border:"1px solid #D0E1F9",color:"#2B6CB0",cursor:"pointer",fontSize:".75rem",fontWeight:700}}>QR Code</button>
+                    <button onClick={()=>remove(i)} style={{padding:"5px 11px",borderRadius:6,background:"#FEF0EF",border:"none",color:"#C0392B",cursor:"pointer",fontSize:".75rem",fontWeight:700}}>Delete</button>
+                  </div>
+
+                  {/* Reorder Buttons */}
+                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                    <button 
+                      type="button" 
+                      disabled={i === 0} 
+                      onClick={()=>moveEvent(i, i - 1)} 
+                      style={{padding:"4px 8px",borderRadius:6,border:"1px solid #CBD5E1",background: i === 0 ? "#F1F5F9" : "white",color: i === 0 ? "#94A3B8" : "#0F172A",cursor: i === 0 ? "not-allowed" : "pointer",fontSize:".72rem",fontWeight:800}}
+                      title="Move event up (Index - 1)"
+                    >
+                      ▲ Move Up
+                    </button>
+                    <button 
+                      type="button" 
+                      disabled={i === items.length - 1} 
+                      onClick={()=>moveEvent(i, i + 1)} 
+                      style={{padding:"4px 8px",borderRadius:6,border:"1px solid #CBD5E1",background: i === items.length - 1 ? "#F1F5F9" : "white",color: i === items.length - 1 ? "#94A3B8" : "#0F172A",cursor: i === items.length - 1 ? "not-allowed" : "pointer",fontSize:".72rem",fontWeight:800}}
+                      title="Move event down (Index + 1)"
+                    >
+                      ▼ Move Down
+                    </button>
+                  </div>
                 </div>
               </>
             )}
