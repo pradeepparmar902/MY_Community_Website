@@ -17374,19 +17374,13 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
 
   // Broadcast execution states
   const [broadcasting, setBroadcasting] = useState(false);
-  const [autoPilotActive, setAutoPilotActive] = useState(false);
-  const [autoPilotDelay, setAutoPilotDelay] = useState(3); // seconds
-  const [countdown, setCountdown] = useState(3);
   const [batchSize, setBatchSize] = useState(10);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [sentCount, setSentCount] = useState(0);
   const [failCount, setFailCount] = useState(0);
   const [broadcastDone, setBroadcastDone] = useState(false);
   const [copiedBroadcastNumbers, setCopiedBroadcastNumbers] = useState(false);
-  const [launchMode, setLaunchMode] = useState(() => localStorage.getItem("mmp_wa_launch_mode") || "web");
-
-  // Persistent reference for single WhatsApp Web window
-  const waTabRef = useRef(null);
+  const [launchMode, setLaunchMode] = useState(() => localStorage.getItem("mmp_wa_launch_mode") || "app");
 
   const formatMessageForReg = (r) => {
     if (!r) return "";
@@ -17512,7 +17506,8 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
       opened++;
     }
 
-    setSentCount(prev => Math.min(prev + opened, recipients.length));
+    const nextCount = Math.min(sentCount + opened, recipients.length);
+    setSentCount(nextCount);
     setCurrentIndex(end);
     if (end >= recipients.length) {
       setBroadcastDone(true);
@@ -17523,7 +17518,6 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
   const executeSendItem = (idx) => {
     if (idx >= recipients.length) {
       setBroadcastDone(true);
-      setAutoPilotActive(false);
       return;
     }
 
@@ -17539,12 +17533,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
         window.location.href = appUrl;
       } else {
         const webUrl = `https://web.whatsapp.com/send?phone=91${phone}&text=${encodeURIComponent(msg)}`;
-        if (!waTabRef.current || waTabRef.current.closed) {
-          waTabRef.current = window.open(webUrl, "MMP_WHATSAPP_BROADCAST");
-        } else {
-          waTabRef.current.location.href = webUrl;
-          try { waTabRef.current.focus(); } catch(e){}
-        }
+        window.open(webUrl, `_wa_direct_${idx}`);
       }
       setSentCount(prev => Math.min(prev + 1, recipients.length));
     } else {
@@ -17555,28 +17544,20 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
     setCurrentIndex(nextIdx);
     if (nextIdx >= recipients.length) {
       setBroadcastDone(true);
-      setAutoPilotActive(false);
     }
   };
 
-  // Auto-Pilot continuous timer runner effect
+  // Keyboard shortcut: Press Enter or Space to send next item immediately
   useEffect(() => {
-    let timer = null;
-    if (autoPilotActive && !broadcastDone && currentIndex < recipients.length) {
-      timer = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            executeSendItem(currentIndex);
-            return autoPilotDelay;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
+    const handleKeyDown = (e) => {
+      if (e.key === "Enter" && !broadcastDone && !broadcasting) {
+        e.preventDefault();
+        executeSendItem(currentIndex);
+      }
     };
-  }, [autoPilotActive, currentIndex, broadcastDone, autoPilotDelay]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentIndex, broadcastDone, broadcasting, recipients]);
 
   // Current active recipient details
   const currentReg = recipients[Math.min(currentIndex, recipients.length - 1)] || recipients[0];
@@ -17626,7 +17607,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
             <select
               value={selectedTplId}
               onChange={e => setSelectedTplId(e.target.value)}
-              disabled={broadcasting || autoPilotActive}
+              disabled={broadcasting}
               style={{
                 width: "100%",
                 padding: "8px 12px",
@@ -17652,7 +17633,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
             <div style={{background:"#EFF6FF",border:"1.5px solid #93C5FD",borderRadius:10,padding:"14px 16px"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
                 <span style={{fontSize:"1.2rem"}}>⚡</span>
-                <strong style={{fontSize:".9rem",color:"#1E40AF"}}>Automated Background API Gateway ({gateway.provider?.toUpperCase()})</strong>
+                <strong style={{fontSize:".9rem",color:"#1E40AF"}}>Automated Background API Gateway Active ({gateway.provider?.toUpperCase()})</strong>
               </div>
               <p style={{fontSize:".82rem",color:"#1E3A8A",margin:0,lineHeight:1.4}}>
                 100% Silent Background Delivery: All {recipients.length} messages will be sent automatically with ZERO screen movements, popups, or tabs.
@@ -17661,83 +17642,73 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
           ) : (
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
               
-              {/* Option 2: Auto-Pilot Sequential Timer Runner (Primary) */}
+              {/* Method 1: 1-Click Fast Sequential Tap Runner */}
               <div style={{background:"#F0FDF4",border:"2px solid #22C55E",borderRadius:10,padding:"16px 18px",boxShadow:"0 2px 8px rgba(34,197,94,0.15)"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,marginBottom:8}}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:"1.3rem"}}>⏱️</span>
+                    <span style={{fontSize:"1.3rem"}}>⚡</span>
                     <div>
-                      <strong style={{fontSize:".95rem",color:"#14532D"}}>Hands-Free Auto-Pilot Runner (Recommended)</strong>
-                      <div style={{fontSize:".75rem",color:"#15803D"}}>Automatically advances to the next student every few seconds</div>
+                      <strong style={{fontSize:".95rem",color:"#14532D"}}>1-Click Fast Tap Runner (Keyboard: Enter / Space)</strong>
+                      <div style={{fontSize:".75rem",color:"#15803D"}}>Each tap immediately opens the student's chat with the invitation drafted</div>
                     </div>
                   </div>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:".78rem",fontWeight:700,color:"#14532D"}}>Delay:</span>
-                    <select
-                      value={autoPilotDelay}
-                      onChange={e => {
-                        const val = Number(e.target.value);
-                        setAutoPilotDelay(val);
-                        setCountdown(val);
-                      }}
-                      style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #22C55E",fontSize:".82rem",fontWeight:700,color:"#14532D",background:"white"}}
+
+                  <div style={{display:"flex",gap:4}}>
+                    <button
+                      type="button"
+                      onClick={() => { setLaunchMode("app"); localStorage.setItem("mmp_wa_launch_mode", "app"); }}
+                      style={{padding:"4px 10px",borderRadius:6,fontSize:".74rem",fontWeight:800,border:"none",background:launchMode==="app"?"#15803D":"#E2E8F0",color:launchMode==="app"?"white":"#475569",cursor:"pointer"}}
                     >
-                      <option value={2}>2 seconds (Fast)</option>
-                      <option value={3}>3 seconds (Standard)</option>
-                      <option value={4}>4 seconds</option>
-                      <option value={5}>5 seconds (Relaxed)</option>
-                    </select>
+                      💻 WhatsApp App
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setLaunchMode("web"); localStorage.setItem("mmp_wa_launch_mode", "web"); }}
+                      style={{padding:"4px 10px",borderRadius:6,fontSize:".74rem",fontWeight:800,border:"none",background:launchMode==="web"?"#2563EB":"#E2E8F0",color:launchMode==="web"?"white":"#475569",cursor:"pointer"}}
+                    >
+                      🌐 Web Browser
+                    </button>
                   </div>
                 </div>
 
                 <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",marginTop:10}}>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!autoPilotActive) {
-                        setCountdown(autoPilotDelay);
-                        if (currentIndex === 0 && sentCount === 0) {
-                          executeSendItem(0);
-                        }
-                      }
-                      setAutoPilotActive(!autoPilotActive);
-                    }}
+                    onClick={() => executeSendItem(currentIndex)}
                     disabled={broadcastDone}
                     style={{
-                      padding: "10px 22px",
+                      padding: "11px 24px",
                       borderRadius: 8,
-                      background: autoPilotActive ? "#DC2626" : "linear-gradient(135deg, #15803D, #166534)",
+                      background: broadcastDone ? "#15803D" : "linear-gradient(135deg, #22C55E, #15803D)",
                       color: "white",
                       border: "none",
-                      fontSize: ".9rem",
+                      fontSize: ".95rem",
                       fontWeight: 800,
                       cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
                       gap: 8,
-                      boxShadow: "0 2px 8px rgba(21,128,61,0.3)"
+                      boxShadow: "0 3px 10px rgba(34,197,94,0.4)"
                     }}
                   >
-                    <span>{autoPilotActive ? "⏸ Pause Auto-Pilot" : (sentCount > 0 ? "▶ Resume Auto-Pilot" : "▶ Start Hands-Free Auto-Pilot")}</span>
+                    <span>{broadcastDone ? "✅" : "🟢"}</span>
+                    <span>{broadcastDone ? "All Recipients Sent!" : `Send to ${currentName} (${currentIndex + 1}/${recipients.length}) [Press Enter] →`}</span>
                   </button>
 
-                  {autoPilotActive && !broadcastDone && (
-                    <div style={{display:"flex",alignItems:"center",gap:6,background:"white",padding:"7px 14px",borderRadius:8,border:"1.5px solid #15803D",animation:"pulse 1.5s infinite"}}>
-                      <span style={{fontSize:"1rem"}}>⏳</span>
-                      <span style={{fontSize:".84rem",fontWeight:800,color:"#15803D"}}>
-                        Next chat opening in: <strong>{countdown}s</strong> ({currentName})
-                      </span>
+                  {!broadcastDone && (
+                    <div style={{fontSize:".8rem",color:"#14532D",fontWeight:600}}>
+                      Tip: You can just press <kbd style={{background:"#E2E8F0",padding:"2px 6px",borderRadius:4,border:"1px solid #CBD5E1",fontWeight:800}}>Enter</kbd> to quickly send one by one!
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Option 1: Open in Batches */}
+              {/* Method 2: Open in Batches */}
               <div style={{background:"#F8FAFC",border:"1.5px solid #CBD5E1",borderRadius:10,padding:"14px 16px"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,marginBottom:6}}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{fontSize:"1.1rem"}}>📂</span>
-                    <strong style={{fontSize:".88rem",color:"#0F172A"}}>Alternative: Open Batch in Multi-Tabs</strong>
+                    <strong style={{fontSize:".88rem",color:"#0F172A"}}>Alternative: Open Batch in Tabs (Zero Screen Switching)</strong>
                   </div>
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
                     <span style={{fontSize:".78rem",color:"#475569"}}>Batch size:</span>
@@ -17749,7 +17720,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
                   </div>
                 </div>
                 <p style={{fontSize:".78rem",color:"#475569",margin:"0 0 10px 0",lineHeight:1.4}}>
-                  Opens pre-filled WhatsApp chats in browser tabs at once with the invitation message already typed in.
+                  Opens pre-filled WhatsApp chats in browser tabs at once with the invitation message already typed in. In WhatsApp, press <strong>Enter</strong> to send, then <strong>Ctrl+W</strong> to close and hit Enter on next tab!
                 </p>
                 <button
                   type="button"
@@ -17774,12 +17745,12 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
                 </button>
               </div>
 
-              {/* Option 3: WhatsApp Official Broadcast List Numbers Export */}
+              {/* Method 3: WhatsApp Official Broadcast List Numbers Export */}
               <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
                 <div>
-                  <strong style={{fontSize:".84rem",color:"#15803D"}}>Mobile Broadcast List (1 Click $ightarrow$ 256 People)</strong>
+                  <strong style={{fontSize:".84rem",color:"#15803D"}}>Mobile Broadcast List (1 Click to All 256 People)</strong>
                   <div style={{fontSize:".75rem",color:"#166534",marginTop:2}}>
-                    Copy all {recipients.length} phone numbers to paste or save into your phone's WhatsApp Broadcast List.
+                    Copy all {recipients.length} phone numbers to paste into your phone's WhatsApp Broadcast List.
                   </div>
                 </div>
                 <button
@@ -17795,7 +17766,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
           )}
 
           {/* Progress Bar */}
-          {(broadcasting || autoPilotActive || broadcastDone || sentCount > 0) && (
+          {(broadcasting || broadcastDone || sentCount > 0) && (
             <div style={{background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"14px 16px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,fontSize:".82rem"}}>
                 <strong style={{color:"#0F172A"}}>Broadcast Progress:</strong>
@@ -17900,7 +17871,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
                 }}
               >
                 <span>{broadcastDone ? "✅" : "🟢"}</span>
-                <span>{broadcastDone ? "All Sent!" : `Manual Send (${currentIndex + 1}/${recipients.length}) →`}</span>
+                <span>{broadcastDone ? "All Sent!" : `Send (${currentIndex + 1}/${recipients.length}) [Enter] →`}</span>
               </button>
             </div>
           )}
