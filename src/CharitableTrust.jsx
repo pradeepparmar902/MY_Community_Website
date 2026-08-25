@@ -1687,14 +1687,32 @@ function Donate({ C, lang, globalProfile, globalAuthToken, onShowUserLogin }) {
 function Events({ C, lang, globalAuthToken, globalProfile, onPublicLogin, forceStandalone }) {
   const w = useW(); const mob = w<700;
   
+  // Robust helper to resolve event from query parameter (id, index, or public event index)
+  const resolveTargetEvent = (param) => {
+    if (!C?.events || !C.events.length) return null;
+    if (param === null || param === undefined) return null;
+    
+    // 1. Match by exact event id or title
+    const byId = C.events.find(e => String(e.id) === String(param) || String(e.title) === String(param));
+    if (byId) return byId;
+
+    // 2. Match by index
+    const idx = parseInt(param);
+    if (!isNaN(idx)) {
+      // Prioritize public events so printed QR codes (?event=0) ALWAYS target the right public form
+      const publicEvs = C.events.filter(e => !e.isInternalOnly && !e.hideFromPublicWebsite);
+      if (publicEvs[idx]) return publicEvs[idx];
+      if (C.events[idx]) return C.events[idx];
+    }
+    return null;
+  };
+
   // Synchronously compute initial event from URL if present
   const getInitialEvent = () => {
-    const match = window.location.href.match(/(?:event|register)=(\d+)/i);
+    const match = window.location.href.match(/(?:event|register)=([^&#\s]+)/i);
     if (match && match[1] !== undefined) {
-      const idx = parseInt(match[1]);
-      if (C?.events && C.events[idx]) {
-        return { type: 'register', event: C.events[idx] };
-      }
+      const target = resolveTargetEvent(decodeURIComponent(match[1]));
+      if (target) return { type: 'register', event: target };
     }
     return null;
   };
@@ -1721,14 +1739,15 @@ function Events({ C, lang, globalAuthToken, globalProfile, onPublicLogin, forceS
   const [previewFile, setPreviewFile] = useState(null);
 
   useEffect(() => {
-    const openForEventIndex = (idx) => {
-      if (C.events && C.events[idx]) {
-        setSelectedEvent({ type: 'register', event: C.events[idx] });
+    const openForEventTarget = (targetParam) => {
+      const targetEv = resolveTargetEvent(targetParam);
+      if (targetEv) {
+        setSelectedEvent({ type: 'register', event: targetEv });
         // Check if logged in. If not, enforce login step (0)
         setAuthToken(globalAuthToken || "");
         setAuthStep(globalAuthToken ? 1 : 0);
         const newForm = { "Submitted By": globalProfile?.name || globalProfile?.['Full Name'] || globalProfile?.mobile || "" };
-        const formSpec = C.forms?.find(f => f.id === C.events[idx].formId) || { fields: [] };
+        const formSpec = C.forms?.find(f => f.id === targetEv.formId) || { fields: [] };
         formSpec.fields.forEach(f => {
           const fKey = f.label?.trim() || "Field";
           const kLow = fKey.toLowerCase();
@@ -1744,17 +1763,13 @@ function Events({ C, lang, globalAuthToken, globalProfile, onPublicLogin, forceS
     };
 
     const handleOpen = (e) => {
-      openForEventIndex(e.detail);
+      openForEventTarget(e.detail);
     };
 
-    // Check URL parameters for direct QR scan (e.g. ?event=0 or ?register=0)
-    let eventParam = null;
-    const match = window.location.href.match(/(?:event|register)=(\d+)/i);
+    // Check URL parameters for direct QR scan (e.g. ?event=0 or ?register=0 or ?event=event_id)
+    const match = window.location.href.match(/(?:event|register)=([^&#\s]+)/i);
     if (match && match[1] !== undefined) {
-      eventParam = match[1];
-    }
-    if (eventParam !== null && eventParam !== undefined && !isNaN(parseInt(eventParam))) {
-      openForEventIndex(parseInt(eventParam));
+      openForEventTarget(decodeURIComponent(match[1]));
       const section = document.getElementById('events');
       if (section) section.scrollIntoView({ behavior: 'smooth' });
     }
