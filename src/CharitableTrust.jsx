@@ -23112,34 +23112,51 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
           </div>
 
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            {/* Dashboard Placement Indicator & Selector for Active Template */}
-            <div style={{background:"#F8FAFC",border:"1.5px solid #CBD5E1",borderRadius:8,padding:"4px 10px",display:"flex",alignItems:"center",gap:6,fontSize:".74rem"}}>
-              <span style={{fontWeight:800,color:"#475569"}}>🎯 Member Portal Placement:</span>
+            {/* Interactive Member Portal Placement Selector */}
+            <div style={{background:"#F8FAFC",border:"1.5px solid #94A3B8",borderRadius:8,padding:"6px 12px",display:"flex",alignItems:"center",gap:8,fontSize:".78rem"}}>
+              <span style={{fontWeight:800,color:"#1E293B",display:"flex",alignItems:"center",gap:4}}>
+                <span>🎯</span> Appears in Member Dashboard Under:
+              </span>
               {currentDocTpl?.id === 'invite' ? (
-                <span style={{fontWeight:800,color:"#D2691E",background:"#FFF7ED",padding:"2px 8px",borderRadius:4,border:"1px solid #FFEDD5"}}>
-                  💌 Special Invites
+                <span style={{fontWeight:800,color:"#D2691E",background:"#FFF7ED",padding:"3px 10px",borderRadius:6,border:"1.5px solid #FDBA74",fontSize:".76rem"}}>
+                  💌 Special Invites (Fixed for Invitation Letters)
                 </span>
               ) : currentDocTpl?.id === 'cert' ? (
-                <span style={{fontWeight:800,color:"#15803D",background:"#F0FDF4",padding:"2px 8px",borderRadius:4,border:"1px solid #DCFCE7"}}>
-                  🎓 Education Awards
+                <span style={{fontWeight:800,color:"#15803D",background:"#F0FDF4",padding:"3px 10px",borderRadius:6,border:"1.5px solid #86EFAC",fontSize:".76rem"}}>
+                  🎓 Education Awards (Fixed for Merit Certificates)
                 </span>
               ) : (
-                <select
-                  value={currentDocTpl?.customTpl?.targetSection || "invites"}
-                  onChange={(e) => {
-                    const newSection = e.target.value;
-                    const updatedTpls = (activeEvent.pdfTemplates || []).map(t => t.id === currentDocTpl.id ? { ...t, targetSection: newSection } : t);
-                    const updatedEvents = (C.events || []).map(ev => (ev.id === activeEvent.id || ev.title === activeEvent.title) ? { ...ev, pdfTemplates: updatedTpls } : ev);
-                    const updatedC = { ...C, events: updatedEvents };
-                    if (setC) setC(updatedC);
-                    fbSave(updatedC, auth?.idToken);
-                    alert(`"${currentDocTpl.name}" will now appear in "${newSection === 'awards' ? 'Education Awards' : 'Special Invites'}" on the Member Portal!`);
-                  }}
-                  style={{padding:"3px 8px",borderRadius:4,border:"1px solid #94A3B8",fontSize:".74rem",fontWeight:700,background:"white",color:"#0F172A",cursor:"pointer"}}
-                >
-                  <option value="invites">💌 Special Invites (Passes / Coupons)</option>
-                  <option value="awards">🎓 Education Awards (Certificates)</option>
-                </select>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <select
+                    value={currentDocTpl?.customTpl?.targetSection || "invites"}
+                    onChange={(e) => {
+                      const newSection = e.target.value;
+                      const updatedTpls = (activeEvent.pdfTemplates || []).map(t => t.id === currentDocTpl.id ? { ...t, targetSection: newSection } : t);
+                      const updatedEvents = (C.events || []).map(ev => (ev.id === activeEvent.id || ev.title === activeEvent.title) ? { ...ev, pdfTemplates: updatedTpls } : ev);
+                      const updatedC = { ...C, events: updatedEvents };
+                      if (setC) setC(updatedC);
+                      fbSave(updatedC, auth?.idToken);
+                      alert(`Saved! "${currentDocTpl.name}" will now appear under "${newSection === 'awards' ? '🎓 Education Awards' : '💌 Special Invites'}" in the Student's My Portal!`);
+                    }}
+                    style={{
+                      padding:"4px 10px",
+                      borderRadius:6,
+                      border:"2px solid #2563EB",
+                      fontSize:".78rem",
+                      fontWeight:800,
+                      background:"white",
+                      color:"#1D4ED8",
+                      cursor:"pointer",
+                      boxShadow:"0 1px 4px rgba(37,99,235,0.2)"
+                    }}
+                  >
+                    <option value="invites">💌 Special Invites (Passes, Coupons & Letters)</option>
+                    <option value="awards">🎓 Education Awards (Certificates & Honors)</option>
+                  </select>
+                  <span style={{fontSize:".7rem",color:"#64748B",fontStyle:"italic"}}>
+                    (Select where released pass appears for student)
+                  </span>
+                </div>
               )}
             </div>
 
