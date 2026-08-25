@@ -124,17 +124,45 @@ try {
 
 // ── FIREBASE HELPERS ──────────────────────────────────────────────────────────
 // Firestore stores everything as one JSON string field for simplicity
+const hydrateConfigAssets = async (config) => {
+  if (!config || !Array.isArray(config.events)) return config;
+  for (const ev of config.events) {
+    if (ev.certBgUrl && ev.certBgUrl.startsWith('asset://')) {
+      const assetId = ev.certBgUrl.replace('asset://', '');
+      const realData = await fbGetAssetDoc(assetId);
+      if (realData) ev.certBgUrl = realData;
+    }
+    if (ev.inviteBgUrl && ev.inviteBgUrl.startsWith('asset://')) {
+      const assetId = ev.inviteBgUrl.replace('asset://', '');
+      const realData = await fbGetAssetDoc(assetId);
+      if (realData) ev.inviteBgUrl = realData;
+    }
+    if (Array.isArray(ev.pdfTemplates)) {
+      for (const tpl of ev.pdfTemplates) {
+        if (tpl.bgUrl && tpl.bgUrl.startsWith('asset://')) {
+          const assetId = tpl.bgUrl.replace('asset://', '');
+          const realData = await fbGetAssetDoc(assetId);
+          if (realData) tpl.bgUrl = realData;
+        }
+      }
+    }
+  }
+  return config;
+};
+
 const fbLoad = async () => {
   try {
     const res = await fetch(`${FS_URL()}?t=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) return null;
     const doc = await res.json();
     const raw = doc?.fields?.data?.stringValue;
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return await hydrateConfigAssets(parsed);
   } catch { return null; }
 };
 
-const compressBase64Image = (dataUrl, maxDimension = 950, quality = 0.65) => {
+const compressBase64Image = (dataUrl, maxDimension = 900, quality = 0.60) => {
   return new Promise((resolve) => {
     if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) {
       return resolve(dataUrl);
@@ -172,22 +200,81 @@ const compressBase64Image = (dataUrl, maxDimension = 950, quality = 0.65) => {
   });
 };
 
-const optimizeConfigForSave = async (content) => {
+// Offload heavy base64 images into independent Firestore document collection 'template_assets'
+const assetCache = {};
+
+const fbSaveAssetDoc = async (assetId, dataUrl, idToken) => {
+  if (!assetId || !dataUrl) return;
+  try {
+    assetCache[assetId] = dataUrl;
+    const url = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/template_assets/${assetId}`;
+    const headers = { "Content-Type": "application/json" };
+    if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
+    await fetch(url, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({
+        fields: {
+          assetData: { stringValue: dataUrl },
+          updatedAt: { timestampValue: new Date().toISOString() }
+        }
+      })
+    });
+  } catch (err) {
+    console.warn("Asset offload error:", err);
+  }
+};
+
+export const fbGetAssetDoc = async (assetId) => {
+  if (!assetId) return "";
+  if (assetCache[assetId]) return assetCache[assetId];
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/template_assets/${assetId}`;
+    const res = await fetch(url);
+    if (!res.ok) return "";
+    const doc = await res.json();
+    const val = doc?.fields?.assetData?.stringValue || "";
+    if (val) assetCache[assetId] = val;
+    return val;
+  } catch (e) {
+    return "";
+  }
+};
+
+const optimizeConfigForSave = async (content, idToken) => {
   if (!content) return content;
   const clone = JSON.parse(JSON.stringify(content));
   if (Array.isArray(clone.events)) {
     for (let i = 0; i < clone.events.length; i++) {
       const ev = clone.events[i];
-      if (ev.certBgUrl && ev.certBgUrl.length > 50000) {
-        ev.certBgUrl = await compressBase64Image(ev.certBgUrl, 950, 0.65);
+      const evKey = (ev.id || `ev_${i}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+
+      // Compress and offload certBgUrl
+      if (ev.certBgUrl && ev.certBgUrl.startsWith('data:image')) {
+        const compressed = await compressBase64Image(ev.certBgUrl, 900, 0.60);
+        const assetId = `${evKey}_cert_bg`;
+        await fbSaveAssetDoc(assetId, compressed, idToken);
+        ev.certBgUrl = `asset://${assetId}`;
       }
-      if (ev.inviteBgUrl && ev.inviteBgUrl.length > 50000) {
-        ev.inviteBgUrl = await compressBase64Image(ev.inviteBgUrl, 950, 0.65);
+
+      // Compress and offload inviteBgUrl
+      if (ev.inviteBgUrl && ev.inviteBgUrl.startsWith('data:image')) {
+        const compressed = await compressBase64Image(ev.inviteBgUrl, 900, 0.60);
+        const assetId = `${evKey}_invite_bg`;
+        await fbSaveAssetDoc(assetId, compressed, idToken);
+        ev.inviteBgUrl = `asset://${assetId}`;
       }
+
+      // Compress and offload custom pdfTemplates bgUrl
       if (Array.isArray(ev.pdfTemplates)) {
         for (let j = 0; j < ev.pdfTemplates.length; j++) {
-          if (ev.pdfTemplates[j].bgUrl && ev.pdfTemplates[j].bgUrl.length > 50000) {
-            ev.pdfTemplates[j].bgUrl = await compressBase64Image(ev.pdfTemplates[j].bgUrl, 950, 0.65);
+          const tpl = ev.pdfTemplates[j];
+          const tplKey = (tpl.id || `tpl_${j}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+          if (tpl.bgUrl && tpl.bgUrl.startsWith('data:image')) {
+            const compressed = await compressBase64Image(tpl.bgUrl, 900, 0.60);
+            const assetId = `${evKey}_${tplKey}_bg`;
+            await fbSaveAssetDoc(assetId, compressed, idToken);
+            tpl.bgUrl = `asset://${assetId}`;
           }
         }
       }
@@ -197,7 +284,7 @@ const optimizeConfigForSave = async (content) => {
 };
 
 const fbSave = async (content, idToken) => {
-  const optimizedContent = await optimizeConfigForSave(content);
+  const optimizedContent = await optimizeConfigForSave(content, idToken);
   const jsonStr = JSON.stringify(optimizedContent);
 
   const res = await fetch(
@@ -4451,6 +4538,10 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
 
     const isInvite = actualType === 'invite';
     let srcUrl = customTpl ? customTpl.bgUrl : isInvite ? certConfig?.inviteBgUrl : (certConfig?.certBgUrl || certConfig?.bgUrl);
+    if (srcUrl && srcUrl.startsWith('asset://')) {
+      const assetId = srcUrl.replace('asset://', '');
+      srcUrl = assetCache[assetId] || srcUrl;
+    }
 
     if (!srcUrl) {
       const tplName = customTpl ? customTpl.name : isInvite ? 'Invite Letter' : 'Certificate';
@@ -25492,7 +25583,12 @@ function DirectInvitePassView({ C, auth }) {
           
           const customTpl = customDocId ? (ev.pdfTemplates || []).find(t => t.id === customDocId || t.name?.toLowerCase() === customDocId?.toLowerCase()) : null;
           // Generate on-screen visual image (Custom PDF Document, Certificate or Invite Letter)
-          const targetBgUrl = customTpl ? customTpl.bgUrl : isCert ? (ev.certBgUrl || ev.bgUrl || ev.inviteBgUrl) : ev.inviteBgUrl;
+          let targetBgUrl = customTpl ? customTpl.bgUrl : isCert ? (ev.certBgUrl || ev.bgUrl || ev.inviteBgUrl) : ev.inviteBgUrl;
+          if (targetBgUrl && targetBgUrl.startsWith('asset://')) {
+            const assetId = targetBgUrl.replace('asset://', '');
+            const realAsset = await fbGetAssetDoc(assetId);
+            if (realAsset) targetBgUrl = realAsset;
+          }
           if (targetBgUrl) {
             try {
               const img = new Image();
