@@ -19508,8 +19508,30 @@ function AdminRegistrations({ mob, C, setC, auth }) {
           {/* Right: Search + Refresh + Export + Bulk Tools Toggle */}
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
             {/* Quick Status Checkbox Selectors */}
-            <div style={{display:"flex",alignItems:"center",gap:4,background:"#F1F5F9",padding:"3px 6px",borderRadius:8,border:"1px solid #CBD5E1"}}>
+            <div style={{display:"flex",alignItems:"center",gap:4,background:"#F1F5F9",padding:"3px 6px",borderRadius:8,border:"1px solid #CBD5E1",flexWrap:"wrap"}}>
               <span style={{fontSize:".72rem",fontWeight:800,color:"#475569",paddingLeft:2}}>☑ Select:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const matches = filteredRegs.filter(r => r.passOpenCount && r.passOpenCount > 0);
+                  setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
+                }}
+                style={{padding:"3px 8px",borderRadius:6,border:"1px solid #BFDBFE",background:"#EFF6FF",color:"#1D4ED8",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                title="Select all applicants who have opened their invitation pass"
+              >
+                👁️ Opened ({filteredRegs.filter(r => r.passOpenCount && r.passOpenCount > 0).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const matches = filteredRegs.filter(r => !r.passOpenCount || r.passOpenCount === 0);
+                  setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
+                }}
+                style={{padding:"3px 8px",borderRadius:6,border:"1px solid #E2E8F0",background:"white",color:"#64748B",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                title="Select all applicants who have NOT opened their pass yet"
+              >
+                ⚪ Unopened ({filteredRegs.filter(r => !r.passOpenCount || r.passOpenCount === 0).length})
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -19805,6 +19827,12 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                         setSelectedIds(filteredRegs.map(r => r.id || r['Transaction ID']));
                       } else if (val === "NONE") {
                         setSelectedIds([]);
+                      } else if (val === "OPENED") {
+                        const matches = filteredRegs.filter(r => r.passOpenCount && r.passOpenCount > 0);
+                        setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
+                      } else if (val === "UNOPENED") {
+                        const matches = filteredRegs.filter(r => !r.passOpenCount || r.passOpenCount === 0);
+                        setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
                       } else {
                         const matches = filteredRegs.filter(r => {
                           const st = r['Status'] || r.status || 'Pending';
@@ -19825,9 +19853,11 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                       width: "100%",
                       maxWidth: 95
                     }}
-                    title="Select checkboxes specifically by Status"
+                    title="Select checkboxes specifically by Status or Pass Open"
                   >
                     <option value="">☑ Select...</option>
+                    <option value="OPENED">👁️ Opened ({filteredRegs.filter(r => r.passOpenCount && r.passOpenCount > 0).length})</option>
+                    <option value="UNOPENED">⚪ Unopened ({filteredRegs.filter(r => !r.passOpenCount || r.passOpenCount === 0).length})</option>
                     <option value="Needs Info">⚠️ Needs Info ({filteredRegs.filter(r => (r.Status || r.status) === "Needs Info").length})</option>
                     <option value="Approved">🟢 Approved ({filteredRegs.filter(r => (r.Status || r.status) === "Approved").length})</option>
                     <option value="Pending">⏳ Pending ({filteredRegs.filter(r => (!r.Status && !r.status) || (r.Status || r.status) === "Pending").length})</option>
