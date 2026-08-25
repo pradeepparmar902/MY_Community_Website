@@ -22107,6 +22107,15 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
     return regs.some(r => r.eventId === e.id || r.eventName === e.title || r.eventTitle === e.title);
   });
 
+  const activeEvent = inviteEvents.find(e => e.id === selectedEventId) || {};
+
+  const availableDocTemplates = [
+    { id: 'invite', name: 'Official Invite Letter', icon: '💌', bgUrl: activeEvent?.inviteBgUrl, isDefault: true },
+    ...(activeEvent?.issueCertificates ? [{ id: 'cert', name: 'Certificate Pass', icon: '🎓', bgUrl: activeEvent?.certBgUrl }] : []),
+    ...(activeEvent?.pdfTemplates || []).map(t => ({ id: t.id, name: t.name, icon: '🎟️', bgUrl: t.bgUrl, customTpl: t }))
+  ];
+  const currentDocTpl = availableDocTemplates.find(d => d.id === activeDocType) || availableDocTemplates[0];
+
   const inviteRegs = regs.filter(r => {
     if (!selectedEventId) return false;
     // Only Approved registrations (same as Certificates — exclude Pending/Rejected)
@@ -22364,13 +22373,6 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
     }
     setReleasingAll(false);
   };
-
-  const availableDocTemplates = [
-    { id: 'invite', name: 'Official Invite Letter', icon: '💌', bgUrl: activeEvent?.inviteBgUrl, isDefault: true },
-    ...(activeEvent?.issueCertificates ? [{ id: 'cert', name: 'Certificate Pass', icon: '🎓', bgUrl: activeEvent?.certBgUrl }] : []),
-    ...(activeEvent?.pdfTemplates || []).map(t => ({ id: t.id, name: t.name, icon: '🎟️', bgUrl: t.bgUrl, customTpl: t }))
-  ];
-  const currentDocTpl = availableDocTemplates.find(d => d.id === activeDocType) || availableDocTemplates[0];
 
   const handlePreview = async (r, ev) => {
     const fieldsData = {...r};
@@ -22681,8 +22683,6 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       </div>
     );
   }
-
-  const activeEvent = inviteEvents.find(e => e.id === selectedEventId) || {};
 
   return (
     <div style={{display:"flex",width:"100%"}}>
