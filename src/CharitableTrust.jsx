@@ -20991,7 +20991,23 @@ function AdminCertificates({ mob, C, auth }) {
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:".85rem",minWidth:900}}>
               <thead>
                 <tr>
-                  <th style={{padding:"14px 12px",textAlign:"center",background:"var(--dt)",color:"white",fontWeight:600,width:"220px"}}>Actions</th>
+                  <th style={{padding:"14px 8px",textAlign:"center",background:"var(--dt)",color:"white",fontWeight:600,width:36}}>
+                    <input
+                      type="checkbox"
+                      checked={filteredRegs.length > 0 && filteredRegs.every(r => selectedIds.includes(r.id || r['Transaction ID']))}
+                      onChange={() => {
+                        const allVisibleSelected = filteredRegs.length > 0 && filteredRegs.every(r => selectedIds.includes(r.id || r['Transaction ID']));
+                        if (allVisibleSelected) {
+                          setSelectedIds([]);
+                        } else {
+                          setSelectedIds(filteredRegs.map(r => r.id || r['Transaction ID']));
+                        }
+                      }}
+                      title="Select / Unselect All Filtered Rows"
+                      style={{cursor:"pointer",width:16,height:16,accentColor:"#15803D"}}
+                    />
+                  </th>
+                  <th style={{padding:"14px 12px",textAlign:"center",background:"var(--dt)",color:"white",fontWeight:600,minWidth:"240px"}}>Actions</th>
                   <th style={{padding:"14px 12px",textAlign:"left",background:"var(--dt)",color:"white",fontWeight:600}}>Date Approved</th>
                   <th style={{padding:"14px 12px",textAlign:"left",background:"var(--dt)",color:"white",fontWeight:600}}>Event</th>
                   <th style={{padding:"14px 12px",textAlign:"left",background:"var(--dt)",color:"white",fontWeight:600}}>Participant Name</th>
@@ -21035,7 +21051,27 @@ function AdminCertificates({ mob, C, auth }) {
                       </td>
                       <td style={{padding:"12px"}}>{date}</td>
                       <td style={{padding:"12px"}}>{evName}</td>
-                      <td style={{padding:"12px",fontWeight:600}}>{pName}</td>
+                      <td style={{padding:"12px",color:"#111827"}}>
+                        <div style={{fontWeight:700,color:"#0F172A"}}>{pName}</div>
+                        <div style={{marginTop:3,display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{fontSize:".72rem",color:"#64748B",fontFamily:"monospace"}}>{r['Transaction ID'] || r.id}</span>
+                          {(r.passOpenCount && r.passOpenCount > 0) ? (
+                            <span 
+                              style={{background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #BFDBFE",padding:"1px 6px",borderRadius:10,fontSize:".68rem",fontWeight:800,display:"inline-flex",alignItems:"center",gap:3}} 
+                              title={`Pass opened ${r.passOpenCount} time${r.passOpenCount > 1 ? 's' : ''}. Last opened: ${new Date(r.lastPassOpenedAt || r._submittedAt).toLocaleString()}`}
+                            >
+                              <span>👁️</span> {r.passOpenCount} {r.passOpenCount === 1 ? 'Open' : 'Opens'}
+                            </span>
+                          ) : (
+                            <span 
+                              style={{background:"#F8FAFC",color:"#94A3B8",border:"1px solid #E2E8F0",padding:"1px 6px",borderRadius:10,fontSize:".68rem",fontWeight:600}} 
+                              title="Recipient has not opened their invitation link yet"
+                            >
+                              ⚪ Unopened
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td style={{padding:"12px",textAlign:"center"}}>
                         {r.certificateHold ? (
                           <span style={{padding:"4px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700,background:"#FEE2E2",color:"#991B1B",display:"inline-block"}}>
@@ -21121,6 +21157,8 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   const [showInviteTplModal, setShowInviteTplModal] = useState(false);
   const [showWorkspaceTplModal, setShowWorkspaceTplModal] = useState(false);
   const [showBulkWhatsAppModal, setShowBulkWhatsAppModal] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [historyModalReg, setHistoryModalReg] = useState(null);
 
   const globalGuests = regs.filter(r => r.isGlobalGuest === true);
 
@@ -21723,10 +21761,27 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
               {releasingAll ? "Releasing..." : "📢 Release All"}
             </button>
             <button onClick={() => {
-              if (filteredRegs.length === 0) return alert("No approved invitees available to send.");
+              const targetList = selectedIds.length > 0
+                ? filteredRegs.filter(r => selectedIds.includes(r.id || r['Transaction ID']))
+                : filteredRegs;
+              if (targetList.length === 0) return alert("No approved invitees selected or available to send.");
               setShowBulkWhatsAppModal(true);
-            }} style={{padding:"8px 18px",borderRadius:8,fontSize:".85rem",fontWeight:800,display:"flex",alignItems:"center",gap:6,background:"#25D366",color:"white",border:"none",cursor:"pointer",boxShadow:"0 2px 8px rgba(37,211,102,0.35)",whiteSpace:"nowrap"}}>
-              <span>🚀</span> Send All WhatsApp ({filteredRegs.length})
+            }} style={{
+              padding:"8px 18px",
+              borderRadius:8,
+              fontSize:".85rem",
+              fontWeight:800,
+              display:"flex",
+              alignItems:"center",
+              gap:6,
+              background: selectedIds.length > 0 ? "linear-gradient(135deg, #15803D, #166534)" : "#25D366",
+              color:"white",
+              border:"none",
+              cursor:"pointer",
+              boxShadow:"0 2px 8px rgba(37,211,102,0.35)",
+              whiteSpace:"nowrap"
+            }}>
+              <span>🚀</span> Send All WhatsApp {selectedIds.length > 0 ? `(${selectedIds.length} Selected)` : `(${filteredRegs.length})`}
             </button>
             <button onClick={handleBulkDownload} disabled={downloadingBulk || releasingAll || refreshing || downloadingEnvelopes} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:600,display:"flex",alignItems:"center",gap:6,background:"var(--sf)",color:"white",border:"none",cursor:(downloadingBulk || releasingAll || refreshing || downloadingEnvelopes)?"wait":"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.1)",whiteSpace:"nowrap"}}>
               {downloadingBulk ? `Generating ZIP (${downloadProgress}/${filteredRegs.length})...` : "📦 Bulk Download ZIP"}
@@ -21737,8 +21792,56 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
           </div>
         </div>
 
-        <div style={{marginBottom: 16, display: "flex", gap: 12}}>
-          <input type="text" placeholder="Search students/guests..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} style={{padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",fontSize:".85rem",width:"100%",maxWidth:300,outline:"none",fontFamily:"inherit"}} />
+        <div style={{marginBottom: 16, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap"}}>
+          <input type="text" placeholder="Search students/guests..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} style={{padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",fontSize:".85rem",width:240,outline:"none",fontFamily:"inherit"}} />
+          
+          {/* Quick Select Filter Pills */}
+          <div style={{display:"flex",alignItems:"center",gap:6,background:"#F1F5F9",padding:"4px 8px",borderRadius:8,border:"1px solid #CBD5E1"}}>
+            <span style={{fontSize:".75rem",fontWeight:800,color:"#475569"}}>☑ Select:</span>
+            <button
+              type="button"
+              onClick={() => {
+                const matches = filteredRegs.filter(r => r.passOpenCount && r.passOpenCount > 0);
+                setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
+              }}
+              style={{padding:"3px 8px",borderRadius:6,border:"1px solid #BFDBFE",background:"#EFF6FF",color:"#1D4ED8",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+              title="Select all invitees who have opened their pass"
+            >
+              👁️ Opened ({filteredRegs.filter(r => r.passOpenCount && r.passOpenCount > 0).length})
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const matches = filteredRegs.filter(r => !r.passOpenCount || r.passOpenCount === 0);
+                setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
+              }}
+              style={{padding:"3px 8px",borderRadius:6,border:"1px solid #E2E8F0",background:"white",color:"#64748B",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+              title="Select all invitees who have NOT opened their pass yet"
+            >
+              ⚪ Unopened ({filteredRegs.filter(r => !r.passOpenCount || r.passOpenCount === 0).length})
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const matches = filteredRegs.filter(r => r.inviteLetterReleased && !r.inviteLetterHold);
+                setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
+              }}
+              style={{padding:"3px 8px",borderRadius:6,border:"1px solid #BBF7D0",background:"#F0FDF4",color:"#166534",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+              title="Select all released invitees"
+            >
+              📢 Released ({filteredRegs.filter(r => r.inviteLetterReleased && !r.inviteLetterHold).length})
+            </button>
+            {selectedIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedIds([])}
+                style={{padding:"3px 8px",borderRadius:6,border:"1px solid #CBD5E1",background:"#FEF2F2",color:"#DC2626",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                title="Clear selected checkboxes"
+              >
+                ✕ Clear ({selectedIds.length})
+              </button>
+            )}
+          </div>
         </div>
 
         {loading ? <p>Loading inviteLetters...</p> : (
@@ -21766,6 +21869,17 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
                   let vDate = r.inviteViewDate ? new Date(r.inviteViewDate).toLocaleString() : "-";
                   let dDate = r.inviteDownloadDate ? new Date(r.inviteDownloadDate).toLocaleString() : "-";
 
+                  const rowId = r.id || r['Transaction ID'];
+                  const isSelected = selectedIds.includes(rowId);
+                  const waLogs = (r.logHistory || []).filter(lg => lg.type === "whatsapp" || (lg.action && String(lg.action).toLowerCase().includes("whatsapp")));
+                  const waCount = Math.max(r.whatsAppCount || 0, waLogs.length);
+                  const lastWaLog = waLogs[waLogs.length - 1];
+                  const lastWaType = r.lastWhatsAppType || lastWaLog?.messageType || lastWaLog?.action || "Official Invitation Pass";
+                  const lastWaDate = r.lastWhatsAppAt || lastWaLog?.timestamp;
+                  const waTooltip = waCount > 0 
+                    ? `WhatsApp sent ${waCount} time${waCount > 1 ? 's' : ''}. Last: ${lastWaType} on ${lastWaDate ? new Date(lastWaDate).toLocaleDateString() : 'recent'}`
+                    : "Send WhatsApp Invitation Pass";
+
                   return (
                     <tr 
                       key={i} 
@@ -21773,20 +21887,50 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
                       style={{
                         borderBottom:"1px solid #eee",
                         cursor: "pointer",
-                        background: previewCertRegId === r.id ? "#E8F4F8" : "transparent",
+                        background: isSelected ? "#F0FDF4" : previewCertRegId === r.id ? "#E8F4F8" : "transparent",
                         transition: "background-color 0.2s"
                       }}
                     >
+                      <td style={{padding:"12px 8px",textAlign:"center"}} onClick={(e)=>e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            setSelectedIds(prev => prev.includes(rowId) ? prev.filter(x => x !== rowId) : [...prev, rowId]);
+                          }}
+                          style={{cursor:"pointer",width:16,height:16,accentColor:"#15803D"}}
+                          title="Select this invitee"
+                        />
+                      </td>
                       <td style={{padding:"12px",textAlign:"center"}} onClick={(e)=>e.stopPropagation()}>
-                        <div style={{display:"flex",justifyContent:"center",gap:6,flexWrap:"wrap"}}>
-                          <button onClick={(e)=>{e.stopPropagation(); handlePreview(r, ev);}} style={{padding:"5px 10px",borderRadius:6,fontSize:".74rem",background:"white",border:"1px solid var(--bd)",cursor:"pointer",fontWeight:600}}>Preview</button>
-                          <button onClick={(e)=>{e.stopPropagation(); setSelectedWhatsAppReg(r);}} style={{padding:"5px 10px",borderRadius:6,fontSize:".74rem",background:"#DCFCE7",border:"1px solid #86EFAC",color:"#15803D",cursor:"pointer",fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
-                            <span>💬</span> WhatsApp
+                        <div style={{display:"flex",justifyContent:"center",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                          <button onClick={(e)=>{e.stopPropagation(); handlePreview(r, ev);}} style={{padding:"5px 8px",borderRadius:6,fontSize:".74rem",background:"white",border:"1px solid var(--bd)",cursor:"pointer",fontWeight:600}}>Preview</button>
+                          <button 
+                            onClick={(e)=>{e.stopPropagation(); setSelectedWhatsAppReg(r);}} 
+                            style={{
+                              padding:"5px 9px",
+                              borderRadius:6,
+                              fontSize:".74rem",
+                              background: waCount > 0 ? "#DCFCE7" : "#F8FAFC",
+                              border: waCount > 0 ? "1.5px solid #22C55E" : "1px solid #86EFAC",
+                              color: waCount > 0 ? "#15803D" : "#475569",
+                              cursor:"pointer",
+                              fontWeight: waCount > 0 ? 800 : 700,
+                              display:"flex",
+                              alignItems:"center",
+                              gap:4
+                            }}
+                            title={waTooltip}
+                          >
+                            <span>💬</span> WhatsApp {waCount > 0 ? `(${waCount})` : ""}
                           </button>
-                          <button onClick={(e)=>{e.stopPropagation(); toggleRelease(r);}} disabled={r.inviteLetterHold} style={{padding:"5px 10px",borderRadius:6,fontSize:".74rem",background:r.inviteLetterHold?"#eaeaea":r.inviteLetterReleased?"#f5f5f5":"var(--dt)",color:r.inviteLetterHold?"#aaa":r.inviteLetterReleased?"#333":"white",border:r.inviteLetterReleased?"1px solid #ccc":"none",cursor:r.inviteLetterHold?"not-allowed":"pointer",fontWeight:600}}>
+                          <button onClick={(e)=>{e.stopPropagation(); setHistoryModalReg(r);}} style={{padding:"5px 7px",borderRadius:6,fontSize:".74rem",background:"#FFF4EC",color:"var(--sf)",border:"1px solid #FDDBB8",cursor:"pointer",fontWeight:700}} title="View Audit Logs & Pass Open History">
+                            📜 Logs {r.logHistory && r.logHistory.length > 0 ? `(${r.logHistory.length})` : ""}
+                          </button>
+                          <button onClick={(e)=>{e.stopPropagation(); toggleRelease(r);}} disabled={r.inviteLetterHold} style={{padding:"5px 8px",borderRadius:6,fontSize:".74rem",background:r.inviteLetterHold?"#eaeaea":r.inviteLetterReleased?"#f5f5f5":"var(--dt)",color:r.inviteLetterHold?"#aaa":r.inviteLetterReleased?"#333":"white",border:r.inviteLetterReleased?"1px solid #ccc":"none",cursor:r.inviteLetterHold?"not-allowed":"pointer",fontWeight:600}}>
                             {r.inviteLetterReleased ? "Revoke" : "Release"}
                           </button>
-                          <button onClick={(e)=>{e.stopPropagation(); toggleHold(r);}} style={{padding:"5px 10px",borderRadius:6,fontSize:".74rem",background:r.inviteLetterHold?"#FEE2E2":"#f5f5f5",color:r.inviteLetterHold?"#991B1B":"#666",border:r.inviteLetterHold?"1px solid #FCA5A5":"1px solid #ccc",cursor:"pointer",fontWeight:600}}>
+                          <button onClick={(e)=>{e.stopPropagation(); toggleHold(r);}} style={{padding:"5px 8px",borderRadius:6,fontSize:".74rem",background:r.inviteLetterHold?"#FEE2E2":"#f5f5f5",color:r.inviteLetterHold?"#991B1B":"#666",border:r.inviteLetterHold?"1px solid #FCA5A5":"1px solid #ccc",cursor:"pointer",fontWeight:600}}>
                             {r.inviteLetterHold ? "Unhold" : "Hold"}
                           </button>
                         </div>
@@ -21838,8 +21982,29 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       {showBulkWhatsAppModal && (
         <BulkWhatsAppBroadcastModal
           event={activeEvent}
-          recipients={filteredRegs}
+          recipients={selectedIds.length > 0 ? filteredRegs.filter(r => selectedIds.includes(r.id || r['Transaction ID'])) : filteredRegs}
           C={C}
+          auth={auth}
+          onLogSent={async (r, msgType) => {
+            const updatedBy = auth?.email || "Admin";
+            const existingLogs = Array.isArray(r.logHistory) ? r.logHistory : [];
+            const waLog = {
+              timestamp: new Date().toISOString(),
+              actor: updatedBy,
+              action: `WhatsApp Sent: ${msgType}`,
+              type: "whatsapp",
+              messageType: msgType,
+              remarks: `WhatsApp invitation pass (${msgType}) sent to applicant.`
+            };
+            const newLogs = [...existingLogs, waLog];
+            const newCount = (r.whatsAppCount || 0) + 1;
+            setRegs(prev => prev.map(x => x.id === r.id ? { ...x, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp } : x));
+            try {
+              const cleanData = { ...r, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp };
+              delete cleanData.id; delete cleanData._submittedAt;
+              await fbUpdateRegistration(r.id, cleanData, auth?.idToken);
+            } catch(e){}
+          }}
           onClose={() => setShowBulkWhatsAppModal(false)}
         />
       )}
@@ -21864,9 +22029,95 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
           reg={{ ...selectedWhatsAppReg, isInviteMode: true }}
           onClose={() => setSelectedWhatsAppReg(null)}
           C={C}
+          auth={auth}
           allRegs={filteredRegs}
           onSelectReg={(nextR) => setSelectedWhatsAppReg(nextR)}
+          onLogSent={async (r, msgType) => {
+            const updatedBy = auth?.email || "Admin";
+            const existingLogs = Array.isArray(r.logHistory) ? r.logHistory : [];
+            const waLog = {
+              timestamp: new Date().toISOString(),
+              actor: updatedBy,
+              action: `WhatsApp Sent: ${msgType}`,
+              type: "whatsapp",
+              messageType: msgType,
+              remarks: `WhatsApp invitation pass (${msgType}) sent to applicant.`
+            };
+            const newLogs = [...existingLogs, waLog];
+            const newCount = (r.whatsAppCount || 0) + 1;
+            setRegs(prev => prev.map(x => x.id === r.id ? { ...x, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp } : x));
+            try {
+              const cleanData = { ...r, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp };
+              delete cleanData.id; delete cleanData._submittedAt;
+              await fbUpdateRegistration(r.id, cleanData, auth?.idToken);
+            } catch(e){}
+          }}
         />
+      )}
+
+      {/* Audit Logs & Pass Open History Modal */}
+      {historyModalReg && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setHistoryModalReg(null)}>
+          <div style={{background:"white",borderRadius:16,maxWidth:540,width:"100%",maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 40px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"16px 20px",background:"linear-gradient(135deg, #15803D, #166534)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <h3 style={{fontSize:"1.1rem",fontWeight:700,margin:0}}>📜 Invite Pass & Activity Log</h3>
+                <div style={{fontSize:".75rem",opacity:0.9,marginTop:2}}>
+                  {historyModalReg['Full Name'] || historyModalReg.name} • {historyModalReg['Transaction ID'] || historyModalReg.id}
+                </div>
+              </div>
+              <button onClick={()=>setHistoryModalReg(null)} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:"50%",width:32,height:32,cursor:"pointer",fontWeight:700,fontSize:"1.1rem"}}>✕</button>
+            </div>
+
+            <div style={{padding:20,overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:12}}>
+              {(() => {
+                const logs = (historyModalReg.logHistory && historyModalReg.logHistory.length > 0)
+                  ? historyModalReg.logHistory
+                  : [
+                      {
+                        actor: "User",
+                        action: "1st Entry Submitted",
+                        timestamp: historyModalReg.timestamp || historyModalReg._submittedAt,
+                        remarks: "Initial registration entry submitted"
+                      }
+                    ];
+
+                return logs.map((lg, lgIdx) => (
+                  <div key={lgIdx} style={{background:"#FAFAFA",border:"1.5px solid var(--bd)",borderRadius:10,padding:14,position:"relative"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <span style={{fontSize:".78rem",fontWeight:800,color:lg.actor?.includes('Student') ? "#1D4ED8" : lg.actor === 'User' ? "var(--sf)" : "#15803D"}}>
+                        {lg.actor?.includes('Student') ? "👤 Student (Recipient)" : lg.actor === 'User' ? "👤 User (Registrant)" : `🛡️ Admin (${lg.actor || 'Admin'})`}
+                      </span>
+                      <span style={{fontSize:".7rem",color:"var(--mu)",fontWeight:600}}>
+                        {lg.timestamp ? new Date(lg.timestamp).toLocaleString() : ""}
+                      </span>
+                    </div>
+                    {lg.type === 'pass_open' || (lg.action && String(lg.action).toLowerCase().includes('pass / invite opened')) ? (
+                      <div style={{marginBottom:6}}>
+                        <span style={{background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #93C5FD",padding:"3px 8px",borderRadius:6,fontSize:".76rem",fontWeight:800,display:"inline-flex",alignItems:"center",gap:4}}>
+                          <span>👁️</span> {lg.action} • {lg.device || 'Mobile'}
+                        </span>
+                      </div>
+                    ) : lg.type === 'whatsapp' || (lg.action && String(lg.action).toLowerCase().includes('whatsapp')) ? (
+                      <div style={{marginBottom:6}}>
+                        <span style={{background:"#DCFCE7",color:"#15803D",border:"1px solid #86EFAC",padding:"3px 8px",borderRadius:6,fontSize:".76rem",fontWeight:800,display:"inline-flex",alignItems:"center",gap:4}}>
+                          <span>💬</span> {lg.action || `WhatsApp Sent (${lg.messageType || 'Update'})`}
+                        </span>
+                      </div>
+                    ) : (
+                      <div style={{fontSize:".88rem",fontWeight:700,color:"var(--dt)",marginBottom:4}}>
+                        {lg.action || lg.status}
+                      </div>
+                    )}
+                    <div style={{fontSize:".82rem",color:"var(--tx)",lineHeight:1.4,background:"white",padding:"8px 10px",borderRadius:6,border:"1px solid #EEE"}}>
+                      {lg.remarks || "No remarks provided"}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* WhatsApp Invite Letter Template Modal */}
