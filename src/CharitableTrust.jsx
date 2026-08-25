@@ -9898,15 +9898,30 @@ function CertificateConfigModal({ ev, onSave, onClose, auth, forms, type = 'cert
   );
 }
 
+const ensureEduEventAtZero = (evList) => {
+  if (!Array.isArray(evList) || evList.length <= 1) return evList || [];
+  const eduIdx = evList.findIndex(e => String(e.title || "").toLowerCase().includes("education felicitation"));
+  if (eduIdx > 0) {
+    const copy = [...evList];
+    const [eduEv] = copy.splice(eduIdx, 1);
+    copy.unshift(eduEv);
+    return copy;
+  }
+  return evList;
+};
+
 function AdminEvents({ mob, C, setC, auth }) {
-  const [items, setItems] = useState(C.events || []);
+  const [items, setItems] = useState(() => ensureEduEventAtZero(C.events || []));
   const [previewForm, setPreviewForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [editIdx, setEditIdx] = useState(null);
   const [configModal, setConfigModal] = useState(null);
   const [qrModal, setQrModal] = useState(null); // { ev, idx }
 
-  useEffect(() => setItems(C.events || []), [C.events]);
+  useEffect(() => {
+    const fixed = ensureEduEventAtZero(C.events || []);
+    setItems(fixed);
+  }, [C.events]);
 
   const saveToFb = async (newC) => {
     if (!auth?.idToken) { alert("Login required to save"); return; }
@@ -9938,9 +9953,9 @@ function AdminEvents({ mob, C, setC, auth }) {
       color: "#E8F4F8",
       formId: ""
     };
-    const newArr = [newItem, ...items];
+    const newArr = [...items, newItem];
     setItems(newArr);
-    setEditIdx(0);
+    setEditIdx(newArr.length - 1);
   };
 
   const remove = (idx) => {
@@ -26637,9 +26652,11 @@ export default function App() {
       if (active) {
         if (data) {
           if (Array.isArray(data.events)) {
-            const pubEvs = data.events.filter(e => !e.isInternalOnly && !e.hideFromPublicWebsite);
-            const intEvs = data.events.filter(e => e.isInternalOnly || e.hideFromPublicWebsite);
-            data.events = [...pubEvs, ...intEvs];
+            const eduIdx = data.events.findIndex(e => String(e.title || "").toLowerCase().includes("education felicitation"));
+            if (eduIdx > 0) {
+              const [eduEv] = data.events.splice(eduIdx, 1);
+              data.events.unshift(eduEv);
+            }
           }
           setC(data);
         }
