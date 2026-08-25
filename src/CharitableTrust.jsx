@@ -19455,12 +19455,50 @@ function AdminRegistrations({ mob, C, setC, auth }) {
 
           {/* Right: Search + Refresh + Export + Bulk Tools Toggle */}
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            {/* Quick Status Checkbox Selectors */}
+            <div style={{display:"flex",alignItems:"center",gap:4,background:"#F1F5F9",padding:"3px 6px",borderRadius:8,border:"1px solid #CBD5E1"}}>
+              <span style={{fontSize:".72rem",fontWeight:800,color:"#475569",paddingLeft:2}}>☑ Select:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const matches = filteredRegs.filter(r => (r.Status || r.status) === "Needs Info");
+                  setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
+                }}
+                style={{padding:"3px 8px",borderRadius:6,border:"1px solid #FDE68A",background:"#FFFBEB",color:"#92400E",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                title="Select all Needs Info students"
+              >
+                ⚠️ Needs Info ({filteredRegs.filter(r => (r.Status || r.status) === "Needs Info").length})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const matches = filteredRegs.filter(r => (r.Status || r.status) === "Approved");
+                  setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
+                }}
+                style={{padding:"3px 8px",borderRadius:6,border:"1px solid #BBF7D0",background:"#F0FDF4",color:"#166534",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                title="Select all Approved students"
+              >
+                🟢 Approved ({filteredRegs.filter(r => (r.Status || r.status) === "Approved").length})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const matches = filteredRegs.filter(r => (!r.Status && !r.status) || (r.Status || r.status) === "Pending");
+                  setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
+                }}
+                style={{padding:"3px 8px",borderRadius:6,border:"1px solid #E2E8F0",background:"white",color:"#334155",fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                title="Select all Pending students"
+              >
+                ⏳ Pending ({filteredRegs.filter(r => (!r.Status && !r.status) || (r.Status || r.status) === "Pending").length})
+              </button>
+            </div>
+
             <input 
               type="text" 
               placeholder="Search..." 
               value={searchQuery}
               onChange={e=>setSearchQuery(e.target.value)}
-              style={{padding:"6px 12px",borderRadius:8,border:"1px solid var(--bd)",fontSize:".82rem",width:160,outline:"none",fontFamily:"inherit"}}
+              style={{padding:"6px 12px",borderRadius:8,border:"1px solid var(--bd)",fontSize:".82rem",width:140,outline:"none",fontFamily:"inherit"}}
             />
             <button onClick={handleRefresh} disabled={refreshing} style={{padding:"6px 12px",borderRadius:8,fontSize:".8rem",fontWeight:600,display:"flex",alignItems:"center",gap:4,background:"white",border:"1px solid var(--bd)",color:"var(--dt)",cursor:refreshing?"wait":"pointer",whiteSpace:"nowrap"}}>
               {refreshing ? "..." : "↻"} Refresh
@@ -19705,12 +19743,46 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                 <th style={{padding:"14px 12px",textAlign:"left"}}>Delete</th>
               </tr>
               <tr style={{background:"#FAFAFA", borderBottom:"2px solid #E0E0E0"}}>
-                <th style={{textAlign:"center"}}>
-                  {selectedIds.length > 0 && (
-                    <span style={{fontSize:".7rem",color:"#15803D",fontWeight:800}}>
-                      {selectedIds.length}✓
-                    </span>
-                  )}
+                <th style={{padding:"4px 6px",textAlign:"center"}}>
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) return;
+                      if (val === "ALL") {
+                        setSelectedIds(filteredRegs.map(r => r.id || r['Transaction ID']));
+                      } else if (val === "NONE") {
+                        setSelectedIds([]);
+                      } else {
+                        const matches = filteredRegs.filter(r => {
+                          const st = r['Status'] || r.status || 'Pending';
+                          return st === val;
+                        });
+                        setSelectedIds(matches.map(r => r.id || r['Transaction ID']));
+                      }
+                    }}
+                    style={{
+                      padding: "3px 4px",
+                      fontSize: ".7rem",
+                      fontWeight: 700,
+                      borderRadius: 4,
+                      border: "1.5px solid #15803D",
+                      background: "#F0FDF4",
+                      color: "#166534",
+                      cursor: "pointer",
+                      width: "100%",
+                      maxWidth: 95
+                    }}
+                    title="Select checkboxes specifically by Status"
+                  >
+                    <option value="">☑ Select...</option>
+                    <option value="Needs Info">⚠️ Needs Info ({filteredRegs.filter(r => (r.Status || r.status) === "Needs Info").length})</option>
+                    <option value="Approved">🟢 Approved ({filteredRegs.filter(r => (r.Status || r.status) === "Approved").length})</option>
+                    <option value="Pending">⏳ Pending ({filteredRegs.filter(r => (!r.Status && !r.status) || (r.Status || r.status) === "Pending").length})</option>
+                    <option value="Disapproved">🔴 Rejected ({filteredRegs.filter(r => (r.Status || r.status) === "Disapproved").length})</option>
+                    <option value="ALL">All ({filteredRegs.length})</option>
+                    <option value="NONE">⬜ Clear All</option>
+                  </select>
                 </th>
                 <th></th>
                 {["Date", "Event", "Transaction ID", "Status", "Remarks", "Updated By", ...allKeys].map(k => {
