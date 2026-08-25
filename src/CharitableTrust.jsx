@@ -14214,9 +14214,17 @@ function UserDashboard({ C, globalProfile, globalAuthToken, onClose }) {
                         {lg.timestamp ? new Date(lg.timestamp).toLocaleString() : ""}
                       </span>
                     </div>
-                    <div style={{fontSize:".88rem",fontWeight:700,color:"var(--dt)",marginBottom:4}}>
-                      {lg.action || lg.status}
-                    </div>
+                    {lg.type === 'whatsapp' || (lg.action && String(lg.action).toLowerCase().includes('whatsapp')) ? (
+                      <div style={{marginBottom:6}}>
+                        <span style={{background:"#DCFCE7",color:"#15803D",border:"1px solid #86EFAC",padding:"3px 8px",borderRadius:6,fontSize:".76rem",fontWeight:800,display:"inline-flex",alignItems:"center",gap:4}}>
+                          <span>💬</span> {lg.action || `WhatsApp Sent (${lg.messageType || 'Update'})`}
+                        </span>
+                      </div>
+                    ) : (
+                      <div style={{fontSize:".88rem",fontWeight:700,color:"var(--dt)",marginBottom:4}}>
+                        {lg.action || lg.status}
+                      </div>
+                    )}
                     <div style={{fontSize:".82rem",color:"var(--tx)",lineHeight:1.4,background:"white",padding:"8px 10px",borderRadius:6,border:"1px solid #EEE"}}>
                       {lg.remarks || "No remarks provided"}
                     </div>
@@ -17336,7 +17344,7 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }
 
 
 // ── Bulk / Broadcast WhatsApp Message Sender Modal ──────────────────────────────
-function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
+function BulkWhatsAppBroadcastModal({ event, recipients = [], C, auth, onLogSent, onClose }) {
   if (!event || recipients.length === 0) return null;
 
   const countApproved = recipients.filter(r => (r['Status'] || r.status) === "Approved").length;
@@ -17631,6 +17639,14 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
 
     if (phone && phone.length === 10) {
       try { navigator.clipboard.writeText(msg); } catch(e){}
+
+      const msgType = selectedTplId === "auto_status_match" 
+        ? `${r['Status'] || r.status || 'Pending'} Notice` 
+        : (activeTemplate?.name || "Status Notice");
+
+      if (typeof onLogSent === "function") {
+        try { onLogSent(r, msgType); } catch(e){}
+      }
 
       if (launchMode === "app") {
         const appUrl = `whatsapp://send?phone=91${phone}&text=${encodeURIComponent(msg)}`;
@@ -18390,7 +18406,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
 }
 
 // ── WhatsApp Applicant Communication Modal ───────────────────────────────────────
-function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSelectReg }) {
+function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, allRegs = [], onSelectReg }) {
   if (!reg) return null;
 
   const rawName = String(reg['Full Name'] || reg['Submitted By'] || reg['Participant Name'] || reg.name || 'Applicant').replace(/\|/g, ' ').trim();
@@ -18602,6 +18618,14 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, allRegs = [], onSele
       const appUrl = `whatsapp://send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
       window.location.href = appUrl;
       return;
+    }
+
+    const msgTypeName = reg.isInviteMode 
+      ? "Official Invitation Pass" 
+      : `${currentStatus} Notice`;
+
+    if (typeof onLogSent === "function") {
+      try { onLogSent(reg, msgTypeName); } catch(e){}
     }
 
     const webUrl = `https://web.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
@@ -19863,9 +19887,38 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                         <button onClick={()=>setViewing(r)} style={{padding:"6px 10px",borderRadius:6,fontSize:".75rem",background:"var(--dt)",color:"white",border:"none",cursor:"pointer",fontWeight:600,boxShadow:"0 2px 4px rgba(0,0,0,0.1)"}}>
                           View
                         </button>
-                        <button onClick={()=>setWhatsAppModalReg(r)} style={{padding:"6px 9px",borderRadius:6,fontSize:".75rem",background:"#DCFCE7",color:"#15803D",border:"1px solid #86EFAC",cursor:"pointer",fontWeight:700,display:"flex",alignItems:"center",gap:4}} title="Send WhatsApp Update to Applicant">
-                          <span>💬</span> WhatsApp
-                        </button>
+                        {(() => {
+                          const waLogs = (r.logHistory || []).filter(lg => lg.type === "whatsapp" || (lg.action && String(lg.action).toLowerCase().includes("whatsapp")));
+                          const count = Math.max(r.whatsAppCount || 0, waLogs.length);
+                          const lastLog = waLogs[waLogs.length - 1];
+                          const lastType = r.lastWhatsAppType || lastLog?.messageType || lastLog?.action || "";
+                          const lastDate = r.lastWhatsAppAt || lastLog?.timestamp;
+                          const tooltip = count > 0 
+                            ? `WhatsApp sent ${count} time${count > 1 ? 's' : ''}. Last: ${lastType} on ${lastDate ? new Date(lastDate).toLocaleDateString() : 'recent'}`
+                            : "Click to send WhatsApp update";
+                          return (
+                            <button 
+                              onClick={()=>setWhatsAppModalReg(r)} 
+                              style={{
+                                padding:"6px 9px",
+                                borderRadius:6,
+                                fontSize:".75rem",
+                                background: count > 0 ? "#DCFCE7" : "#F8FAFC",
+                                color: count > 0 ? "#15803D" : "#475569",
+                                border: count > 0 ? "1.5px solid #22C55E" : "1px solid #CBD5E1",
+                                cursor:"pointer",
+                                fontWeight: count > 0 ? 800 : 600,
+                                display:"flex",
+                                alignItems:"center",
+                                gap:4,
+                                boxShadow: count > 0 ? "0 1px 4px rgba(34,197,94,0.2)" : "none"
+                              }} 
+                              title={tooltip}
+                            >
+                              <span>💬</span> WhatsApp {count > 0 ? `(${count})` : ""}
+                            </button>
+                          );
+                        })()}
                         <button onClick={()=>setHistoryModalReg(r)} style={{padding:"6px 8px",borderRadius:6,fontSize:".75rem",background:"#FFF4EC",color:"var(--sf)",border:"1px solid #FDDBB8",cursor:"pointer",fontWeight:700}} title="View Log History">
                           📜 Logs {r.logHistory && r.logHistory.length > 0 ? `(${r.logHistory.length})` : ""}
                         </button>
@@ -19973,6 +20026,27 @@ function AdminRegistrations({ mob, C, setC, auth }) {
           event={(C.events || []).find(e => e.title === filteredRegs[0]?.eventName || e.title === filteredRegs[0]?.eventTitle || e.id === filteredRegs[0]?.eventId) || (C.events || [])[0] || { title: "Event Registrations" }}
           recipients={selectedIds.length > 0 ? filteredRegs.filter(r => selectedIds.includes(r.id || r['Transaction ID'])) : filteredRegs}
           C={C}
+          auth={auth}
+          onLogSent={async (r, msgType) => {
+            const updatedBy = auth?.email || "Admin";
+            const existingLogs = Array.isArray(r.logHistory) ? r.logHistory : [];
+            const waLog = {
+              timestamp: new Date().toISOString(),
+              actor: updatedBy,
+              action: `WhatsApp Sent: ${msgType}`,
+              type: "whatsapp",
+              messageType: msgType,
+              remarks: `WhatsApp message (${msgType}) sent to applicant.`
+            };
+            const newLogs = [...existingLogs, waLog];
+            const newCount = (r.whatsAppCount || 0) + 1;
+            setRegs(prev => prev.map(x => x.id === r.id ? { ...x, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp } : x));
+            try {
+              const cleanData = { ...r, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp };
+              delete cleanData.id; delete cleanData._submittedAt;
+              await fbUpdateRegistration(r.id, cleanData, auth?.idToken);
+            } catch(e){}
+          }}
           onClose={() => setShowBulkWhatsAppModal(false)}
         />
       )}
@@ -19982,8 +20056,29 @@ function AdminRegistrations({ mob, C, setC, auth }) {
           reg={whatsAppModalReg} 
           onClose={() => setWhatsAppModalReg(null)} 
           C={C} 
+          auth={auth}
           allRegs={filteredRegs}
           onSelectReg={setWhatsAppModalReg}
+          onLogSent={async (r, msgType) => {
+            const updatedBy = auth?.email || "Admin";
+            const existingLogs = Array.isArray(r.logHistory) ? r.logHistory : [];
+            const waLog = {
+              timestamp: new Date().toISOString(),
+              actor: updatedBy,
+              action: `WhatsApp Sent: ${msgType}`,
+              type: "whatsapp",
+              messageType: msgType,
+              remarks: `WhatsApp message (${msgType}) sent to applicant.`
+            };
+            const newLogs = [...existingLogs, waLog];
+            const newCount = (r.whatsAppCount || 0) + 1;
+            setRegs(prev => prev.map(x => x.id === r.id ? { ...x, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp } : x));
+            try {
+              const cleanData = { ...r, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp };
+              delete cleanData.id; delete cleanData._submittedAt;
+              await fbUpdateRegistration(r.id, cleanData, auth?.idToken);
+            } catch(e){}
+          }}
         />
       )}
 
