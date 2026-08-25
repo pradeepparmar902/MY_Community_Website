@@ -17336,50 +17336,61 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }
 
 
 // ── Bulk / Broadcast WhatsApp Message Sender Modal ──────────────────────────────
-function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
+function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationMode = false, onClose }) {
   if (!event || recipients.length === 0) return null;
 
-  const defaultWorkspaceTemplates = [
+  const defaultApprovedTpl = C.whatsAppTplApproved || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Percentage:* {PERCENTAGE}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai\n\n👉 View your application on your dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
+
+  const defaultNeedsInfoTpl = C.whatsAppTplNeedsInfo || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nYour application (*{TXN_ID}*) for *Education Felicitation 2026* requires additional information or document correction for verification.\n\n⚠️ *Committee Remarks / Action Required:*\n👉 *{REMARKS}*\n\n📝 *How to Update Your Application:*\n1. Open portal: {PORTAL_URL}\n2. Log in with registered mobile: *+91 {MOBILE}*\n3. Go to *My Dashboard* > *Registrations*\n4. Click *Edit & Resubmit* and update the requested document/details.\n\nPlease complete this at the earliest.\n\nWarm regards,\n*Education Verification Committee*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
+
+  const defaultPendingTpl = C.whatsAppTplPending || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nThank you for submitting your registration for *Education Felicitation 2026*.\n\n📋 *Application Summary:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Current Status:* ⏳ *Under Verification / Review*\n\nOur Verification Committee is currently reviewing your submitted details and documents. You will receive an update once the verification is completed.\n\n👉 Track your live application status on your student dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
+
+  const defaultDisapprovedTpl = C.whatsAppTplDisapproved || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nRegarding your application (*{TXN_ID}*) for *Education Felicitation 2026*.\n\n• *Status:* 🔴 *Not Approved*\n• *Reason / Remarks:* {REMARKS}\n\nIf you believe this is an error or need clarification, please contact your Vibhag Committee Member or our helpline.\n\nWarm regards,\n*Education Committee*\n📞 Helpline: {HELPLINE_PHONES}`;
+
+  const defaultInviteTpl = C.whatsAppTplInvite || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026 - Official Invitation*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nWe are pleased to invite you and your family as our esteemed guests of honor to the *Annual Student Education Felicitation 2026*.\n\n📋 *Invitation Pass Details:*\n• *Transaction / Pass ID:* {TXN_ID}\n• *Invitee Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View & Download Official PDF Invitation Letter & Pass:*\n{INVITE_PDF_LINK}\n\nPlease show this digital pass or downloaded invitation letter at the registration desk upon arrival.\n\nWarm regards,\n*Central Working Committee (CWC) & Education Board*\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
+
+  const broadcastTemplates = [
     {
-      id: "tpl_student_pass",
-      name: "Official Student Invitation & Entry Pass",
+      id: "auto_status_match",
+      name: "🔄 Dynamic: Auto-Match Each Student's Live Status (Approved / Needs Info / Pending / Disapproved)",
       isDefault: true,
-      text: C.whatsAppTplInvite || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026 - Official Invitation*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nWe are pleased to invite you and your family as our esteemed guests of honor to the *Annual Student Education Felicitation 2026*.\n\n📋 *Invitation Pass Details:*\n• *Transaction / Pass ID:* {TXN_ID}\n• *Invitee Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View & Download Official PDF Invitation Letter & Pass:*\n{INVITE_PDF_LINK}\n\nPlease show this digital pass or downloaded invitation letter at the registration desk upon arrival.\n\nWarm regards,\n*Central Working Committee (CWC) & Education Board*\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`
+      text: "AUTO_STATUS_MATCH"
     },
     {
       id: "tpl_approved_notice",
-      name: "Application Approved & Verified Notice",
+      name: "🟢 Application Approved & Verified Notice (Only)",
       isDefault: false,
-      text: C.whatsAppTplApproved || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Percentage:* {PERCENTAGE}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai\n\n👉 View your application on your dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`
+      text: defaultApprovedTpl
     },
     {
       id: "tpl_needs_info_notice",
-      name: "Needs Info / Document Correction Notice",
+      name: "⚠️ Needs Info / Document Correction Notice (Only)",
       isDefault: false,
-      text: C.whatsAppTplNeedsInfo || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nYour application (*{TXN_ID}*) for *Education Felicitation 2026* requires additional information or document correction for verification.\n\n⚠️ *Committee Remarks / Action Required:*\n👉 *{REMARKS}*\n\n📝 *How to Update Your Application:*\n1. Open portal: {PORTAL_URL}\n2. Log in with registered mobile: *+91 {MOBILE}*\n3. Go to *My Dashboard* > *Registrations*\n4. Click *Edit & Resubmit* and update the requested document/details.\n\nPlease complete this at the earliest.\n\nWarm regards,\n*Education Verification Committee*\n📞 Committee Helpline: {HELPLINE_PHONES}`
+      text: defaultNeedsInfoTpl
     },
     {
-      id: "tpl_vip_guest",
-      name: "VIP / Special Dignitary Invitation",
+      id: "tpl_pending_notice",
+      name: "⏳ Under Verification / Review Notice (Only)",
       isDefault: false,
-      text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🌟 *Special Dignitary Invitation - Education Felicitation 2026*\n═══════════════════════\nRespected *{STUDENT_NAME}* Ji,\n\nOn behalf of Mumbai Meghwal Panchayat & Vidya Gohil Charitable Trust, we cordially request the honor of your esteemed presence as our *Special Guest of Honor* at our upcoming Annual Education Felicitation Ceremony.\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View Official Digital Invitation Pass:*\n{INVITE_PDF_LINK}\n\nWe look forward to welcoming you and celebrating together.\n\nWarm regards,\n*President & Central Working Committee (CWC)*\n📞 Helpline: {HELPLINE_PHONES}`
+      text: defaultPendingTpl
     },
     {
-      id: "tpl_event_reminder",
-      name: "Event Reminder & Reporting Time Notice",
+      id: "tpl_disapproved_notice",
+      name: "🔴 Disapproved Application Notice (Only)",
       isDefault: false,
-      text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n⏰ *Gentle Reminder: Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nThis is a gentle reminder that the *Annual Student Education Felicitation Ceremony* is scheduled for *02-10-2026 (Friday)*.\n\n• *Invitee Name:* {STUDENT_NAME}\n• *Pass / Txn ID:* {TXN_ID}\n• *Reporting Time:* 09:30 AM Sharp\n• *Venue:* Mumbai, Maharashtra\n\n👉 *Open Your Digital Pass on Mobile:*\n{INVITE_PDF_LINK}\n\nPlease carry your digital pass on your phone for smooth verification at the venue.\n\nWarm regards,\n*Event Management Team*`
-    }
+      text: defaultDisapprovedTpl
+    },
+    {
+      id: "tpl_student_pass",
+      name: "🏆 Official Student Invitation & Entry Pass",
+      isDefault: false,
+      text: defaultInviteTpl
+    },
+    ...(event?.whatsAppTemplates || [])
   ];
 
-  const workspaceTemplates = (event?.whatsAppTemplates && event.whatsAppTemplates.length > 0)
-    ? event?.whatsAppTemplates
-    : defaultWorkspaceTemplates;
-
-  const defaultTpl = workspaceTemplates.find(t => t.isDefault) || workspaceTemplates[0];
-  const [selectedTplId, setSelectedTplId] = useState(defaultTpl?.id || "tpl_student_pass");
-  
-  const activeTemplate = workspaceTemplates.find(t => t.id === selectedTplId) || defaultTpl;
+  const [selectedTplId, setSelectedTplId] = useState("auto_status_match");
+  const activeTemplate = broadcastTemplates.find(t => t.id === selectedTplId) || broadcastTemplates[0];
 
   const gateway = C.whatsAppGateway || {};
   const isApiEnabled = gateway.enabled && gateway.instanceId && gateway.token;
@@ -17392,7 +17403,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
   const [failCount, setFailCount] = useState(0);
   const [broadcastDone, setBroadcastDone] = useState(false);
   const [copiedBroadcastNumbers, setCopiedBroadcastNumbers] = useState(false);
-  const [launchMode, setLaunchMode] = useState(() => localStorage.getItem("mmp_wa_launch_mode") || "app");
+  const [launchMode, setLaunchMode] = useState(() => localStorage.getItem("mmp_wa_launch_mode") || "web");
 
   const formatMessageForReg = (r) => {
     if (!r) return "";
@@ -17403,10 +17414,21 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
     const rStream = r['Stream / Class'] || r['Stream'] || r['Course'] || 'N/A';
     const rPct = r['% Obtained'] || r.percentage || r['Marks / Percentage'] || 'N/A';
     const rRemarks = r['Remarks'] || r.remarks || 'Application under review';
+    const rStatus = r['Status'] || r.status || 'Pending';
+
+    let rawTemplateText = "";
+    if (selectedTplId === "auto_status_match") {
+      if (rStatus === "Approved") rawTemplateText = defaultApprovedTpl;
+      else if (rStatus === "Needs Info") rawTemplateText = defaultNeedsInfoTpl;
+      else if (rStatus === "Disapproved") rawTemplateText = defaultDisapprovedTpl;
+      else rawTemplateText = defaultPendingTpl;
+    } else {
+      rawTemplateText = activeTemplate?.text || defaultApprovedTpl;
+    }
 
     const passUrl = `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}`.replace(/\/?$/, '') + `/?invite=${encodeURIComponent(rTxn || "")}`;
     
-    let processed = (activeTemplate?.text || "")
+    let processed = rawTemplateText
       .replace(/\{STUDENT_NAME\}/g, rName || "Student")
       .replace(/\{TXN_ID\}/g, rTxn || "N/A")
       .replace(/\{VIBHAG\}/g, rVibhag || "All Vibhags")
@@ -17559,7 +17581,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
     }
   };
 
-  // Keyboard shortcut: Press Enter or Space to send next item immediately
+  // Keyboard shortcut: Press Enter to send next item immediately
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === "Enter" && !broadcastDone && !broadcasting) {
@@ -17569,11 +17591,12 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentIndex, broadcastDone, broadcasting, recipients]);
+  }, [currentIndex, broadcastDone, broadcasting, recipients, selectedTplId]);
 
   // Current active recipient details
   const currentReg = recipients[Math.min(currentIndex, recipients.length - 1)] || recipients[0];
   const currentName = String(currentReg?.['Full Name'] || currentReg?.['Submitted By'] || currentReg?.['Participant Name'] || currentReg?.name || 'Applicant').replace(/\|/g, ' ').trim();
+  const currentStatus = currentReg?.['Status'] || currentReg?.status || 'Pending';
 
   // Copy phone numbers for WhatsApp Broadcast List
   const handleCopyBroadcastList = () => {
@@ -17581,7 +17604,8 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
       .map(r => {
         const p = String(r['Mobile Number'] || r.submitterMob || r['Alternate Mobile Number'] || r.phone || '').replace(/\D/g, '').slice(-10);
         const n = String(r['Full Name'] || r['Submitted By'] || r['Participant Name'] || r.name || 'Applicant').replace(/\|/g, ' ').trim();
-        return p.length === 10 ? `+91 ${p} - ${n}` : null;
+        const st = r['Status'] || r.status || 'Pending';
+        return p.length === 10 ? `+91 ${p} - ${n} (${st})` : null;
       })
       .filter(Boolean)
       .join("\n");
@@ -17601,10 +17625,10 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
         <div style={{padding:"18px 24px",background:"linear-gradient(135deg, #15803D, #166534)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <h3 style={{fontSize:"1.15rem",fontWeight:800,margin:0,display:"flex",alignItems:"center",gap:8}}>
-              <span>📢</span> Send All WhatsApp Messages ({recipients.length} Recipients)
+              <span>📢</span> Broadcast WhatsApp Updates ({recipients.length} Registrations)
             </h3>
             <div style={{fontSize:".8rem",opacity:0.9,marginTop:2}}>
-              Broadcast personalized invitation passes & letters to all {recipients.length} approved invitees for {event.title}.
+              Broadcast personalized application status updates (Approved / Needs Info / Pending) to all {recipients.length} filtered applicants.
             </div>
           </div>
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:32,height:32,color:"white",cursor:"pointer",fontWeight:800}}>✕</button>
@@ -17614,15 +17638,17 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
         <div style={{padding:"20px 24px",overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:16}}>
           
           {/* Template Selection */}
-          <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"12px 16px"}}>
-            <div style={{fontSize:".8rem",fontWeight:800,color:"#15803D",marginBottom:6}}>1. CHOOSE WHATSAPP TEMPLATE TO BROADCAST:</div>
+          <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"14px 16px"}}>
+            <div style={{fontSize:".8rem",fontWeight:800,color:"#15803D",marginBottom:6}}>
+              1. CHOOSE STATUS UPDATE TEMPLATE TO BROADCAST:
+            </div>
             <select
               value={selectedTplId}
               onChange={e => setSelectedTplId(e.target.value)}
               disabled={broadcasting}
               style={{
                 width: "100%",
-                padding: "8px 12px",
+                padding: "9px 12px",
                 borderRadius: 8,
                 border: "1.5px solid #15803D",
                 fontSize: ".88rem",
@@ -17632,12 +17658,18 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
                 cursor: "pointer"
               }}
             >
-              {workspaceTemplates.map(t => (
+              {broadcastTemplates.map(t => (
                 <option key={t.id} value={t.id}>
-                  {t.name} {t.isDefault ? "★ (Default)" : ""}
+                  {t.name} {t.id === "auto_status_match" ? "★ (Recommended)" : ""}
                 </option>
               ))}
             </select>
+
+            {selectedTplId === "auto_status_match" && (
+              <div style={{fontSize:".76rem",color:"#15803D",marginTop:6,lineHeight:1.4,fontWeight:600}}>
+                ✨ <strong>Smart Dynamic Logic:</strong> Approved students get the Congratulations Approval message, Needs Info students get their specific Committee Remarks, and Pending students get Under Verification updates!
+              </div>
+            )}
           </div>
 
           {/* Broadcast Strategy Options */}
@@ -17661,7 +17693,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
                     <span style={{fontSize:"1.3rem"}}>⚡</span>
                     <div>
                       <strong style={{fontSize:".95rem",color:"#14532D"}}>1-Click Fast Tap Runner (Keyboard: Enter / Space)</strong>
-                      <div style={{fontSize:".75rem",color:"#15803D"}}>Each tap immediately opens the student's chat with the invitation drafted</div>
+                      <div style={{fontSize:".75rem",color:"#15803D"}}>Each tap immediately opens the applicant's chat with their status update message</div>
                     </div>
                   </div>
 
@@ -17704,12 +17736,12 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
                     }}
                   >
                     <span>{broadcastDone ? "✅" : "🟢"}</span>
-                    <span>{broadcastDone ? "All Recipients Sent!" : `Send to ${currentName} (${currentIndex + 1}/${recipients.length}) [Press Enter] →`}</span>
+                    <span>{broadcastDone ? "All Applicants Processed!" : `Send to ${currentName} (${currentStatus}) [Press Enter] →`}</span>
                   </button>
 
                   {!broadcastDone && (
                     <div style={{fontSize:".8rem",color:"#14532D",fontWeight:600}}>
-                      Tip: You can just press <kbd style={{background:"#E2E8F0",padding:"2px 6px",borderRadius:4,border:"1px solid #CBD5E1",fontWeight:800}}>Enter</kbd> to quickly send one by one!
+                      Tip: You can just tap <kbd style={{background:"#E2E8F0",padding:"2px 6px",borderRadius:4,border:"1px solid #CBD5E1",fontWeight:800}}>Enter</kbd> to rapidly send to each student!
                     </div>
                   )}
                 </div>
@@ -17732,7 +17764,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
                   </div>
                 </div>
                 <p style={{fontSize:".78rem",color:"#475569",margin:"0 0 10px 0",lineHeight:1.4}}>
-                  Opens pre-filled WhatsApp chats in browser tabs at once with the invitation message already typed in. In WhatsApp, press <strong>Enter</strong> to send, then <strong>Ctrl+W</strong> to close and hit Enter on next tab!
+                  Opens pre-filled WhatsApp chats in browser tabs at once with the status update message already typed in. In WhatsApp, press <strong>Enter</strong> to send, then <strong>Ctrl+W</strong> to close and hit Enter on next tab!
                 </p>
                 <button
                   type="button"
@@ -17760,9 +17792,9 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
               {/* Method 3: WhatsApp Official Broadcast List Numbers Export */}
               <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
                 <div>
-                  <strong style={{fontSize:".84rem",color:"#15803D"}}>Mobile Broadcast List (1 Click to All 256 People)</strong>
+                  <strong style={{fontSize:".84rem",color:"#15803D"}}>Mobile Broadcast List (1 Click to All People)</strong>
                   <div style={{fontSize:".75rem",color:"#166534",marginTop:2}}>
-                    Copy all {recipients.length} phone numbers to paste into your phone's WhatsApp Broadcast List.
+                    Copy all {recipients.length} phone numbers with their status to paste into your phone's WhatsApp Broadcast List.
                   </div>
                 </div>
                 <button
@@ -17807,12 +17839,12 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
           {/* Sample Message Preview */}
           <div>
             <div style={{fontSize:".78rem",fontWeight:700,color:"#475569",marginBottom:6}}>
-              PREVIEW (Sample for 1st recipient: {String(recipients[0]?.['Full Name'] || 'Student')}):
+              PREVIEW (Sample for 1st recipient: {String(recipients[0]?.['Full Name'] || 'Student')} - Status: {String(recipients[0]?.['Status'] || 'Pending')}):
             </div>
             <textarea
               value={samplePreview}
               readOnly
-              rows={5}
+              rows={6}
               style={{
                 width: "100%",
                 padding: "10px 12px",
@@ -17861,7 +17893,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
           ) : (
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <span style={{fontSize:".8rem",color:"#64748B",fontWeight:600}}>
-                {currentIndex < recipients.length ? `Next: ${currentName}` : "Complete!"}
+                {currentIndex < recipients.length ? `Next: ${currentName} (${currentStatus})` : "Complete!"}
               </span>
               <button
                 type="button"
