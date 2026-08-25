@@ -17509,8 +17509,11 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, auth, onLogSent
       rawTemplateText = activeTemplate?.text || defaultApprovedTpl;
     }
 
-    const passUrl = `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}`.replace(/\/?$/, '') + `/?invite=${encodeURIComponent(rTxn || "")}`;
-    
+    const baseUrl = `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}`.replace(/\/?$/, '');
+    const certUrl = `${baseUrl}/?cert=${encodeURIComponent(rTxn || "")}`;
+    const inviteUrl = `${baseUrl}/?invite=${encodeURIComponent(rTxn || "")}`;
+    const defaultUrl = (selectedTplId === "tpl_cert_notice" || activeTemplate?.name?.toLowerCase().includes("certificate")) ? certUrl : inviteUrl;
+
     let processed = rawTemplateText
       .replace(/\{STUDENT_NAME\}/g, rName || "Student")
       .replace(/\{TXN_ID\}/g, rTxn || "N/A")
@@ -17519,15 +17522,18 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, auth, onLogSent
       .replace(/\{PERCENTAGE\}/g, rPct || "N/A")
       .replace(/\{REMARKS\}/g, rRemarks || "Application under review")
       .replace(/\{MOBILE\}/g, rMobile || "")
-      .replace(/\{PORTAL_URL\}/g, passUrl)
-      .replace(/\{INVITE_PDF_LINK\}/g, passUrl)
-      .replace(/\{PASS_LINK\}/g, passUrl)
-      .replace(/\{WEBSITE_HOME\}/g, C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/")
+      .replace(/\{CERTIFICATE_LINK\}/g, certUrl)
+      .replace(/\{CERTIFICATE_URL\}/g, certUrl)
+      .replace(/\{INVITE_PDF_LINK\}/g, inviteUrl)
+      .replace(/\{INVITE_LINK\}/g, inviteUrl)
+      .replace(/\{PASS_LINK\}/g, inviteUrl)
+      .replace(/\{PORTAL_URL\}/g, defaultUrl)
+      .replace(/\{WEBSITE_HOME\}/g, baseUrl)
       .replace(/\{HELPLINE_PHONES\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209 / +91 9967821964")
       .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209");
 
-    if (rTxn && rTxn !== 'N/A' && processed.includes("https://pradeepparmar902.github.io/MY_Community_Website/") && !processed.includes("?invite=") && !processed.includes("?pass=")) {
-      processed = processed.replace("https://pradeepparmar902.github.io/MY_Community_Website/", passUrl);
+    if (rTxn && rTxn !== 'N/A' && processed.includes("https://pradeepparmar902.github.io/MY_Community_Website/") && !processed.includes("?invite=") && !processed.includes("?pass=") && !processed.includes("?cert=")) {
+      processed = processed.replace("https://pradeepparmar902.github.io/MY_Community_Website/", defaultUrl);
     }
     return processed;
   };
@@ -18350,29 +18356,75 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
                 </div>
               </div>
 
-              {/* Placeholder Pills */}
+              {/* Placeholder Pills & URL Builder Helper */}
               <div>
                 <div style={{fontSize:".75rem",fontWeight:700,color:"#475569",marginBottom:6}}>INSERT PERSONALIZED PLACEHOLDERS:</div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
                   {[
                     '{STUDENT_NAME}',
                     '{TXN_ID}',
+                    '{CERTIFICATE_LINK}',
                     '{INVITE_PDF_LINK}',
-                    '{VIBHAG}',
-                    '{STREAM}',
+                    '{PORTAL_URL}',
                     '{PERCENTAGE}',
-                    '{HELPLINE_PHONES}',
-                    '{PORTAL_URL}'
+                    '{STREAM}',
+                    '{VIBHAG}',
+                    '{HELPLINE_PHONES}'
                   ].map(ph => (
                     <button
                       key={ph}
                       type="button"
                       onClick={() => insertPlaceholder(' ' + ph)}
-                      style={{padding:"3px 8px",background:"#F1F5F9",border:"1px solid #CBD5E1",borderRadius:6,fontSize:".74rem",fontWeight:700,color:"#334155",cursor:"pointer"}}
+                      style={{
+                        padding:"4px 9px",
+                        background: ph.includes('CERTIFICATE') ? "#EFF6FF" : ph.includes('INVITE') ? "#F0FDF4" : "#F1F5F9",
+                        border: ph.includes('CERTIFICATE') ? "1px solid #93C5FD" : ph.includes('INVITE') ? "1px solid #86EFAC" : "1px solid #CBD5E1",
+                        color: ph.includes('CERTIFICATE') ? "#1D4ED8" : ph.includes('INVITE') ? "#15803D" : "#334155",
+                        borderRadius:6,
+                        fontSize:".75rem",
+                        fontWeight:700,
+                        cursor:"pointer"
+                      }}
                     >
                       + {ph}
                     </button>
                   ))}
+                </div>
+
+                {/* Interactive Direct URL Builder & Copy Helper */}
+                <div style={{background:"#F8FAFC",border:"1px solid #CBD5E1",borderRadius:8,padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
+                  <div style={{fontSize:".74rem",fontWeight:800,color:"#334155"}}>🔗 DIRECT URL GENERATOR HELPER:</div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:"white",padding:"6px 10px",borderRadius:6,border:"1px solid #E2E8F0"}}>
+                    <span style={{fontSize:".75rem",color:"#1E293B",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      🎓 <strong>Certificate URL:</strong> https://pradeepparmar902.github.io/MY_Community_Website/?cert={'{TXN_ID}'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        insertPlaceholder(' https://pradeepparmar902.github.io/MY_Community_Website/?cert={TXN_ID}');
+                        alert("Inserted Certificate URL into template!");
+                      }}
+                      style={{padding:"3px 8px",background:"#2563EB",color:"white",border:"none",borderRadius:4,fontSize:".7rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
+                    >
+                      + Insert in Template
+                    </button>
+                  </div>
+
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:"white",padding:"6px 10px",borderRadius:6,border:"1px solid #E2E8F0"}}>
+                    <span style={{fontSize:".75rem",color:"#1E293B",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      💌 <strong>Invite Pass URL:</strong> https://pradeepparmar902.github.io/MY_Community_Website/?invite={'{TXN_ID}'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        insertPlaceholder(' https://pradeepparmar902.github.io/MY_Community_Website/?invite={TXN_ID}');
+                        alert("Inserted Invite Pass URL into template!");
+                      }}
+                      style={{padding:"3px 8px",background:"#15803D",color:"white",border:"none",borderRadius:4,fontSize:".7rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
+                    >
+                      + Insert in Template
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -18460,8 +18512,11 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
   const [selectedTplId, setSelectedTplId] = useState(defaultTpl?.id || "tpl_student_pass");
 
   const formatTemplateString = (tplString, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks) => {
-    const passUrl = `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}`.replace(/\/?$/, '') + `/?invite=${encodeURIComponent(rTxn || "")}`;
-    
+    const baseUrl = `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}`.replace(/\/?$/, '');
+    const certUrl = `${baseUrl}/?cert=${encodeURIComponent(rTxn || "")}`;
+    const inviteUrl = `${baseUrl}/?invite=${encodeURIComponent(rTxn || "")}`;
+    const defaultUrl = reg.isCertMode ? certUrl : inviteUrl;
+
     let processed = (tplString || "")
       .replace(/\{STUDENT_NAME\}/g, rName || "Student")
       .replace(/\{TXN_ID\}/g, rTxn || "N/A")
@@ -18470,15 +18525,18 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
       .replace(/\{PERCENTAGE\}/g, rPct || "N/A")
       .replace(/\{REMARKS\}/g, rRemarks || "Application under review")
       .replace(/\{MOBILE\}/g, rMobile || "")
-      .replace(/\{PORTAL_URL\}/g, passUrl)
-      .replace(/\{INVITE_PDF_LINK\}/g, passUrl)
-      .replace(/\{PASS_LINK\}/g, passUrl)
-      .replace(/\{WEBSITE_HOME\}/g, C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/")
+      .replace(/\{CERTIFICATE_LINK\}/g, certUrl)
+      .replace(/\{CERTIFICATE_URL\}/g, certUrl)
+      .replace(/\{INVITE_PDF_LINK\}/g, inviteUrl)
+      .replace(/\{INVITE_LINK\}/g, inviteUrl)
+      .replace(/\{PASS_LINK\}/g, inviteUrl)
+      .replace(/\{PORTAL_URL\}/g, defaultUrl)
+      .replace(/\{WEBSITE_HOME\}/g, baseUrl)
       .replace(/\{HELPLINE_PHONES\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209 / +91 9967821964")
       .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209");
 
-    if (rTxn && rTxn !== 'N/A' && processed.includes("https://pradeepparmar902.github.io/MY_Community_Website/") && !processed.includes("?invite=") && !processed.includes("?pass=")) {
-      processed = processed.replace("https://pradeepparmar902.github.io/MY_Community_Website/", passUrl);
+    if (rTxn && rTxn !== 'N/A' && processed.includes("https://pradeepparmar902.github.io/MY_Community_Website/") && !processed.includes("?invite=") && !processed.includes("?pass=") && !processed.includes("?cert=")) {
+      processed = processed.replace("https://pradeepparmar902.github.io/MY_Community_Website/", defaultUrl);
     }
     return processed;
   };
@@ -25081,7 +25139,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
 
 
 
-// ── Direct 1-Click Personalized Invitation Pass & Instant On-Screen Viewer ──────────────
+// ── Direct 1-Click Personalized Invitation Pass & Certificate On-Screen Viewer ──────────────
 function DirectInvitePassView({ C, auth }) {
   const [loading, setLoading] = useState(true);
   const [regData, setRegData] = useState(null);
@@ -25090,7 +25148,8 @@ function DirectInvitePassView({ C, auth }) {
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const searchParams = new URLSearchParams(window.location.search);
-  const passId = searchParams.get('invite') || searchParams.get('pass') || searchParams.get('letter') || '';
+  const isCert = !!(searchParams.get('cert') || searchParams.get('certificate'));
+  const passId = searchParams.get('cert') || searchParams.get('certificate') || searchParams.get('invite') || searchParams.get('pass') || searchParams.get('letter') || '';
 
   useEffect(() => {
     const loadAndFetchPass = async () => {
@@ -25131,7 +25190,7 @@ function DirectInvitePassView({ C, auth }) {
         if (matched) {
           setRegData(matched);
 
-          // ── Pass / Link Open Tracker: Automatically log when recipient opens their WhatsApp link
+          // ── Pass & Certificate Link Open Tracker: Automatically log when recipient opens link
           try {
             const now = new Date().toISOString();
             const currentCount = parseInt(matched.passOpenCount || 0, 10);
@@ -25139,14 +25198,20 @@ function DirectInvitePassView({ C, auth }) {
             const deviceType = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? "Mobile" : "Desktop";
             
             const existingLogs = Array.isArray(matched.logHistory) ? matched.logHistory : [];
+            const actionLabel = isCert 
+              ? `Certificate Opened (${newCount}${newCount === 1 ? 'st' : newCount === 2 ? 'nd' : newCount === 3 ? 'rd' : 'th'} time)`
+              : `Pass / Invite Opened (${newCount}${newCount === 1 ? 'st' : newCount === 2 ? 'nd' : newCount === 3 ? 'rd' : 'th'} time)`;
+
             const openLog = {
               timestamp: now,
               actor: "Student (Recipient)",
-              action: `Pass / Invite Opened (${newCount}${newCount === 1 ? 'st' : newCount === 2 ? 'nd' : newCount === 3 ? 'rd' : 'th'} time)`,
-              type: "pass_open",
+              action: actionLabel,
+              type: isCert ? "cert_open" : "pass_open",
               openCount: newCount,
               device: deviceType,
-              remarks: `Student opened digital invitation pass link via WhatsApp on ${deviceType}.`
+              remarks: isCert 
+                ? `Student opened digital merit certificate link via WhatsApp on ${deviceType}.`
+                : `Student opened digital invitation pass link via WhatsApp on ${deviceType}.`
             };
             const newLogs = [...existingLogs, openLog];
             
@@ -25187,8 +25252,9 @@ function DirectInvitePassView({ C, auth }) {
           };
           const sName = String(matched['Full Name'] || matched['Submitted By'] || matched['Participant Name'] || matched.name || 'Applicant').replace(/\|/g, ' ').trim();
           
-          // Generate on-screen visual image
-          if (ev.inviteBgUrl) {
+          // Generate on-screen visual image (Certificate or Invite Letter)
+          const targetBgUrl = isCert ? (ev.certBgUrl || ev.bgUrl || ev.inviteBgUrl) : ev.inviteBgUrl;
+          if (targetBgUrl) {
             try {
               const img = new Image();
               img.crossOrigin = "Anonymous";
@@ -25199,14 +25265,14 @@ function DirectInvitePassView({ C, auth }) {
                 const ctx = canvas.getContext("2d");
                 ctx.drawImage(img, 0, 0);
 
-                const fontSize = ev.inviteFontSize || 30;
+                const fontSize = isCert ? (ev.certFontSize || ev.fontSize || 30) : (ev.inviteFontSize || 30);
                 ctx.font = `bold ${fontSize}px sans-serif`;
-                ctx.fillStyle = ev.inviteFontColor || "#000000";
+                ctx.fillStyle = isCert ? (ev.certFontColor || ev.fontColor || "#000000") : (ev.inviteFontColor || "#000000");
                 ctx.textBaseline = "middle";
 
-                const m = ev.inviteMap || {};
+                const m = isCert ? (ev.certMap || ev.fieldMap || ev.inviteMap || {}) : (ev.inviteMap || {});
                 Object.entries(m).forEach(([key, pos]) => {
-                  if (pos.visible) {
+                  if (pos && pos.visible) {
                     const xPx = (parseFloat(pos.x) / 100) * img.width;
                     const yPx = (parseFloat(pos.y) / 100) * img.height;
                     let val = matched[key] || "";
@@ -25219,7 +25285,7 @@ function DirectInvitePassView({ C, auth }) {
 
                 setLetterImgUrl(canvas.toDataURL("image/png"));
               };
-              img.src = ev.inviteBgUrl;
+              img.src = targetBgUrl;
             } catch(err) {
               console.warn("Canvas image preview fallback:", err);
             }
@@ -25251,14 +25317,17 @@ function DirectInvitePassView({ C, auth }) {
       };
 
       const sName = String(regData['Full Name'] || regData['Submitted By'] || regData['Participant Name'] || regData.name || 'Applicant').replace(/\|/g, ' ').trim();
-      const pdfBlob = await generateCertificatePDF(ev, regData, sName, 'invite', 'blob');
+      const docType = isCert ? 'cert' : 'invite';
+      const pdfBlob = await generateCertificatePDF(ev, regData, sName, docType, 'blob');
 
       if (pdfBlob) {
         const url = URL.createObjectURL(pdfBlob);
         const link = document.createElement('a');
         link.href = url;
         const safeName = sName.replace(/[^a-z0-9]/gi, '_');
-        link.download = `Invitation_Letter_${safeName}_${regData['Transaction ID'] || passId}.pdf`;
+        link.download = isCert 
+          ? `Certificate_${safeName}_${regData['Transaction ID'] || passId}.pdf`
+          : `Invitation_Letter_${safeName}_${regData['Transaction ID'] || passId}.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -25289,7 +25358,7 @@ function DirectInvitePassView({ C, auth }) {
                 Mumbai Meghwal Panchayat
               </h1>
               <div style={{fontSize:".75rem",opacity:0.9,marginTop:2,fontWeight:600}}>
-                🏆 Education Felicitation 2026 • Official Invitation Pass
+                {isCert ? "🏆 Education Felicitation 2026 • Official Merit Certificate" : "🏆 Education Felicitation 2026 • Official Invitation Pass"}
               </div>
             </div>
           </div>
@@ -25598,7 +25667,7 @@ export default function App() {
 
   // ── Direct Invitation Pass & Standalone Form Routing ─────────────────────
   const href = window.location.href;
-  const isInviteLetterPass = href.includes('invite=') || href.includes('pass=') || href.includes('letter=');
+  const isInviteLetterPass = href.includes('invite=') || href.includes('pass=') || href.includes('letter=') || href.includes('cert=') || href.includes('certificate=');
   const isStandaloneForm = href.includes('event=') || href.includes('register=');
 
   return (
