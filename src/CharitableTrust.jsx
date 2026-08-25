@@ -17336,8 +17336,23 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }
 
 
 // ── Bulk / Broadcast WhatsApp Message Sender Modal ──────────────────────────────
-function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationMode = false, onClose }) {
+function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
   if (!event || recipients.length === 0) return null;
+
+  // Status Filter Bucket: "All" | "Approved" | "Needs Info" | "Pending" | "Disapproved"
+  const [statusFilter, setStatusFilter] = useState("All");
+
+  const activeRecipients = recipients.filter(r => {
+    if (!r) return false;
+    if (statusFilter === "All") return true;
+    const st = r['Status'] || r.status || 'Pending';
+    return st === statusFilter;
+  });
+
+  const countApproved = recipients.filter(r => (r['Status'] || r.status) === "Approved").length;
+  const countNeedsInfo = recipients.filter(r => (r['Status'] || r.status) === "Needs Info").length;
+  const countPending = recipients.filter(r => (!r['Status'] && !r.status) || (r['Status'] || r.status) === "Pending").length;
+  const countDisapproved = recipients.filter(r => (r['Status'] || r.status) === "Disapproved").length;
 
   const defaultApprovedTpl = C.whatsAppTplApproved || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Percentage:* {PERCENTAGE}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai\n\n👉 View your application on your dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
 
@@ -17358,25 +17373,25 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
     },
     {
       id: "tpl_approved_notice",
-      name: "🟢 Application Approved & Verified Notice (Only)",
+      name: "🟢 Application Approved & Verified Notice",
       isDefault: false,
       text: defaultApprovedTpl
     },
     {
       id: "tpl_needs_info_notice",
-      name: "⚠️ Needs Info / Document Correction Notice (Only)",
+      name: "⚠️ Needs Info / Document Correction Notice (Includes Committee Remarks)",
       isDefault: false,
       text: defaultNeedsInfoTpl
     },
     {
       id: "tpl_pending_notice",
-      name: "⏳ Under Verification / Review Notice (Only)",
+      name: "⏳ Under Verification / Review Notice",
       isDefault: false,
       text: defaultPendingTpl
     },
     {
       id: "tpl_disapproved_notice",
-      name: "🔴 Disapproved Application Notice (Only)",
+      name: "🔴 Disapproved Application Notice",
       isDefault: false,
       text: defaultDisapprovedTpl
     },
@@ -17404,6 +17419,20 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
   const [broadcastDone, setBroadcastDone] = useState(false);
   const [copiedBroadcastNumbers, setCopiedBroadcastNumbers] = useState(false);
   const [launchMode, setLaunchMode] = useState(() => localStorage.getItem("mmp_wa_launch_mode") || "web");
+
+  const handleStatusFilterChange = (newStatus) => {
+    setStatusFilter(newStatus);
+    setCurrentIndex(0);
+    setSentCount(0);
+    setFailCount(0);
+    setBroadcastDone(false);
+
+    if (newStatus === "Approved") setSelectedTplId("tpl_approved_notice");
+    else if (newStatus === "Needs Info") setSelectedTplId("tpl_needs_info_notice");
+    else if (newStatus === "Pending") setSelectedTplId("tpl_pending_notice");
+    else if (newStatus === "Disapproved") setSelectedTplId("tpl_disapproved_notice");
+    else setSelectedTplId("auto_status_match");
+  };
 
   const formatMessageForReg = (r) => {
     if (!r) return "";
@@ -17451,14 +17480,15 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
 
   // Automated API Gateway Broadcast
   const startApiBroadcast = async () => {
+    if (activeRecipients.length === 0) return;
     setBroadcasting(true);
     setSentCount(0);
     setFailCount(0);
     setBroadcastDone(false);
 
-    for (let i = 0; i < recipients.length; i++) {
+    for (let i = 0; i < activeRecipients.length; i++) {
       setCurrentIndex(i);
-      const r = recipients[i];
+      const r = activeRecipients[i];
       const phone = String(r['Mobile Number'] || r.submitterMob || r['Alternate Mobile Number'] || r.phone || '').replace(/\D/g, '').slice(-10);
       
       if (!phone || phone.length < 10) {
@@ -17508,7 +17538,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
         }
 
         if (res && res.ok) {
-          setSentCount(prev => Math.min(prev + 1, recipients.length));
+          setSentCount(prev => Math.min(prev + 1, activeRecipients.length));
         } else {
           setFailCount(prev => prev + 1);
         }
@@ -17525,11 +17555,11 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
 
   // Open Batch in Multi-Tabs (5, 10, or 20 at a time)
   const openBatchInTabs = (size = 10) => {
-    const end = Math.min(currentIndex + size, recipients.length);
+    const end = Math.min(currentIndex + size, activeRecipients.length);
     let opened = 0;
 
     for (let i = currentIndex; i < end; i++) {
-      const r = recipients[i];
+      const r = activeRecipients[i];
       const phone = String(r['Mobile Number'] || r.submitterMob || r['Alternate Mobile Number'] || r.phone || '').replace(/\D/g, '').slice(-10);
       if (!phone || phone.length < 10) continue;
 
@@ -17540,22 +17570,22 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
       opened++;
     }
 
-    const nextCount = Math.min(sentCount + opened, recipients.length);
+    const nextCount = Math.min(sentCount + opened, activeRecipients.length);
     setSentCount(nextCount);
     setCurrentIndex(end);
-    if (end >= recipients.length) {
+    if (end >= activeRecipients.length) {
       setBroadcastDone(true);
     }
   };
 
   // Execute Send to a specific index and advance
   const executeSendItem = (idx) => {
-    if (idx >= recipients.length) {
+    if (idx >= activeRecipients.length) {
       setBroadcastDone(true);
       return;
     }
 
-    const r = recipients[idx];
+    const r = activeRecipients[idx];
     const phone = String(r?.['Mobile Number'] || r?.submitterMob || r?.['Alternate Mobile Number'] || r?.phone || '').replace(/\D/g, '').slice(-10);
     const msg = formatMessageForReg(r);
 
@@ -17569,14 +17599,14 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
         const webUrl = `https://web.whatsapp.com/send?phone=91${phone}&text=${encodeURIComponent(msg)}`;
         window.open(webUrl, `_wa_direct_${idx}`);
       }
-      setSentCount(prev => Math.min(prev + 1, recipients.length));
+      setSentCount(prev => Math.min(prev + 1, activeRecipients.length));
     } else {
       setFailCount(prev => prev + 1);
     }
 
     const nextIdx = idx + 1;
     setCurrentIndex(nextIdx);
-    if (nextIdx >= recipients.length) {
+    if (nextIdx >= activeRecipients.length) {
       setBroadcastDone(true);
     }
   };
@@ -17591,16 +17621,16 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentIndex, broadcastDone, broadcasting, recipients, selectedTplId]);
+  }, [currentIndex, broadcastDone, broadcasting, activeRecipients, selectedTplId]);
 
   // Current active recipient details
-  const currentReg = recipients[Math.min(currentIndex, recipients.length - 1)] || recipients[0];
+  const currentReg = activeRecipients[Math.min(currentIndex, Math.max(0, activeRecipients.length - 1))] || activeRecipients[0];
   const currentName = String(currentReg?.['Full Name'] || currentReg?.['Submitted By'] || currentReg?.['Participant Name'] || currentReg?.name || 'Applicant').replace(/\|/g, ' ').trim();
   const currentStatus = currentReg?.['Status'] || currentReg?.status || 'Pending';
 
   // Copy phone numbers for WhatsApp Broadcast List
   const handleCopyBroadcastList = () => {
-    const phoneList = recipients
+    const phoneList = activeRecipients
       .map(r => {
         const p = String(r['Mobile Number'] || r.submitterMob || r['Alternate Mobile Number'] || r.phone || '').replace(/\D/g, '').slice(-10);
         const n = String(r['Full Name'] || r['Submitted By'] || r['Participant Name'] || r.name || 'Applicant').replace(/\|/g, ' ').trim();
@@ -17615,20 +17645,20 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
     setTimeout(() => setCopiedBroadcastNumbers(false), 2500);
   };
 
-  const samplePreview = formatMessageForReg(recipients[0]);
+  const samplePreview = formatMessageForReg(activeRecipients[0]);
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100004,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
-      <div style={{background:"white",borderRadius:16,maxWidth:780,width:"100%",maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 25px 50px -12px rgba(0,0,0,0.35)"}} onClick={e=>e.stopPropagation()}>
+      <div style={{background:"white",borderRadius:16,maxWidth:800,width:"100%",maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 25px 50px -12px rgba(0,0,0,0.35)"}} onClick={e=>e.stopPropagation()}>
         
         {/* Header */}
         <div style={{padding:"18px 24px",background:"linear-gradient(135deg, #15803D, #166534)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <h3 style={{fontSize:"1.15rem",fontWeight:800,margin:0,display:"flex",alignItems:"center",gap:8}}>
-              <span>📢</span> Broadcast WhatsApp Updates ({recipients.length} Registrations)
+              <span>📢</span> Broadcast WhatsApp Updates ({activeRecipients.length} {statusFilter === 'All' ? 'Applicants' : statusFilter})
             </h3>
             <div style={{fontSize:".8rem",opacity:0.9,marginTop:2}}>
-              Broadcast personalized application status updates (Approved / Needs Info / Pending) to all {recipients.length} filtered applicants.
+              Filter and broadcast personalized WhatsApp messages to specific applicant status buckets.
             </div>
           </div>
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:32,height:32,color:"white",cursor:"pointer",fontWeight:800}}>✕</button>
@@ -17637,10 +17667,135 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
         {/* Content */}
         <div style={{padding:"20px 24px",overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:16}}>
           
-          {/* Template Selection */}
+          {/* STEP 1: STATUS BUCKET FILTER PILLS */}
+          <div style={{background:"#F8FAFC",border:"1.5px solid #E2E8F0",borderRadius:12,padding:"14px 16px"}}>
+            <div style={{fontSize:".8rem",fontWeight:800,color:"#334155",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span>🎯 1. CHOOSE WHO TO SEND TO (SELECT STATUS BUCKET):</span>
+              <span style={{fontSize:".74rem",color:"#64748B",fontWeight:600}}>Showing {activeRecipients.length} of {recipients.length}</span>
+            </div>
+            
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button
+                type="button"
+                onClick={() => handleStatusFilterChange("All")}
+                style={{
+                  padding:"6px 14px",
+                  borderRadius:20,
+                  border: statusFilter === "All" ? "2px solid #0F172A" : "1px solid #CBD5E1",
+                  background: statusFilter === "All" ? "#0F172A" : "white",
+                  color: statusFilter === "All" ? "white" : "#334155",
+                  fontWeight: 700,
+                  fontSize: ".78rem",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6
+                }}
+              >
+                <span>👥 All Applicants</span>
+                <span style={{background:statusFilter==="All"?"rgba(255,255,255,0.2)":"#E2E8F0",padding:"1px 6px",borderRadius:10,fontSize:".7rem"}}>
+                  {recipients.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleStatusFilterChange("Needs Info")}
+                style={{
+                  padding:"6px 14px",
+                  borderRadius:20,
+                  border: statusFilter === "Needs Info" ? "2px solid #D97706" : "1px solid #FDE68A",
+                  background: statusFilter === "Needs Info" ? "#D97706" : "#FFFBEB",
+                  color: statusFilter === "Needs Info" ? "white" : "#92400E",
+                  fontWeight: 700,
+                  fontSize: ".78rem",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6
+                }}
+              >
+                <span>⚠️ Pending Queries (Needs Info)</span>
+                <span style={{background:statusFilter==="Needs Info"?"rgba(255,255,255,0.25)":"#FEF3C7",padding:"1px 6px",borderRadius:10,fontSize:".7rem",fontWeight:800}}>
+                  {countNeedsInfo}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleStatusFilterChange("Approved")}
+                style={{
+                  padding:"6px 14px",
+                  borderRadius:20,
+                  border: statusFilter === "Approved" ? "2px solid #15803D" : "1px solid #BBF7D0",
+                  background: statusFilter === "Approved" ? "#15803D" : "#F0FDF4",
+                  color: statusFilter === "Approved" ? "white" : "#166534",
+                  fontWeight: 700,
+                  fontSize: ".78rem",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6
+                }}
+              >
+                <span>🟢 Approved & Verified</span>
+                <span style={{background:statusFilter==="Approved"?"rgba(255,255,255,0.25)":"#DCFCE7",padding:"1px 6px",borderRadius:10,fontSize:".7rem",fontWeight:800}}>
+                  {countApproved}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleStatusFilterChange("Pending")}
+                style={{
+                  padding:"6px 14px",
+                  borderRadius:20,
+                  border: statusFilter === "Pending" ? "2px solid #475569" : "1px solid #E2E8F0",
+                  background: statusFilter === "Pending" ? "#475569" : "#F1F5F9",
+                  color: statusFilter === "Pending" ? "white" : "#334155",
+                  fontWeight: 700,
+                  fontSize: ".78rem",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6
+                }}
+              >
+                <span>⏳ Under Review / Pending</span>
+                <span style={{background:statusFilter==="Pending"?"rgba(255,255,255,0.25)":"#E2E8F0",padding:"1px 6px",borderRadius:10,fontSize:".7rem",fontWeight:800}}>
+                  {countPending}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleStatusFilterChange("Disapproved")}
+                style={{
+                  padding:"6px 14px",
+                  borderRadius:20,
+                  border: statusFilter === "Disapproved" ? "2px solid #DC2626" : "1px solid #FECACA",
+                  background: statusFilter === "Disapproved" ? "#DC2626" : "#FEF2F2",
+                  color: statusFilter === "Disapproved" ? "white" : "#991B1B",
+                  fontWeight: 700,
+                  fontSize: ".78rem",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6
+                }}
+              >
+                <span>🔴 Disapproved / Rejected</span>
+                <span style={{background:statusFilter==="Disapproved"?"rgba(255,255,255,0.25)":"#FEE2E2",padding:"1px 6px",borderRadius:10,fontSize:".7rem",fontWeight:800}}>
+                  {countDisapproved}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* STEP 2: TEMPLATE SELECTION */}
           <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"14px 16px"}}>
             <div style={{fontSize:".8rem",fontWeight:800,color:"#15803D",marginBottom:6}}>
-              1. CHOOSE STATUS UPDATE TEMPLATE TO BROADCAST:
+              2. CHOOSE MESSAGE TEMPLATE TO SEND:
             </div>
             <select
               value={selectedTplId}
@@ -17660,14 +17815,14 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
             >
               {broadcastTemplates.map(t => (
                 <option key={t.id} value={t.id}>
-                  {t.name} {t.id === "auto_status_match" ? "★ (Recommended)" : ""}
+                  {t.name}
                 </option>
               ))}
             </select>
 
-            {selectedTplId === "auto_status_match" && (
-              <div style={{fontSize:".76rem",color:"#15803D",marginTop:6,lineHeight:1.4,fontWeight:600}}>
-                ✨ <strong>Smart Dynamic Logic:</strong> Approved students get the Congratulations Approval message, Needs Info students get their specific Committee Remarks, and Pending students get Under Verification updates!
+            {statusFilter === "Needs Info" && (
+              <div style={{fontSize:".76rem",color:"#92400E",background:"#FEF3C7",padding:"6px 10px",borderRadius:6,marginTop:8,fontWeight:600}}>
+                ⚠️ Sending specifically to <strong>{countNeedsInfo} students with pending queries</strong>. Each student will receive their individual committee remarks ({'{REMARKS}'}) and edit link.
               </div>
             )}
           </div>
@@ -17680,7 +17835,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
                 <strong style={{fontSize:".9rem",color:"#1E40AF"}}>Automated Background API Gateway Active ({gateway.provider?.toUpperCase()})</strong>
               </div>
               <p style={{fontSize:".82rem",color:"#1E3A8A",margin:0,lineHeight:1.4}}>
-                100% Silent Background Delivery: All {recipients.length} messages will be sent automatically with ZERO screen movements, popups, or tabs.
+                100% Silent Background Delivery: All {activeRecipients.length} messages will be sent automatically with ZERO screen movements, popups, or tabs.
               </p>
             </div>
           ) : (
@@ -17693,7 +17848,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
                     <span style={{fontSize:"1.3rem"}}>⚡</span>
                     <div>
                       <strong style={{fontSize:".95rem",color:"#14532D"}}>1-Click Fast Tap Runner (Keyboard: Enter / Space)</strong>
-                      <div style={{fontSize:".75rem",color:"#15803D"}}>Each tap immediately opens the applicant's chat with their status update message</div>
+                      <div style={{fontSize:".75rem",color:"#15803D"}}>Sends to {activeRecipients.length} {statusFilter === 'All' ? 'applicants' : statusFilter + ' students'}</div>
                     </div>
                   </div>
 
@@ -17719,16 +17874,16 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
                   <button
                     type="button"
                     onClick={() => executeSendItem(currentIndex)}
-                    disabled={broadcastDone}
+                    disabled={broadcastDone || activeRecipients.length === 0}
                     style={{
                       padding: "11px 24px",
                       borderRadius: 8,
-                      background: broadcastDone ? "#15803D" : "linear-gradient(135deg, #22C55E, #15803D)",
+                      background: (broadcastDone || activeRecipients.length === 0) ? "#15803D" : "linear-gradient(135deg, #22C55E, #15803D)",
                       color: "white",
                       border: "none",
                       fontSize: ".95rem",
                       fontWeight: 800,
-                      cursor: "pointer",
+                      cursor: (broadcastDone || activeRecipients.length === 0) ? "default" : "pointer",
                       display: "flex",
                       alignItems: "center",
                       gap: 8,
@@ -17736,12 +17891,12 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
                     }}
                   >
                     <span>{broadcastDone ? "✅" : "🟢"}</span>
-                    <span>{broadcastDone ? "All Applicants Processed!" : `Send to ${currentName} (${currentStatus}) [Press Enter] →`}</span>
+                    <span>{activeRecipients.length === 0 ? "No Students In This Bucket" : broadcastDone ? "All Done!" : `Send to ${currentName} (${currentStatus}) [Press Enter] →`}</span>
                   </button>
 
-                  {!broadcastDone && (
+                  {!broadcastDone && activeRecipients.length > 0 && (
                     <div style={{fontSize:".8rem",color:"#14532D",fontWeight:600}}>
-                      Tip: You can just tap <kbd style={{background:"#E2E8F0",padding:"2px 6px",borderRadius:4,border:"1px solid #CBD5E1",fontWeight:800}}>Enter</kbd> to rapidly send to each student!
+                      Tip: Just press <kbd style={{background:"#E2E8F0",padding:"2px 6px",borderRadius:4,border:"1px solid #CBD5E1",fontWeight:800}}>Enter</kbd> to rapidly send!
                     </div>
                   )}
                 </div>
@@ -17763,13 +17918,10 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
                     </select>
                   </div>
                 </div>
-                <p style={{fontSize:".78rem",color:"#475569",margin:"0 0 10px 0",lineHeight:1.4}}>
-                  Opens pre-filled WhatsApp chats in browser tabs at once with the status update message already typed in. In WhatsApp, press <strong>Enter</strong> to send, then <strong>Ctrl+W</strong> to close and hit Enter on next tab!
-                </p>
                 <button
                   type="button"
                   onClick={() => openBatchInTabs(batchSize)}
-                  disabled={broadcastDone}
+                  disabled={broadcastDone || activeRecipients.length === 0}
                   style={{
                     padding: "8px 16px",
                     borderRadius: 8,
@@ -17785,16 +17937,16 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
                     gap: 6
                   }}
                 >
-                  <span>🚀</span> Open Next {Math.min(batchSize, recipients.length - currentIndex)} WhatsApp Tabs (From #{currentIndex + 1})
+                  <span>🚀</span> Open Next {Math.min(batchSize, Math.max(0, activeRecipients.length - currentIndex))} Tabs (From #{currentIndex + 1})
                 </button>
               </div>
 
               {/* Method 3: WhatsApp Official Broadcast List Numbers Export */}
               <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
                 <div>
-                  <strong style={{fontSize:".84rem",color:"#15803D"}}>Mobile Broadcast List (1 Click to All People)</strong>
+                  <strong style={{fontSize:".84rem",color:"#15803D"}}>Mobile Broadcast List ({statusFilter} Numbers)</strong>
                   <div style={{fontSize:".75rem",color:"#166534",marginTop:2}}>
-                    Copy all {recipients.length} phone numbers with their status to paste into your phone's WhatsApp Broadcast List.
+                    Copy all {activeRecipients.length} phone numbers for this bucket to paste into WhatsApp.
                   </div>
                 </div>
                 <button
@@ -17802,7 +17954,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
                   onClick={handleCopyBroadcastList}
                   style={{padding:"6px 14px",background:"white",border:"1.5px solid #15803D",color:"#15803D",borderRadius:6,fontSize:".78rem",fontWeight:700,cursor:"pointer"}}
                 >
-                  {copiedBroadcastNumbers ? "✅ Copied Number List!" : "📋 Copy All Phone Numbers"}
+                  {copiedBroadcastNumbers ? "✅ Copied Number List!" : "📋 Copy Filtered Numbers"}
                 </button>
               </div>
 
@@ -17813,15 +17965,15 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
           {(broadcasting || broadcastDone || sentCount > 0) && (
             <div style={{background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"14px 16px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,fontSize:".82rem"}}>
-                <strong style={{color:"#0F172A"}}>Broadcast Progress:</strong>
+                <strong style={{color:"#0F172A"}}>Broadcast Progress ({statusFilter}):</strong>
                 <span style={{fontWeight:800,color:"#15803D"}}>
-                  {Math.min(sentCount, recipients.length)} of {recipients.length} Processed ({Math.min(100, Math.round(((sentCount) / recipients.length) * 100))}%)
+                  {Math.min(sentCount, activeRecipients.length)} of {activeRecipients.length} Processed ({activeRecipients.length === 0 ? 0 : Math.min(100, Math.round(((sentCount) / activeRecipients.length) * 100))}%)
                 </span>
               </div>
               <div style={{width:"100%",height:10,background:"#E2E8F0",borderRadius:6,overflow:"hidden"}}>
                 <div
                   style={{
-                    width: `${Math.min(100, Math.round(((sentCount) / recipients.length) * 100))}%`,
+                    width: `${activeRecipients.length === 0 ? 0 : Math.min(100, Math.round(((sentCount) / activeRecipients.length) * 100))}%`,
                     height: "100%",
                     background: "linear-gradient(90deg, #22C55E, #15803D)",
                     transition: "width 0.3s"
@@ -17837,27 +17989,29 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
           )}
 
           {/* Sample Message Preview */}
-          <div>
-            <div style={{fontSize:".78rem",fontWeight:700,color:"#475569",marginBottom:6}}>
-              PREVIEW (Sample for 1st recipient: {String(recipients[0]?.['Full Name'] || 'Student')} - Status: {String(recipients[0]?.['Status'] || 'Pending')}):
+          {activeRecipients.length > 0 && (
+            <div>
+              <div style={{fontSize:".78rem",fontWeight:700,color:"#475569",marginBottom:6}}>
+                PREVIEW (Sample for 1st recipient: {String(activeRecipients[0]?.['Full Name'] || 'Student')} - Status: {String(activeRecipients[0]?.['Status'] || 'Pending')}):
+              </div>
+              <textarea
+                value={samplePreview}
+                readOnly
+                rows={5}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #CBD5E1",
+                  fontSize: ".8rem",
+                  fontFamily: "monospace",
+                  background: "#FAFDF7",
+                  color: "#334155",
+                  boxSizing: "border-box"
+                }}
+              />
             </div>
-            <textarea
-              value={samplePreview}
-              readOnly
-              rows={6}
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: 8,
-                border: "1px solid #CBD5E1",
-                fontSize: ".8rem",
-                fontFamily: "monospace",
-                background: "#FAFDF7",
-                color: "#334155",
-                boxSizing: "border-box"
-              }}
-            />
-          </div>
+          )}
 
         </div>
 
@@ -17871,11 +18025,11 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
             <button
               type="button"
               onClick={startApiBroadcast}
-              disabled={broadcasting || broadcastDone}
+              disabled={broadcasting || broadcastDone || activeRecipients.length === 0}
               style={{
                 padding: "10px 24px",
                 borderRadius: 8,
-                background: broadcastDone ? "#15803D" : "linear-gradient(135deg, #15803D, #166534)",
+                background: (broadcastDone || activeRecipients.length === 0) ? "#15803D" : "linear-gradient(135deg, #15803D, #166534)",
                 color: "white",
                 border: "none",
                 fontSize: ".9rem",
@@ -17888,26 +18042,26 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
               }}
             >
               <span>{broadcasting ? "⏳" : broadcastDone ? "✅" : "🚀"}</span>
-              <span>{broadcasting ? `Broadcasting (${currentIndex + 1}/${recipients.length})...` : broadcastDone ? "All Messages Sent!" : `Send All ${recipients.length} Messages in Background`}</span>
+              <span>{broadcasting ? `Broadcasting (${currentIndex + 1}/${activeRecipients.length})...` : broadcastDone ? "All Messages Sent!" : `Send All ${activeRecipients.length} Messages in Background`}</span>
             </button>
           ) : (
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <span style={{fontSize:".8rem",color:"#64748B",fontWeight:600}}>
-                {currentIndex < recipients.length ? `Next: ${currentName} (${currentStatus})` : "Complete!"}
+                {activeRecipients.length === 0 ? "Empty Bucket" : currentIndex < activeRecipients.length ? `Next: ${currentName} (${currentStatus})` : "Complete!"}
               </span>
               <button
                 type="button"
                 onClick={() => executeSendItem(currentIndex)}
-                disabled={broadcastDone}
+                disabled={broadcastDone || activeRecipients.length === 0}
                 style={{
                   padding: "10px 20px",
                   borderRadius: 8,
-                  background: broadcastDone ? "#15803D" : "linear-gradient(135deg, #25D366, #15803D)",
+                  background: (broadcastDone || activeRecipients.length === 0) ? "#15803D" : "linear-gradient(135deg, #25D366, #15803D)",
                   color: "white",
                   border: "none",
                   fontSize: ".88rem",
                   fontWeight: 800,
-                  cursor: "pointer",
+                  cursor: (broadcastDone || activeRecipients.length === 0) ? "default" : "pointer",
                   boxShadow: "0 2px 8px rgba(37,211,102,0.35)",
                   display: "flex",
                   alignItems: "center",
@@ -17915,7 +18069,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, isRegistrationM
                 }}
               >
                 <span>{broadcastDone ? "✅" : "🟢"}</span>
-                <span>{broadcastDone ? "All Sent!" : `Send (${currentIndex + 1}/${recipients.length}) [Enter] →`}</span>
+                <span>{activeRecipients.length === 0 ? "None" : broadcastDone ? "All Sent!" : `Send (${currentIndex + 1}/${activeRecipients.length}) [Enter] →`}</span>
               </button>
             </div>
           )}
