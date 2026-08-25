@@ -21731,6 +21731,20 @@ function AdminCertificates({ mob, C, setC, auth }) {
                   <span>🎯</span> Filter Rows:
                 </span>
                 
+                {/* Contact Group Filter */}
+                {Array.from(new Set(inviteRegs.map(r => r.Group || r.Category || r.Vibhag).filter(Boolean))).length > 1 && (
+                  <select
+                    value={selectedContactGroup}
+                    onChange={(e) => setSelectedContactGroup(e.target.value)}
+                    style={{padding:"3px 8px",borderRadius:6,border:"1.5px solid #CBD5E1",fontSize:".72rem",fontWeight:800,background:"white",color:"#0F172A",cursor:"pointer"}}
+                  >
+                    <option value="All">👥 All Groups ({inviteRegs.length})</option>
+                    {Array.from(new Set(inviteRegs.map(r => r.Group || r.Category || r.Vibhag).filter(Boolean))).map(grp => (
+                      <option key={grp} value={grp}>{grp} ({inviteRegs.filter(r => (r.Group || r.Category || r.Vibhag) === grp).length})</option>
+                    ))}
+                  </select>
+                )}
+                
                 {/* Opened Pill */}
                 <button
                   type="button"
@@ -22189,7 +22203,9 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   // Global guest modals
   const [showGlobalGuestsModal, setShowGlobalGuestsModal] = useState(false);
   const [showImportGuestModal, setShowImportGuestModal] = useState(false);
-  const [guestForm, setGuestForm] = useState({ fullName: "", mobile: "", email: "", address: "", designation: "" });
+  const [guestForm, setGuestForm] = useState({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member" });
+  const [showImportContactGroupModal, setShowImportContactGroupModal] = useState(false);
+  const [selectedContactGroup, setSelectedContactGroup] = useState("All");
   const [addingGuest, setAddingGuest] = useState(false);
 
   // Field mapping
@@ -22251,10 +22267,10 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
 
   const inviteRegs = regs.filter(r => {
     if (!selectedEventId) return false;
-    // Only Approved registrations (same as Certificates — exclude Pending/Rejected)
-    if (r.Status !== "Approved" && r.status !== "Approved") return false;
-    // Exclude special/global guests (they are handled separately)
-    if (r.isGlobalGuest || r.isSpecialGuest || r.globalGuestId) return false;
+    // Only Approved registrations or special/committee guests
+    if (r.Status !== "Approved" && r.status !== "Approved" && !r.isSpecialGuest) return false;
+    // Exclude the raw global directory pool entry itself
+    if (r.isGlobalGuest) return false;
     const ev = inviteEvents.find(e => e.id === selectedEventId);
     if (!ev) return false;
     let evName = r.eventName || r.eventTitle || r.eventId;
@@ -22276,6 +22292,10 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       const st = getDocReleaseStatus(r, activeDocId);
       if (inviteReleasePillFilter === "released" && !st.isReleased) return false;
       if (inviteReleasePillFilter === "pending" && (st.isReleased || st.isHeld)) return false;
+    }
+    if (selectedContactGroup && selectedContactGroup !== "All") {
+      const rGroup = r.Group || r.Category || r.Vibhag || "General Committee";
+      if (rGroup !== selectedContactGroup) return false;
     }
     return true;
   });
@@ -22322,6 +22342,9 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       "Address": guestForm.address,
       "Designation": guestForm.designation,
       "Organization": guestForm.designation,
+      "Group": guestForm.group || "General Committee",
+      "Category": guestForm.group || "General Committee",
+      "Vibhag": guestForm.group || "General Committee",
       isGlobalGuest: true,
       _submittedAt: Date.now(),
       formId: "global_guest_directory"
@@ -22362,6 +22385,7 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
         const designation = row["Designation"] || row["Organization"] || row["Company"] || "";
         const address = row["Address"] || row["Location"] || "";
 
+        const groupName = row.Group || row.group || row.Category || row.category || row.Team || row.team || row.Vibhag || "CWC Member";
         const newGlobalGuest = {
           "Full Name": fullName,
           "Participant Name": fullName,
@@ -22372,6 +22396,9 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
           "Address": address,
           "Designation": designation,
           "Organization": designation,
+          "Group": groupName,
+          "Category": groupName,
+          "Vibhag": groupName,
           isGlobalGuest: true,
           _submittedAt: Date.now(),
           formId: "global_guest_directory_import"
@@ -22386,6 +22413,56 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
     }
     setUploadingExcel(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleImportContactGroup = async (targetGroup) => {
+    const ev = inviteEvents.find(ev => ev.id === selectedEventId);
+    if (!ev) return alert("Please select a valid event workspace.");
+
+    const guestsInGroup = globalGuests.filter(g => {
+      if (targetGroup === "All") return true;
+      const gGroup = g.Group || g.Category || g.Vibhag || "General Committee";
+      return gGroup === targetGroup;
+    });
+
+    if (guestsInGroup.length === 0) return alert("No contacts found in group " + targetGroup);
+
+    const unimported = guestsInGroup.filter(g => !regs.some(r => r.globalGuestId === g.id && r.eventId === ev.id));
+    if (unimported.length === 0) return alert("All " + guestsInGroup.length + " contacts from " + targetGroup + " are already imported into this workspace!");
+
+    if (!window.confirm("Import " + unimported.length + " contacts from " + targetGroup + " into " + ev.title + "?")) return;
+
+    let successCount = 0;
+    for (const g of unimported) {
+      const newEventGuest = {
+        ...g,
+        eventId: ev.id,
+        eventName: ev.title || "Unknown Event",
+        eventTitle: ev.title || "Unknown Event",
+        Status: "Approved",
+        isSpecialGuest: true,
+        globalGuestId: g.id,
+        _submittedAt: Date.now()
+      };
+      if (ev.guestMapping) {
+        if (ev.guestMapping.fullName) newEventGuest[ev.guestMapping.fullName] = g["Full Name"];
+        if (ev.guestMapping.designation) newEventGuest[ev.guestMapping.designation] = g.Designation;
+        if (ev.guestMapping.mobile) newEventGuest[ev.guestMapping.mobile] = g.Mobile;
+        if (ev.guestMapping.email) newEventGuest[ev.guestMapping.email] = g.Email;
+        if (ev.guestMapping.address) newEventGuest[ev.guestMapping.address] = g.Address;
+      }
+      delete newEventGuest.isGlobalGuest;
+      delete newEventGuest.id;
+      try {
+        await fbSubmitRegistration(newEventGuest, auth?.idToken);
+        successCount++;
+      } catch(e) {
+        console.error("Error importing contact:", e);
+      }
+    }
+    alert("Successfully imported " + successCount + " contacts from " + targetGroup + "!");
+    setShowImportContactGroupModal(false);
+    fetchRegs();
   };
 
   const handleImportGlobalGuest = async (globalGuest) => {
@@ -22680,9 +22757,15 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
                 <label style={{display:"block",fontSize:".85rem",fontWeight:600,marginBottom:6}}>Full Name (Required)</label>
                 <input required type="text" value={guestForm.fullName} onChange={e=>setGuestForm({...guestForm, fullName: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",boxSizing:"border-box",fontFamily:"inherit"}} />
               </div>
-              <div>
-                <label style={{display:"block",fontSize:".85rem",fontWeight:600,marginBottom:6}}>Designation / Organization</label>
-                <input type="text" value={guestForm.designation} onChange={e=>setGuestForm({...guestForm, designation: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",boxSizing:"border-box",fontFamily:"inherit"}} />
+              <div style={{display:"flex",gap:16}}>
+                <div style={{flex:1}}>
+                  <label style={{display:"block",fontSize:".85rem",fontWeight:600,marginBottom:6}}>Designation / Role</label>
+                  <input type="text" placeholder="e.g. CWC Member, Trustee, Lead" value={guestForm.designation} onChange={e=>setGuestForm({...guestForm, designation: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",boxSizing:"border-box",fontFamily:"inherit"}} />
+                </div>
+                <div style={{flex:1}}>
+                  <label style={{display:"block",fontSize:".85rem",fontWeight:600,marginBottom:6}}>Contact Group / Team</label>
+                  <input type="text" placeholder="e.g. CWC Members, Trustees, Volunteers" value={guestForm.group} onChange={e=>setGuestForm({...guestForm, group: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",boxSizing:"border-box",fontFamily:"inherit"}} />
+                </div>
               </div>
               <div style={{display:"flex",gap:16}}>
                 <div style={{flex:1}}>
@@ -22952,8 +23035,11 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
             <button onClick={() => setShowWorkspaceTplModal(true)} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:700,display:"flex",alignItems:"center",gap:6,background:"#F0FDF4",border:"1px solid #86EFAC",color:"#15803D",cursor:"pointer",boxShadow:"0 2px 8px rgba(21,128,61,0.15)",whiteSpace:"nowrap"}}>
               📝 Workspace WhatsApp Templates ({((activeEvent?.whatsAppTemplates && activeEvent.whatsAppTemplates.length > 0) ? activeEvent.whatsAppTemplates.length : 3)})
             </button>
-            <button onClick={() => setShowImportGuestModal(true)} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:600,display:"flex",alignItems:"center",gap:6,background:"white",border:"1px solid var(--bd)",color:"var(--dt)",cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",whiteSpace:"nowrap"}}>
-              + Import Special Guest
+            <button onClick={() => setShowImportContactGroupModal(true)} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:800,display:"flex",alignItems:"center",gap:6,background:"linear-gradient(135deg, #0D4B5E, #135D74)",color:"white",border:"none",cursor:"pointer",boxShadow:"0 2px 8px rgba(13,75,94,0.2)",whiteSpace:"nowrap"}}>
+              <span>👥</span> Import Contact Group ({Array.from(new Set(globalGuests.map(g => g.Group || g.Category || g.Vibhag || "General Committee"))).length})
+            </button>
+            <button onClick={() => setShowImportGuestModal(true)} style={{padding:"8px 14px",borderRadius:8,fontSize:".85rem",fontWeight:600,display:"flex",alignItems:"center",gap:6,background:"white",border:"1px solid var(--bd)",color:"var(--dt)",cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",whiteSpace:"nowrap"}}>
+              + Single Guest
             </button>
             <button onClick={() => {
               setMappingForm({
@@ -23784,6 +23870,80 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
                 💾 Save Template
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Contact Group Modal */}
+      {showImportContactGroupModal && (
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:"white",borderRadius:12,padding:32,width:"100%",maxWidth:650,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 40px rgba(0,0,0,0.2)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+               <div>
+                 <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",marginTop:0,marginBottom:4}}>Import Contact Group</h2>
+                 <p style={{fontSize:".85rem",color:"var(--mu)",margin:0}}>Import all members of a contact group at once into: <strong>{activeEvent.title}</strong></p>
+               </div>
+               <button onClick={()=>setShowImportContactGroupModal(false)} style={{background:"none",border:"none",fontSize:"1.5rem",cursor:"pointer"}}>×</button>
+            </div>
+
+            {(() => {
+              const groupsMap = {};
+              globalGuests.forEach(g => {
+                const grp = g.Group || g.Category || g.Vibhag || "General Committee";
+                if (!groupsMap[grp]) groupsMap[grp] = [];
+                groupsMap[grp].push(g);
+              });
+              const groupNames = Object.keys(groupsMap);
+
+              return (
+                <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                  {groupNames.map(grp => {
+                    const list = groupsMap[grp];
+                    const importedCount = list.filter(g => regs.some(r => r.globalGuestId === g.id && r.eventId === selectedEventId)).length;
+                    const unimportedCount = list.length - importedCount;
+
+                    return (
+                      <div key={grp} style={{padding:16,border:"1.5px solid #CBD5E1",borderRadius:10,background:"#F8FAFC",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+                        <div>
+                          <div style={{fontSize:"1rem",fontWeight:800,color:"#0F172A",display:"flex",alignItems:"center",gap:6}}>
+                            <span>🏷️</span> {grp}
+                          </div>
+                          <div style={{fontSize:".8rem",color:"#475569",marginTop:4}}>
+                            <strong>{list.length}</strong> total contacts • <span style={{color:"#15803D",fontWeight:700}}>{importedCount} already imported</span> {unimportedCount > 0 && <span style={{color:"#D97706",fontWeight:700}}>• {unimportedCount} ready to import</span>}
+                          </div>
+                        </div>
+                        <button
+                          disabled={unimportedCount === 0}
+                          onClick={() => handleImportContactGroup(grp)}
+                          style={{
+                            padding: "8px 18px",
+                            borderRadius: 8,
+                            border: "none",
+                            background: unimportedCount === 0 ? "#CBD5E1" : "#15803D",
+                            color: unimportedCount === 0 ? "#64748B" : "white",
+                            fontSize: ".84rem",
+                            fontWeight: 800,
+                            cursor: unimportedCount === 0 ? "not-allowed" : "pointer",
+                            boxShadow: unimportedCount > 0 ? "0 2px 8px rgba(21,128,61,0.25)" : "none"
+                          }}
+                        >
+                          {unimportedCount === 0 ? "All Imported ✓" : ("Import " + unimportedCount + " Members ➔")}
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  {groupNames.length === 0 && (
+                    <div style={{padding:32,textAlign:"center",background:"#F8FAFC",borderRadius:8,border:"1px dashed #CBD5E1"}}>
+                      <p style={{color:"var(--mu)"}}>No contacts found in Special Guests Directory.</p>
+                      <button onClick={()=>{setShowImportContactGroupModal(false); setSelectedEventId(null); setTimeout(()=>setShowGlobalGuestsModal(true), 100);}} style={{padding:"8px 16px",background:"var(--dt)",color:"white",border:"none",borderRadius:6,cursor:"pointer",fontWeight:700,marginTop:12}}>
+                         ➕ Add Contacts to Directory
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
