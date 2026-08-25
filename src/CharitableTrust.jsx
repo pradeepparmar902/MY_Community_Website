@@ -9898,20 +9898,23 @@ function CertificateConfigModal({ ev, onSave, onClose, auth, forms, type = 'cert
   );
 }
 
-const ensureEduEventAtZero = (evList) => {
+const organizeEventsOrder = (evList) => {
   if (!Array.isArray(evList) || evList.length <= 1) return evList || [];
-  const eduIdx = evList.findIndex(e => String(e.title || "").toLowerCase().includes("education felicitation"));
+  const publicEvs = evList.filter(e => !e.isInternalOnly && !e.hideFromPublicWebsite);
+  const internalEvs = evList.filter(e => e.isInternalOnly || e.hideFromPublicWebsite);
+
+  // Ensure "Education felicitation" is index 0 among public events
+  const eduIdx = publicEvs.findIndex(e => String(e.title || "").toLowerCase().includes("education felicitation"));
   if (eduIdx > 0) {
-    const copy = [...evList];
-    const [eduEv] = copy.splice(eduIdx, 1);
-    copy.unshift(eduEv);
-    return copy;
+    const [eduEv] = publicEvs.splice(eduIdx, 1);
+    publicEvs.unshift(eduEv);
   }
-  return evList;
+
+  return [...publicEvs, ...internalEvs];
 };
 
 function AdminEvents({ mob, C, setC, auth }) {
-  const [items, setItems] = useState(() => ensureEduEventAtZero(C.events || []));
+  const [items, setItems] = useState(() => organizeEventsOrder(C.events || []));
   const [previewForm, setPreviewForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [editIdx, setEditIdx] = useState(null);
@@ -9919,7 +9922,7 @@ function AdminEvents({ mob, C, setC, auth }) {
   const [qrModal, setQrModal] = useState(null); // { ev, idx }
 
   useEffect(() => {
-    const fixed = ensureEduEventAtZero(C.events || []);
+    const fixed = organizeEventsOrder(C.events || []);
     setItems(fixed);
   }, [C.events]);
 
@@ -10442,25 +10445,49 @@ function AdminEvents({ mob, C, setC, auth }) {
                     <button onClick={()=>remove(i)} style={{padding:"5px 11px",borderRadius:6,background:"#FEF0EF",border:"none",color:"#C0392B",cursor:"pointer",fontSize:".75rem",fontWeight:700}}>Delete</button>
                   </div>
 
-                  {/* Reorder Buttons */}
-                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                  {/* Prominent Reorder Buttons */}
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
                     <button 
                       type="button" 
                       disabled={i === 0} 
                       onClick={()=>moveEvent(i, i - 1)} 
-                      style={{padding:"4px 8px",borderRadius:6,border:"1px solid #CBD5E1",background: i === 0 ? "#F1F5F9" : "white",color: i === 0 ? "#94A3B8" : "#0F172A",cursor: i === 0 ? "not-allowed" : "pointer",fontSize:".72rem",fontWeight:800}}
-                      title="Move event up (Index - 1)"
+                      style={{
+                        padding:"5px 10px",
+                        borderRadius:6,
+                        border:"1.5px solid #2563EB",
+                        background: i === 0 ? "#F1F5F9" : "#EFF6FF",
+                        color: i === 0 ? "#94A3B8" : "#1D4ED8",
+                        cursor: i === 0 ? "not-allowed" : "pointer",
+                        fontSize:".74rem",
+                        fontWeight:800,
+                        display:"flex",
+                        alignItems:"center",
+                        gap:3
+                      }}
+                      title="Move event higher in index (e.g. Index #2 to Index #1)"
                     >
-                      ▲ Move Up
+                      <span>▲</span> Move Up
                     </button>
                     <button 
                       type="button" 
                       disabled={i === items.length - 1} 
                       onClick={()=>moveEvent(i, i + 1)} 
-                      style={{padding:"4px 8px",borderRadius:6,border:"1px solid #CBD5E1",background: i === items.length - 1 ? "#F1F5F9" : "white",color: i === items.length - 1 ? "#94A3B8" : "#0F172A",cursor: i === items.length - 1 ? "not-allowed" : "pointer",fontSize:".72rem",fontWeight:800}}
-                      title="Move event down (Index + 1)"
+                      style={{
+                        padding:"5px 10px",
+                        borderRadius:6,
+                        border:"1.5px solid #2563EB",
+                        background: i === items.length - 1 ? "#F1F5F9" : "#EFF6FF",
+                        color: i === items.length - 1 ? "#94A3B8" : "#1D4ED8",
+                        cursor: i === items.length - 1 ? "not-allowed" : "pointer",
+                        fontSize:".74rem",
+                        fontWeight:800,
+                        display:"flex",
+                        alignItems:"center",
+                        gap:3
+                      }}
+                      title="Move event lower in index (e.g. Index #1 to Index #2)"
                     >
-                      ▼ Move Down
+                      <span>▼</span> Move Down
                     </button>
                   </div>
                 </div>
