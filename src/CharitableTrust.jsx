@@ -21533,6 +21533,145 @@ function AdminCertificates({ mob, C, setC, auth }) {
         isProcessing={downloadingBulk} 
         progress={downloadProgress} 
       />
+
+      {/* Bulk WhatsApp Broadcast Modal */}
+      {showBulkWhatsAppModal && (
+        <BulkWhatsAppBroadcastModal
+          event={activeEvent}
+          recipients={selectedIds.length > 0 ? filteredRegs.filter(r => selectedIds.includes(r.id || r['Transaction ID'])) : filteredRegs}
+          C={C}
+          auth={auth}
+          onLogSent={async (r, msgType) => {
+            const updatedBy = auth?.email || "Admin";
+            const existingLogs = Array.isArray(r.logHistory) ? r.logHistory : [];
+            const waLog = {
+              timestamp: new Date().toISOString(),
+              actor: updatedBy,
+              action: `WhatsApp Sent: ${msgType}`,
+              type: "whatsapp",
+              messageType: msgType,
+              remarks: `WhatsApp certificate update (${msgType}) sent to applicant.`
+            };
+            const newLogs = [...existingLogs, waLog];
+            const newCount = (r.whatsAppCount || 0) + 1;
+            setRegs(prev => prev.map(x => x.id === r.id ? { ...x, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp } : x));
+            try {
+              const cleanData = { ...r, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp };
+              delete cleanData.id; delete cleanData._submittedAt;
+              await fbUpdateRegistration(r.id, cleanData, auth?.idToken);
+            } catch(e){}
+          }}
+          onClose={() => setShowBulkWhatsAppModal(false)}
+        />
+      )}
+
+      {/* Workspace Multi-Template Modal */}
+      {showWorkspaceTplModal && (
+        <WorkspaceWhatsAppTemplateModal
+          event={activeEvent}
+          C={C}
+          setC={setC}
+          auth={auth}
+          onClose={() => setShowWorkspaceTplModal(false)}
+        />
+      )}
+
+      {/* WhatsApp Applicant Messenger Modal */}
+      {selectedWhatsAppReg && (
+        <WhatsAppApplicantMessengerModal
+          reg={{ ...selectedWhatsAppReg, isCertMode: true }}
+          onClose={() => setSelectedWhatsAppReg(null)}
+          C={C}
+          auth={auth}
+          allRegs={filteredRegs}
+          onSelectReg={(nextR) => setSelectedWhatsAppReg(nextR)}
+          onLogSent={async (r, msgType) => {
+            const updatedBy = auth?.email || "Admin";
+            const existingLogs = Array.isArray(r.logHistory) ? r.logHistory : [];
+            const waLog = {
+              timestamp: new Date().toISOString(),
+              actor: updatedBy,
+              action: `WhatsApp Sent: ${msgType}`,
+              type: "whatsapp",
+              messageType: msgType,
+              remarks: `WhatsApp certificate update (${msgType}) sent to applicant.`
+            };
+            const newLogs = [...existingLogs, waLog];
+            const newCount = (r.whatsAppCount || 0) + 1;
+            setRegs(prev => prev.map(x => x.id === r.id ? { ...x, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp } : x));
+            try {
+              const cleanData = { ...r, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp };
+              delete cleanData.id; delete cleanData._submittedAt;
+              await fbUpdateRegistration(r.id, cleanData, auth?.idToken);
+            } catch(e){}
+          }}
+        />
+      )}
+
+      {/* Audit Logs & Pass Open History Modal */}
+      {historyModalReg && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setHistoryModalReg(null)}>
+          <div style={{background:"white",borderRadius:16,maxWidth:540,width:"100%",maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 40px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"16px 20px",background:"linear-gradient(135deg, #15803D, #166534)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <h3 style={{fontSize:"1.1rem",fontWeight:700,margin:0}}>📜 Certificate & Activity Log</h3>
+                <div style={{fontSize:".75rem",opacity:0.9,marginTop:2}}>
+                  {historyModalReg['Full Name'] || historyModalReg.name} • {historyModalReg['Transaction ID'] || historyModalReg.id}
+                </div>
+              </div>
+              <button onClick={()=>setHistoryModalReg(null)} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:"50%",width:32,height:32,cursor:"pointer",fontWeight:700,fontSize:"1.1rem"}}>✕</button>
+            </div>
+
+            <div style={{padding:20,overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:12}}>
+              {(() => {
+                const logs = (historyModalReg.logHistory && historyModalReg.logHistory.length > 0)
+                  ? historyModalReg.logHistory
+                  : [
+                      {
+                        actor: "User",
+                        action: "1st Entry Submitted",
+                        timestamp: historyModalReg.timestamp || historyModalReg._submittedAt,
+                        remarks: "Initial registration entry submitted"
+                      }
+                    ];
+
+                return logs.map((lg, lgIdx) => (
+                  <div key={lgIdx} style={{background:"#FAFAFA",border:"1.5px solid var(--bd)",borderRadius:10,padding:14,position:"relative"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <span style={{fontSize:".78rem",fontWeight:800,color:lg.actor?.includes('Student') ? "#1D4ED8" : lg.actor === 'User' ? "var(--sf)" : "#15803D"}}>
+                        {lg.actor?.includes('Student') ? "👤 Student (Recipient)" : lg.actor === 'User' ? "👤 User (Registrant)" : `🛡️ Admin (${lg.actor || 'Admin'})`}
+                      </span>
+                      <span style={{fontSize:".7rem",color:"var(--mu)",fontWeight:600}}>
+                        {lg.timestamp ? new Date(lg.timestamp).toLocaleString() : ""}
+                      </span>
+                    </div>
+                    {lg.type === 'pass_open' || (lg.action && String(lg.action).toLowerCase().includes('pass / invite opened')) ? (
+                      <div style={{marginBottom:6}}>
+                        <span style={{background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #93C5FD",padding:"3px 8px",borderRadius:6,fontSize:".76rem",fontWeight:800,display:"inline-flex",alignItems:"center",gap:4}}>
+                          <span>👁️</span> {lg.action} • {lg.device || 'Mobile'}
+                        </span>
+                      </div>
+                    ) : lg.type === 'whatsapp' || (lg.action && String(lg.action).toLowerCase().includes('whatsapp')) ? (
+                      <div style={{marginBottom:6}}>
+                        <span style={{background:"#DCFCE7",color:"#15803D",border:"1px solid #86EFAC",padding:"3px 8px",borderRadius:6,fontSize:".76rem",fontWeight:800,display:"inline-flex",alignItems:"center",gap:4}}>
+                          <span>💬</span> {lg.action || `WhatsApp Sent (${lg.messageType || 'Update'})`}
+                        </span>
+                      </div>
+                    ) : (
+                      <div style={{fontSize:".88rem",fontWeight:700,color:"var(--dt)",marginBottom:4}}>
+                        {lg.action || lg.status}
+                      </div>
+                    )}
+                    <div style={{fontSize:".82rem",color:"var(--tx)",lineHeight:1.4,background:"white",padding:"8px 10px",borderRadius:6,border:"1px solid #EEE"}}>
+                      {lg.remarks || "No remarks provided"}
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
