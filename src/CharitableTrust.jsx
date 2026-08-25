@@ -26635,7 +26635,14 @@ export default function App() {
 
     fbLoad().then(data => {
       if (active) {
-        if (data) setC(data);
+        if (data) {
+          if (Array.isArray(data.events)) {
+            const pubEvs = data.events.filter(e => !e.isInternalOnly && !e.hideFromPublicWebsite);
+            const intEvs = data.events.filter(e => e.isInternalOnly || e.hideFromPublicWebsite);
+            data.events = [...pubEvs, ...intEvs];
+          }
+          setC(data);
+        }
         setFbState("ready");
         clearTimeout(safetyTimer);
       }
