@@ -22314,6 +22314,17 @@ function AdminCertificates({ mob, C, setC, auth }) {
 }
 
 
+
+const getContactGroups = (contact) => {
+  if (!contact) return ["General Committee"];
+  if (Array.isArray(contact.groups) && contact.groups.length > 0) return contact.groups.map(s => String(s).trim()).filter(Boolean);
+  if (Array.isArray(contact.Groups) && contact.Groups.length > 0) return contact.Groups.map(s => String(s).trim()).filter(Boolean);
+  const raw = contact.Group || contact.group || contact.Category || contact.category || contact.Team || contact.team || contact.Vibhag || "";
+  if (!raw || typeof raw !== 'string') return ["General Committee"];
+  const parts = raw.split(/[,/|;]+/).map(s => s.trim()).filter(Boolean);
+  return parts.length > 0 ? parts : ["General Committee"];
+};
+
 function AdminInviteLetters({ mob, C, setC, auth }) {
   const [regs, setRegs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22413,8 +22424,8 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       if (inviteReleasePillFilter === "pending" && (st.isReleased || st.isHeld)) return false;
     }
     if (selectedContactGroup && selectedContactGroup !== "All") {
-      const rGroup = r.Group || r.Category || r.Vibhag || "General Committee";
-      if (rGroup !== selectedContactGroup) return false;
+      const rGroups = getContactGroups(r);
+      if (!rGroups.includes(selectedContactGroup)) return false;
     }
     return true;
   });
@@ -22450,32 +22461,74 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
     e.preventDefault();
     if (!guestForm.fullName) return alert("Full Name is required.");
     
-    setAddingGuest(true);
-    const newGlobalGuest = {
-      "Full Name": guestForm.fullName,
-      "Participant Name": guestForm.fullName,
-      "Name": guestForm.fullName,
-      "Mobile": guestForm.mobile,
-      "Mobile Number": guestForm.mobile,
-      "Email": guestForm.email,
-      "Address": guestForm.address,
-      "Designation": guestForm.designation,
-      "Organization": guestForm.designation,
-      "Group": guestForm.group || "General Committee",
-      "Category": guestForm.group || "General Committee",
-      "Vibhag": guestForm.group || "General Committee",
-      isGlobalGuest: true,
-      _submittedAt: Date.now(),
-      formId: "global_guest_directory"
-    };
+    const assignedGroups = (guestForm.groups && guestForm.groups.length > 0)
+      ? guestForm.groups
+      : getContactGroups({ group: guestForm.group });
 
-    try {
-      await fbSubmitRegistration(newGlobalGuest, auth?.idToken);
-      alert("Global guest added to directory!");
-      setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "" });
-      fetchRegs();
-    } catch (err) {
-      alert("Error adding global guest: " + err.message);
+    const groupStr = assignedGroups.join(", ");
+
+    setAddingGuest(true);
+    if (editingGuest) {
+      // Update existing contact
+      try {
+        const updatedData = {
+          ...editingGuest,
+          "Full Name": guestForm.fullName,
+          "Participant Name": guestForm.fullName,
+          "Name": guestForm.fullName,
+          "Mobile": guestForm.mobile,
+          "Mobile Number": guestForm.mobile,
+          "Email": guestForm.email,
+          "Address": guestForm.address,
+          "Designation": guestForm.designation,
+          "Organization": guestForm.designation,
+          "Group": groupStr,
+          "Category": groupStr,
+          "Vibhag": assignedGroups[0] || "General Committee",
+          groups: assignedGroups,
+          Groups: assignedGroups
+        };
+        const cleanCopy = { ...updatedData };
+        delete cleanCopy.id;
+        delete cleanCopy._submittedAt;
+        await fbUpdateRegistration(editingGuest.id, cleanCopy, auth?.idToken);
+        alert("Contact details and groups updated successfully!");
+        setEditingGuest(null);
+        setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member", groups: ["CWC Member"] });
+        fetchRegs();
+      } catch (err) {
+        alert("Error updating contact: " + err.message);
+      }
+    } else {
+      // Create new contact
+      const newGlobalGuest = {
+        "Full Name": guestForm.fullName,
+        "Participant Name": guestForm.fullName,
+        "Name": guestForm.fullName,
+        "Mobile": guestForm.mobile,
+        "Mobile Number": guestForm.mobile,
+        "Email": guestForm.email,
+        "Address": guestForm.address,
+        "Designation": guestForm.designation,
+        "Organization": guestForm.designation,
+        "Group": groupStr,
+        "Category": groupStr,
+        "Vibhag": assignedGroups[0] || "General Committee",
+        groups: assignedGroups,
+        Groups: assignedGroups,
+        isGlobalGuest: true,
+        _submittedAt: Date.now(),
+        formId: "global_guest_directory"
+      };
+
+      try {
+        await fbSubmitRegistration(newGlobalGuest, auth?.idToken);
+        alert("Global guest added to directory with assigned groups!");
+        setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member", groups: ["CWC Member"] });
+        fetchRegs();
+      } catch (err) {
+        alert("Error adding global guest: " + err.message);
+      }
     }
     setAddingGuest(false);
   };
@@ -22540,8 +22593,8 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
 
     const guestsInGroup = globalGuests.filter(g => {
       if (targetGroup === "All") return true;
-      const gGroup = g.Group || g.Category || g.Vibhag || "General Committee";
-      return gGroup === targetGroup;
+      const gGroups = getContactGroups(g);
+      return gGroups.includes(targetGroup);
     });
 
     if (guestsInGroup.length === 0) return alert("No contacts found in group " + targetGroup);
