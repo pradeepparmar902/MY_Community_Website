@@ -17339,9 +17339,30 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }
 function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
   if (!event || recipients.length === 0) return null;
 
-  // Status Filter Bucket: "All" | "Approved" | "Needs Info" | "Pending" | "Disapproved"
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [selectedTplId, setSelectedTplId] = useState("auto_status_match");
+  const countApproved = recipients.filter(r => (r['Status'] || r.status) === "Approved").length;
+  const countNeedsInfo = recipients.filter(r => (r['Status'] || r.status) === "Needs Info").length;
+  const countPending = recipients.filter(r => (!r['Status'] && !r.status) || (r['Status'] || r.status) === "Pending").length;
+  const countDisapproved = recipients.filter(r => (r['Status'] || r.status) === "Disapproved").length;
+
+  // Determine initial status filter based on the selected recipients
+  const initialStatusFilter = (() => {
+    if (countNeedsInfo > 0 && countApproved === 0 && countPending === 0 && countDisapproved === 0) return "Needs Info";
+    if (countApproved > 0 && countNeedsInfo === 0 && countPending === 0 && countDisapproved === 0) return "Approved";
+    if (countPending > 0 && countApproved === 0 && countNeedsInfo === 0 && countDisapproved === 0) return "Pending";
+    if (countDisapproved > 0 && countApproved === 0 && countNeedsInfo === 0 && countPending === 0) return "Disapproved";
+    return "All";
+  })();
+
+  const initialTplId = (() => {
+    if (initialStatusFilter === "Needs Info") return "tpl_needs_info_notice";
+    if (initialStatusFilter === "Approved") return "tpl_approved_notice";
+    if (initialStatusFilter === "Pending") return "tpl_pending_notice";
+    if (initialStatusFilter === "Disapproved") return "tpl_disapproved_notice";
+    return "auto_status_match";
+  })();
+
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
+  const [selectedTplId, setSelectedTplId] = useState(initialTplId);
 
   const defaultApprovedTpl = C.whatsAppTplApproved || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\n🎉 Hearty Congratulations! Your application for *Education Felicitation 2026* has been *APPROVED* by the Verification Committee.\n\n📋 *Application Details:*\n• *Transaction ID:* {TXN_ID}\n• *Student Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n• *Percentage:* {PERCENTAGE}%\n• *Status:* 🟢 *Approved & Verified*\n\n📅 *Event Date:* 02-10-2026\n📍 *Venue:* Mumbai\n\n👉 View your application on your dashboard:\n{PORTAL_URL}\n\nWarm regards,\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
 
@@ -17353,42 +17374,42 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
 
   const defaultInviteTpl = C.whatsAppTplInvite || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026 - Official Invitation*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nWe are pleased to invite you and your family as our esteemed guests of honor to the *Annual Student Education Felicitation 2026*.\n\n📋 *Invitation Pass Details:*\n• *Transaction / Pass ID:* {TXN_ID}\n• *Invitee Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View & Download Official PDF Invitation Letter & Pass:*\n{INVITE_PDF_LINK}\n\nPlease show this digital pass or downloaded invitation letter at the registration desk upon arrival.\n\nWarm regards,\n*Central Working Committee (CWC) & Education Board*\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`;
 
-  const broadcastTemplates = [
+  const allBroadcastTemplates = [
     {
       id: "auto_status_match",
-      name: "🔄 Dynamic: Auto-Match Each Student's Live Status (Approved / Needs Info / Pending / Disapproved)",
+      name: "🔄 Dynamic: Auto-Match Each Student's Live Status",
       isDefault: true,
       targetStatus: "All",
       text: "AUTO_STATUS_MATCH"
     },
-    {
+    ...(countNeedsInfo > 0 || initialStatusFilter === "All" ? [{
       id: "tpl_needs_info_notice",
-      name: "⚠️ Needs Info / Pending Queries Notice (Only)",
+      name: `⚠️ Needs Info / Document Correction Notice (${countNeedsInfo} Selected)`,
       isDefault: false,
       targetStatus: "Needs Info",
       text: defaultNeedsInfoTpl
-    },
-    {
+    }] : []),
+    ...(countApproved > 0 || initialStatusFilter === "All" ? [{
       id: "tpl_approved_notice",
-      name: "🟢 Application Approved & Verified Notice (Only)",
+      name: `🟢 Application Approved & Verified Notice (${countApproved} Selected)`,
       isDefault: false,
       targetStatus: "Approved",
       text: defaultApprovedTpl
-    },
-    {
+    }] : []),
+    ...(countPending > 0 || initialStatusFilter === "All" ? [{
       id: "tpl_pending_notice",
-      name: "⏳ Under Verification / Review Notice (Only)",
+      name: `⏳ Under Verification / Review Notice (${countPending} Selected)`,
       isDefault: false,
       targetStatus: "Pending",
       text: defaultPendingTpl
-    },
-    {
+    }] : []),
+    ...(countDisapproved > 0 ? [{
       id: "tpl_disapproved_notice",
-      name: "🔴 Disapproved Application Notice (Only)",
+      name: `🔴 Disapproved Application Notice (${countDisapproved} Selected)`,
       isDefault: false,
       targetStatus: "Disapproved",
       text: defaultDisapprovedTpl
-    },
+    }] : []),
     {
       id: "tpl_student_pass",
       name: "🏆 Official Student Invitation & Entry Pass",
@@ -17399,7 +17420,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
     ...(event?.whatsAppTemplates || [])
   ];
 
-  const activeTemplate = broadcastTemplates.find(t => t.id === selectedTplId) || broadcastTemplates[0];
+  const activeTemplate = allBroadcastTemplates.find(t => t.id === selectedTplId) || allBroadcastTemplates[0];
 
   // Derive active recipients strictly based on statusFilter
   const activeRecipients = recipients.filter(r => {
@@ -17408,11 +17429,6 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
     const st = r['Status'] || r.status || 'Pending';
     return st === statusFilter;
   });
-
-  const countApproved = recipients.filter(r => (r['Status'] || r.status) === "Approved").length;
-  const countNeedsInfo = recipients.filter(r => (r['Status'] || r.status) === "Needs Info").length;
-  const countPending = recipients.filter(r => (!r['Status'] && !r.status) || (r['Status'] || r.status) === "Pending").length;
-  const countDisapproved = recipients.filter(r => (r['Status'] || r.status) === "Disapproved").length;
 
   const gateway = C.whatsAppGateway || {};
   const isApiEnabled = gateway.enabled && gateway.instanceId && gateway.token;
@@ -17450,7 +17466,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
     setFailCount(0);
     setBroadcastDone(false);
 
-    const chosen = broadcastTemplates.find(t => t.id === tplId);
+    const chosen = allBroadcastTemplates.find(t => t.id === tplId);
     if (chosen && chosen.targetStatus && chosen.targetStatus !== "All") {
       setStatusFilter(chosen.targetStatus);
     } else if (tplId === "auto_status_match" || tplId === "tpl_student_pass") {
@@ -17679,10 +17695,10 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
         <div style={{padding:"18px 24px",background:"linear-gradient(135deg, #15803D, #166534)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <h3 style={{fontSize:"1.15rem",fontWeight:800,margin:0,display:"flex",alignItems:"center",gap:8}}>
-              <span>📢</span> Broadcast WhatsApp Updates ({activeRecipients.length} {statusFilter === 'All' ? 'Applicants' : statusFilter})
+              <span>📢</span> Broadcast WhatsApp ({activeRecipients.length} {statusFilter === 'All' ? 'Selected' : statusFilter})
             </h3>
             <div style={{fontSize:".8rem",opacity:0.9,marginTop:2}}>
-              Sending personalized messages to all {activeRecipients.length} {statusFilter === 'All' ? 'filtered applicants' : statusFilter + ' students'}.
+              Sending personalized messages to all {activeRecipients.length} {statusFilter === 'All' ? 'selected applicants' : statusFilter + ' students'}.
             </div>
           </div>
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:32,height:32,color:"white",cursor:"pointer",fontWeight:800}}>✕</button>
@@ -17694,8 +17710,8 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
           {/* STEP 1: STATUS BUCKET FILTER PILLS */}
           <div style={{background:"#F8FAFC",border:"1.5px solid #E2E8F0",borderRadius:12,padding:"14px 16px"}}>
             <div style={{fontSize:".8rem",fontWeight:800,color:"#334155",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <span>🎯 1. CHOOSE WHO TO SEND TO (SELECT STATUS BUCKET):</span>
-              <span style={{fontSize:".74rem",color:"#64748B",fontWeight:600}}>Showing {activeRecipients.length} of {recipients.length}</span>
+              <span>🎯 STATUS BUCKET FOR SELECTED:</span>
+              <span style={{fontSize:".74rem",color:"#64748B",fontWeight:600}}>Showing {activeRecipients.length} of {recipients.length} Selected</span>
             </div>
             
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -17716,70 +17732,76 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
                   gap: 6
                 }}
               >
-                <span>👥 All ({recipients.length})</span>
+                <span>👥 All Selected ({recipients.length})</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => handleStatusFilterChange("Needs Info")}
-                style={{
-                  padding:"6px 14px",
-                  borderRadius:20,
-                  border: statusFilter === "Needs Info" ? "2px solid #D97706" : "1.5px solid #FDE68A",
-                  background: statusFilter === "Needs Info" ? "#D97706" : "#FFFBEB",
-                  color: statusFilter === "Needs Info" ? "white" : "#92400E",
-                  fontWeight: 800,
-                  fontSize: ".78rem",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  boxShadow: statusFilter === "Needs Info" ? "0 2px 8px rgba(217,119,6,0.3)" : "none"
-                }}
-              >
-                <span>⚠️ Pending Queries / Needs Info ({countNeedsInfo})</span>
-              </button>
+              {countNeedsInfo > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleStatusFilterChange("Needs Info")}
+                  style={{
+                    padding:"6px 14px",
+                    borderRadius:20,
+                    border: statusFilter === "Needs Info" ? "2px solid #D97706" : "1.5px solid #FDE68A",
+                    background: statusFilter === "Needs Info" ? "#D97706" : "#FFFBEB",
+                    color: statusFilter === "Needs Info" ? "white" : "#92400E",
+                    fontWeight: 800,
+                    fontSize: ".78rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    boxShadow: statusFilter === "Needs Info" ? "0 2px 8px rgba(217,119,6,0.3)" : "none"
+                  }}
+                >
+                  <span>⚠️ Needs Info ({countNeedsInfo})</span>
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => handleStatusFilterChange("Approved")}
-                style={{
-                  padding:"6px 14px",
-                  borderRadius:20,
-                  border: statusFilter === "Approved" ? "2px solid #15803D" : "1.5px solid #BBF7D0",
-                  background: statusFilter === "Approved" ? "#15803D" : "#F0FDF4",
-                  color: statusFilter === "Approved" ? "white" : "#166534",
-                  fontWeight: 800,
-                  fontSize: ".78rem",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  boxShadow: statusFilter === "Approved" ? "0 2px 8px rgba(21,128,61,0.3)" : "none"
-                }}
-              >
-                <span>🟢 Approved ({countApproved})</span>
-              </button>
+              {countApproved > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleStatusFilterChange("Approved")}
+                  style={{
+                    padding:"6px 14px",
+                    borderRadius:20,
+                    border: statusFilter === "Approved" ? "2px solid #15803D" : "1.5px solid #BBF7D0",
+                    background: statusFilter === "Approved" ? "#15803D" : "#F0FDF4",
+                    color: statusFilter === "Approved" ? "white" : "#166534",
+                    fontWeight: 800,
+                    fontSize: ".78rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    boxShadow: statusFilter === "Approved" ? "0 2px 8px rgba(21,128,61,0.3)" : "none"
+                  }}
+                >
+                  <span>🟢 Approved ({countApproved})</span>
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={() => handleStatusFilterChange("Pending")}
-                style={{
-                  padding:"6px 14px",
-                  borderRadius:20,
-                  border: statusFilter === "Pending" ? "2px solid #475569" : "1.5px solid #E2E8F0",
-                  background: statusFilter === "Pending" ? "#475569" : "#F1F5F9",
-                  color: statusFilter === "Pending" ? "white" : "#334155",
-                  fontWeight: 700,
-                  fontSize: ".78rem",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6
-                }}
-              >
-                <span>⏳ Under Review ({countPending})</span>
-              </button>
+              {countPending > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleStatusFilterChange("Pending")}
+                  style={{
+                    padding:"6px 14px",
+                    borderRadius:20,
+                    border: statusFilter === "Pending" ? "2px solid #475569" : "1.5px solid #E2E8F0",
+                    background: statusFilter === "Pending" ? "#475569" : "#F1F5F9",
+                    color: statusFilter === "Pending" ? "white" : "#334155",
+                    fontWeight: 700,
+                    fontSize: ".78rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6
+                  }}
+                >
+                  <span>⏳ Under Review ({countPending})</span>
+                </button>
+              )}
 
               {countDisapproved > 0 && (
                 <button
@@ -17808,7 +17830,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
           {/* STEP 2: TEMPLATE SELECTION */}
           <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"14px 16px"}}>
             <div style={{fontSize:".8rem",fontWeight:800,color:"#15803D",marginBottom:6}}>
-              2. CHOOSE MESSAGE TEMPLATE:
+              CHOOSE MESSAGE TEMPLATE:
             </div>
             <select
               value={selectedTplId}
@@ -17826,7 +17848,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
                 cursor: "pointer"
               }}
             >
-              {broadcastTemplates.map(t => (
+              {allBroadcastTemplates.map(t => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
@@ -17835,7 +17857,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
 
             {statusFilter === "Needs Info" && (
               <div style={{fontSize:".76rem",color:"#92400E",background:"#FEF3C7",padding:"8px 12px",borderRadius:6,marginTop:8,fontWeight:600,lineHeight:1.4}}>
-                ⚠️ <strong>Filtered to {countNeedsInfo} students with Needs Info / Pending queries.</strong> Each student will receive their personal correction remarks ({'{REMARKS}'}).
+                ⚠️ <strong>Broadcasting to {countNeedsInfo} students with Needs Info / Pending queries.</strong> Each student will receive their personal correction remarks ({'{REMARKS}'}).
               </div>
             )}
           </div>
@@ -17861,7 +17883,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, onClose }) {
                     <span style={{fontSize:"1.3rem"}}>⚡</span>
                     <div>
                       <strong style={{fontSize:".95rem",color:"#14532D"}}>1-Click Fast Tap Runner (Keyboard: Enter / Space)</strong>
-                      <div style={{fontSize:".75rem",color:"#15803D"}}>Sends to {activeRecipients.length} {statusFilter === 'All' ? 'applicants' : statusFilter + ' students'}</div>
+                      <div style={{fontSize:".75rem",color:"#15803D"}}>Sends to {activeRecipients.length} {statusFilter === 'All' ? 'selected applicants' : statusFilter + ' students'}</div>
                     </div>
                   </div>
 
