@@ -134,7 +134,72 @@ const fbLoad = async () => {
   } catch { return null; }
 };
 
+const compressBase64Image = (dataUrl, maxDimension = 950, quality = 0.65) => {
+  return new Promise((resolve) => {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image')) {
+      return resolve(dataUrl);
+    }
+    try {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDimension || h > maxDimension) {
+          if (w >= h) {
+            h = Math.round((maxDimension / w) * h);
+            w = maxDimension;
+          } else {
+            w = Math.round((maxDimension / h) * w);
+            h = maxDimension;
+          }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        const compressed = canvas.toDataURL("image/jpeg", quality);
+        resolve(compressed);
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    } catch (e) {
+      resolve(dataUrl);
+    }
+  });
+};
+
+const optimizeConfigForSave = async (content) => {
+  if (!content) return content;
+  const clone = JSON.parse(JSON.stringify(content));
+  if (Array.isArray(clone.events)) {
+    for (let i = 0; i < clone.events.length; i++) {
+      const ev = clone.events[i];
+      if (ev.certBgUrl && ev.certBgUrl.length > 50000) {
+        ev.certBgUrl = await compressBase64Image(ev.certBgUrl, 950, 0.65);
+      }
+      if (ev.inviteBgUrl && ev.inviteBgUrl.length > 50000) {
+        ev.inviteBgUrl = await compressBase64Image(ev.inviteBgUrl, 950, 0.65);
+      }
+      if (Array.isArray(ev.pdfTemplates)) {
+        for (let j = 0; j < ev.pdfTemplates.length; j++) {
+          if (ev.pdfTemplates[j].bgUrl && ev.pdfTemplates[j].bgUrl.length > 50000) {
+            ev.pdfTemplates[j].bgUrl = await compressBase64Image(ev.pdfTemplates[j].bgUrl, 950, 0.65);
+          }
+        }
+      }
+    }
+  }
+  return clone;
+};
+
 const fbSave = async (content, idToken) => {
+  const optimizedContent = await optimizeConfigForSave(content);
+  const jsonStr = JSON.stringify(optimizedContent);
+
   const res = await fetch(
     `${FS_URL()}?updateMask.fieldPaths=data&updateMask.fieldPaths=savedAt`,
     {
@@ -142,7 +207,7 @@ const fbSave = async (content, idToken) => {
       headers: { "Content-Type":"application/json", "Authorization":`Bearer ${idToken}` },
       body: JSON.stringify({
         fields: {
-          data:    { stringValue: JSON.stringify(content) },
+          data:    { stringValue: jsonStr },
           savedAt: { timestampValue: new Date().toISOString() },
         }
       })
@@ -9635,11 +9700,21 @@ function CertificateConfigModal({ ev, onSave, onClose, auth, forms, type = 'cert
         img.onload = () => {
           const canvas = document.createElement('canvas');
           let w = img.width; let h = img.height;
-          if (w > 1200) { h = Math.round((1200/w)*h); w = 1200; }
+          if (w > 950 || h > 950) {
+            if (w >= h) {
+              h = Math.round((950 / w) * h);
+              w = 950;
+            } else {
+              w = Math.round((950 / h) * w);
+              h = 950;
+            }
+          }
           canvas.width = w; canvas.height = h;
           const ctx = canvas.getContext('2d');
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, w, h);
           ctx.drawImage(img, 0, 0, w, h);
-          const b64 = canvas.toDataURL('image/jpeg', 0.85);
+          const b64 = canvas.toDataURL('image/jpeg', 0.65);
           setCertBgUrl(b64);
           setUploading(false);
         };
