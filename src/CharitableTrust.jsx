@@ -21984,7 +21984,7 @@ function AdminCertificates({ mob, C, setC, auth }) {
                     </tr>
                   );
                 })}
-                {filteredRegs.length === 0 && <tr><td colSpan={7} style={{padding:40,textAlign:"center",color:"var(--mu)"}}>No certificates found to manage.</td></tr>}
+                {filteredRegs.length === 0 && <tr><td colSpan={9} style={{padding:40,textAlign:"center",color:"var(--mu)"}}>No certificates found to manage.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -23200,16 +23200,26 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
 
         {loading ? <p>Loading inviteLetters...</p> : (
           <div style={{borderRadius:12,boxShadow:"0 10px 30px rgba(0,0,0,0.06)",overflow:"hidden",border:"1px solid #E0E0E0",background:"white",overflowX:"auto"}}>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:".85rem",minWidth:900}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:".85rem",minWidth:1000}}>
               <thead>
-                <tr>
-                  <th style={{padding:"14px 12px",textAlign:"center",background:"var(--dt)",color:"white",fontWeight:600,width:"220px"}}>Actions</th>
-                  <th style={{padding:"14px 12px",textAlign:"left",background:"var(--dt)",color:"white",fontWeight:600}}>Date Approved</th>
-                  <th style={{padding:"14px 12px",textAlign:"left",background:"var(--dt)",color:"white",fontWeight:600}}>Event</th>
-                  <th style={{padding:"14px 12px",textAlign:"left",background:"var(--dt)",color:"white",fontWeight:600}}>Participant Name</th>
-                  <th style={{padding:"14px 12px",textAlign:"center",background:"var(--dt)",color:"white",fontWeight:600}}>Status</th>
-                  <th style={{padding:"14px 12px",textAlign:"center",background:"var(--dt)",color:"white",fontWeight:600}}>Viewed On</th>
-                  <th style={{padding:"14px 12px",textAlign:"center",background:"var(--dt)",color:"white",fontWeight:600}}>Downloaded On</th>
+                <tr style={{background:"linear-gradient(135deg, #0D4B5E, #135D74)"}}>
+                  <th style={{padding:"14px 8px",textAlign:"center",color:"white",fontWeight:700,width:"40px"}}>
+                    <input
+                      type="checkbox"
+                      checked={filteredRegs.length > 0 && selectedIds.length === filteredRegs.length}
+                      onChange={toggleSelectAll}
+                      style={{cursor:"pointer",width:16,height:16,accentColor:"#22C55E"}}
+                      title="Select / Deselect all"
+                    />
+                  </th>
+                  <th style={{padding:"14px 12px",textAlign:"center",color:"white",fontWeight:700,width:"240px"}}>Actions</th>
+                  <th style={{padding:"14px 12px",textAlign:"left",color:"white",fontWeight:700}}>Participant & ID</th>
+                  <th style={{padding:"14px 12px",textAlign:"left",color:"white",fontWeight:700}}>📱 Mobile Number</th>
+                  <th style={{padding:"14px 12px",textAlign:"left",color:"white",fontWeight:700}}>Event</th>
+                  <th style={{padding:"14px 12px",textAlign:"center",color:"white",fontWeight:700}}>Date Approved</th>
+                  <th style={{padding:"14px 12px",textAlign:"center",color:"white",fontWeight:700}}>Status</th>
+                  <th style={{padding:"14px 12px",textAlign:"center",color:"white",fontWeight:700}}>👁️ Viewed</th>
+                  <th style={{padding:"14px 12px",textAlign:"center",color:"white",fontWeight:700}}>📥 Downloaded</th>
                 </tr>
               </thead>
               <tbody>
@@ -23234,17 +23244,26 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
                     ? `WhatsApp sent ${waCount} time${waCount > 1 ? 's' : ''}. Last: ${lastWaType} on ${lastWaDate ? new Date(lastWaDate).toLocaleDateString() : 'recent'}`
                     : "Send WhatsApp Invitation Pass";
 
+                  const rawMobile = r["Mobile Number"] || r["Mobile"] || r["submitterMob"] || r["WhatsApp Number"] || r["Phone"] || "";
+                  const cleanMobile = rawMobile ? String(rawMobile).replace(/\D/g, "").slice(-10) : "";
+                  const formattedMobile = cleanMobile ? `+91 ${cleanMobile.slice(0, 5)} ${cleanMobile.slice(5)}` : "-";
+                  const cleanPName = String(pName).replace(/\|/g, " ").replace(/\s+/g, " ").trim();
+                  const txnId = r["Transaction ID"] || r.transactionId || r.id || "";
+                  const vibhag = r["Vibhag"] || r.vibhag || "";
+
                   return (
                     <tr 
                       key={i} 
                       onClick={() => handlePreview(r, ev)}
                       style={{
-                        borderBottom:"1px solid #eee",
+                        borderBottom: "1px solid #E2E8F0",
                         cursor: "pointer",
-                        background: isSelected ? "#F0FDF4" : previewCertRegId === r.id ? "#E8F4F8" : "transparent",
-                        transition: "background-color 0.2s"
+                        background: isSelected ? "#F0FDF4" : previewCertRegId === r.id ? "#EFF6FF" : (i % 2 === 0 ? "#FFFFFF" : "#F8FAFC"),
+                        borderLeft: isSelected ? "4px solid #15803D" : previewCertRegId === r.id ? "4px solid #2563EB" : "4px solid transparent",
+                        transition: "all 0.15s"
                       }}
                     >
+                      {/* Checkbox */}
                       <td style={{padding:"12px 8px",textAlign:"center"}} onClick={(e)=>e.stopPropagation()}>
                         <input
                           type="checkbox"
@@ -23253,70 +23272,195 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
                             setSelectedIds(prev => prev.includes(rowId) ? prev.filter(x => x !== rowId) : [...prev, rowId]);
                           }}
                           style={{cursor:"pointer",width:16,height:16,accentColor:"#15803D"}}
-                          title="Select this invitee"
+                          title="Select this row"
                         />
                       </td>
-                      <td style={{padding:"12px",textAlign:"center"}} onClick={(e)=>e.stopPropagation()}>
-                        <div style={{display:"flex",justifyContent:"center",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-                          <button onClick={(e)=>{e.stopPropagation(); handlePreview(r, ev);}} style={{padding:"5px 8px",borderRadius:6,fontSize:".74rem",background:"white",border:"1px solid var(--bd)",cursor:"pointer",fontWeight:600}}>Preview</button>
-                          <button 
-                            onClick={(e)=>{e.stopPropagation(); setSelectedWhatsAppReg(r);}} 
-                            style={{
-                              padding:"5px 9px",
-                              borderRadius:6,
-                              fontSize:".74rem",
-                              background: waCount > 0 ? "#DCFCE7" : "#F8FAFC",
-                              border: waCount > 0 ? "1.5px solid #22C55E" : "1px solid #86EFAC",
-                              color: waCount > 0 ? "#15803D" : "#475569",
-                              cursor:"pointer",
-                              fontWeight: waCount > 0 ? 800 : 700,
-                              display:"flex",
-                              alignItems:"center",
-                              gap:4
-                            }}
-                            title={waTooltip}
-                          >
-                            <span>💬</span> WhatsApp {waCount > 0 ? `(${waCount})` : ""}
-                          </button>
-                          <button onClick={(e)=>{e.stopPropagation(); setHistoryModalReg(r);}} style={{padding:"5px 7px",borderRadius:6,fontSize:".74rem",background:"#FFF4EC",color:"var(--sf)",border:"1px solid #FDDBB8",cursor:"pointer",fontWeight:700}} title="View Audit Logs & Pass Open History">
-                            📜 Logs {r.logHistory && r.logHistory.length > 0 ? `(${r.logHistory.length})` : ""}
-                          </button>
-                          {(() => {
-                            const activeDocId = currentDocTpl?.id || 'invite';
-                            const { isReleased: docIsReleased, isHeld: docIsHeld } = getDocReleaseStatus(r, activeDocId);
-                            return (
-                              <>
-                                <button onClick={(e)=>{e.stopPropagation(); toggleRelease(r);}} disabled={docIsHeld} style={{padding:"5px 8px",borderRadius:6,fontSize:".74rem",background:docIsHeld?"#eaeaea":docIsReleased?"#f5f5f5":"var(--dt)",color:docIsHeld?"#aaa":docIsReleased?"#333":"white",border:docIsReleased?"1px solid #ccc":"none",cursor:docIsHeld?"not-allowed":"pointer",fontWeight:600}}>
-                                  {docIsReleased ? "Revoke" : "Release"}
-                                </button>
-                                <button onClick={(e)=>{e.stopPropagation(); toggleHold(r);}} style={{padding:"5px 8px",borderRadius:6,fontSize:".74rem",background:docIsHeld?"#FEE2E2":"#f5f5f5",color:docIsHeld?"#991B1B":"#666",border:docIsHeld?"1px solid #FCA5A5":"1px solid #ccc",cursor:"pointer",fontWeight:600}}>
-                                  {docIsHeld ? "Unhold" : "Hold"}
-                                </button>
-                              </>
-                            );
-                          })()}
+
+                      {/* Actions */}
+                      <td style={{padding:"10px 8px",textAlign:"center"}} onClick={(e)=>e.stopPropagation()}>
+                        <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"center"}}>
+                          <div style={{display:"flex",gap:4,alignItems:"center",justifyContent:"center",flexWrap:"wrap"}}>
+                            <button 
+                              onClick={(e)=>{e.stopPropagation(); handlePreview(r, ev);}} 
+                              style={{padding:"4px 8px",borderRadius:6,fontSize:".74rem",background:"white",border:"1.5px solid #CBD5E1",color:"#334155",cursor:"pointer",fontWeight:700,display:"flex",alignItems:"center",gap:3}}
+                              title="Preview active PDF"
+                            >
+                              <span>👁️</span> Preview
+                            </button>
+                            <button 
+                              onClick={(e)=>{e.stopPropagation(); setSelectedWhatsAppReg(r);}} 
+                              style={{
+                                padding:"4px 9px",
+                                borderRadius:6,
+                                fontSize:".74rem",
+                                background: waCount > 0 ? "#DCFCE7" : "#F0FDF4",
+                                border: waCount > 0 ? "1.5px solid #16A34A" : "1.5px solid #86EFAC",
+                                color: waCount > 0 ? "#15803D" : "#166534",
+                                cursor:"pointer",
+                                fontWeight: 800,
+                                display:"flex",
+                                alignItems:"center",
+                                gap:4
+                              }}
+                              title={waTooltip}
+                            >
+                              <span>💬</span> WhatsApp {waCount > 0 ? `(${waCount})` : ""}
+                            </button>
+                            <button 
+                              onClick={(e)=>{e.stopPropagation(); setHistoryModalReg(r);}} 
+                              style={{padding:"4px 8px",borderRadius:6,fontSize:".74rem",background:"#FFF7ED",color:"#C2410C",border:"1.5px solid #FFEDD5",cursor:"pointer",fontWeight:800,display:"flex",alignItems:"center",gap:3}} 
+                              title="View Activity Logs & Open Tracker"
+                            >
+                              <span>📜</span> Logs {r.logHistory && r.logHistory.length > 0 ? `(${r.logHistory.length})` : ""}
+                            </button>
+                          </div>
+
+                          <div style={{display:"flex",gap:4,alignItems:"center",justifyContent:"center",flexWrap:"wrap"}}>
+                            {(() => {
+                              const activeDocId = currentDocTpl?.id || 'invite';
+                              const { isReleased: docIsReleased, isHeld: docIsHeld } = getDocReleaseStatus(r, activeDocId);
+                              return (
+                                <>
+                                  <button 
+                                    onClick={(e)=>{e.stopPropagation(); toggleRelease(r);}} 
+                                    disabled={docIsHeld} 
+                                    style={{
+                                      padding:"4px 10px",
+                                      borderRadius:6,
+                                      fontSize:".74rem",
+                                      background: docIsHeld ? "#F1F5F9" : docIsReleased ? "#F8FAFC" : "#0D4B5E",
+                                      color: docIsHeld ? "#94A3B8" : docIsReleased ? "#334155" : "white",
+                                      border: docIsReleased ? "1.5px solid #CBD5E1" : "none",
+                                      cursor: docIsHeld ? "not-allowed" : "pointer",
+                                      fontWeight: 800,
+                                      boxShadow: (!docIsReleased && !docIsHeld) ? "0 2px 6px rgba(13,75,94,0.3)" : "none"
+                                    }}
+                                  >
+                                    {docIsReleased ? "Revoke" : "📢 Release"}
+                                  </button>
+                                  <button 
+                                    onClick={(e)=>{e.stopPropagation(); toggleHold(r);}} 
+                                    style={{
+                                      padding:"4px 8px",
+                                      borderRadius:6,
+                                      fontSize:".74rem",
+                                      background: docIsHeld ? "#FEE2E2" : "#F8FAFC",
+                                      color: docIsHeld ? "#DC2626" : "#64748B",
+                                      border: docIsHeld ? "1.5px solid #FCA5A5" : "1.5px solid #CBD5E1",
+                                      cursor:"pointer",
+                                      fontWeight: 700
+                                    }}
+                                  >
+                                    {docIsHeld ? "Unhold" : "Hold"}
+                                  </button>
+                                </>
+                              );
+                            })()}
+                          </div>
                         </div>
                       </td>
-                      <td style={{padding:"12px"}}>{date}</td>
-                      <td style={{padding:"12px"}}>{evName}</td>
-                      <td style={{padding:"12px",fontWeight:600}}>{pName}</td>
-                      <td style={{padding:"12px",textAlign:"center"}}>
+
+                      {/* Participant & ID */}
+                      <td style={{padding:"12px 10px"}}>
+                        <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                          <span style={{fontSize:".88rem",fontWeight:800,color:"#0F172A",letterSpacing:"-0.01em"}}>
+                            {cleanPName}
+                          </span>
+                          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                            {txnId && (
+                              <span style={{fontSize:".7rem",fontFamily:"monospace",fontWeight:800,background:"#1E293B",color:"white",padding:"1px 6px",borderRadius:4}}>
+                                {txnId}
+                              </span>
+                            )}
+                            {vibhag && (
+                              <span style={{fontSize:".7rem",fontWeight:700,background:"#F1F5F9",color:"#475569",padding:"1px 6px",borderRadius:4,border:"1px solid #E2E8F0"}}>
+                                {vibhag}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Mobile Number */}
+                      <td style={{padding:"12px 10px"}}>
+                        {cleanMobile ? (
+                          <a
+                            href={`tel:+91${cleanMobile}`}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              fontSize: ".82rem",
+                              fontWeight: 700,
+                              color: "#0284C7",
+                              textDecoration: "none",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              background: "#F0F9FF",
+                              padding: "4px 8px",
+                              borderRadius: 6,
+                              border: "1px solid #BAE6FD"
+                            }}
+                            title="Click to call"
+                          >
+                            <span>📱</span> {formattedMobile}
+                          </a>
+                        ) : (
+                          <span style={{color:"#94A3B8",fontSize:".78rem"}}>-</span>
+                        )}
+                      </td>
+
+                      {/* Event */}
+                      <td style={{padding:"12px 10px",fontSize:".82rem",color:"#334155",fontWeight:600}}>
+                        {evName}
+                      </td>
+
+                      {/* Date Approved */}
+                      <td style={{padding:"12px 10px",fontSize:".8rem",color:"#475569",textAlign:"center"}}>
+                        {date}
+                      </td>
+
+                      {/* Status */}
+                      <td style={{padding:"12px 10px",textAlign:"center"}}>
                         {(() => {
                           const activeDocId = currentDocTpl?.id || 'invite';
                           const { isReleased: docIsReleased, isHeld: docIsHeld } = getDocReleaseStatus(r, activeDocId);
                           return docIsHeld ? (
-                            <span style={{padding:"4px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700,background:"#FEE2E2",color:"#991B1B",display:"inline-block"}}>
-                              Hold
+                            <span style={{padding:"4px 10px",borderRadius:12,fontSize:".75rem",fontWeight:800,background:"#FEE2E2",color:"#DC2626",border:"1px solid #FCA5A5",display:"inline-flex",alignItems:"center",gap:4}}>
+                              <span>🔴</span> Hold
+                            </span>
+                          ) : docIsReleased ? (
+                            <span style={{padding:"4px 10px",borderRadius:12,fontSize:".75rem",fontWeight:800,background:"#DCFCE7",color:"#15803D",border:"1px solid #86EFAC",display:"inline-flex",alignItems:"center",gap:4}}>
+                              <span>🟢</span> Released
                             </span>
                           ) : (
-                            <span style={{padding:"4px 8px",borderRadius:6,fontSize:".75rem",fontWeight:700,background:docIsReleased?"#EDFAF1":"#FEF9EC",color:docIsReleased?"#1A7A3E":"#C8860A"}}>
-                              {docIsReleased ? "Released" : "Pending"}
+                            <span style={{padding:"4px 10px",borderRadius:12,fontSize:".75rem",fontWeight:800,background:"#FEF3C7",color:"#B45309",border:"1px solid #FDE68A",display:"inline-flex",alignItems:"center",gap:4}}>
+                              <span>⏳</span> Pending
                             </span>
                           );
                         })()}
                       </td>
-                      <td style={{padding:"12px",textAlign:"center",color:"var(--mu)",fontSize:".75rem"}}>{vDate}</td>
-                      <td style={{padding:"12px",textAlign:"center",color:"var(--mu)",fontSize:".75rem"}}>{dDate}</td>
+
+                      {/* Viewed On */}
+                      <td style={{padding:"12px 10px",textAlign:"center",color:"#64748B",fontSize:".75rem",fontWeight:600}}>
+                        {vDate !== "-" ? (
+                          <span style={{background:"#EFF6FF",color:"#1D4ED8",padding:"3px 7px",borderRadius:6,border:"1px solid #DBEAFE"}}>
+                            👁️ {vDate}
+                          </span>
+                        ) : (
+                          <span style={{color:"#94A3B8"}}>-</span>
+                        )}
+                      </td>
+
+                      {/* Downloaded On */}
+                      <td style={{padding:"12px 10px",textAlign:"center",color:"#64748B",fontSize:".75rem",fontWeight:600}}>
+                        {dDate !== "-" ? (
+                          <span style={{background:"#F0FDF4",color:"#15803D",padding:"3px 7px",borderRadius:6,border:"1px solid #BBF7D0"}}>
+                            📥 {dDate}
+                          </span>
+                        ) : (
+                          <span style={{color:"#94A3B8"}}>-</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
