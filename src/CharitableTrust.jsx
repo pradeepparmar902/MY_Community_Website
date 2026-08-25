@@ -20942,7 +20942,7 @@ function BulkSelectionModal({ isOpen, onClose, title, items = [], actionLabel = 
   );
 }
 
-function AdminCertificates({ mob, C, auth }) {
+function AdminCertificates({ mob, C, setC, auth }) {
   const [regs, setRegs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -20953,6 +20953,13 @@ function AdminCertificates({ mob, C, auth }) {
   const [downloadingBulk, setDownloadingBulk] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [showSelectModal, setShowSelectModal] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [certOpenPillFilter, setCertOpenPillFilter] = useState(null);
+  const [certReleasePillFilter, setCertReleasePillFilter] = useState(null);
+  const [selectedWhatsAppReg, setSelectedWhatsAppReg] = useState(null);
+  const [showBulkWhatsAppModal, setShowBulkWhatsAppModal] = useState(false);
+  const [showWorkspaceTplModal, setShowWorkspaceTplModal] = useState(false);
+  const [historyModalReg, setHistoryModalReg] = useState(null);
 
   const handleBulkDownload = () => {
     if (filteredRegs.length === 0) return alert("No certificates available to download.");
@@ -21097,9 +21104,20 @@ function AdminCertificates({ mob, C, auth }) {
   });
 
   const filteredRegs = certRegs.filter(r => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return Object.values(r).some(v => String(v).toLowerCase().includes(q));
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!Object.values(r).some(v => String(v).toLowerCase().includes(q))) return false;
+    }
+    if (certOpenPillFilter) {
+      const hasOpened = r.passOpenCount && r.passOpenCount > 0;
+      if (certOpenPillFilter === "opened" && !hasOpened) return false;
+      if (certOpenPillFilter === "unopened" && hasOpened) return false;
+    }
+    if (certReleasePillFilter) {
+      if (certReleasePillFilter === "released" && (!r.certificateReleased || r.certificateHold)) return false;
+      if (certReleasePillFilter === "pending" && (r.certificateReleased || r.certificateHold)) return false;
+    }
+    return true;
   });
 
   if (!selectedEventId) {
@@ -21149,18 +21167,190 @@ function AdminCertificates({ mob, C, auth }) {
             <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",margin:0}}>Certificate Console</h2>
             <p style={{fontSize:".85rem",color:"var(--mu)",marginTop:4}}>Manage and release certificates for: <strong>{activeEvent.title}</strong></p>
           </div>
-          <div style={{display:"flex",gap:12,width:mob?"100%":"auto",flexWrap:"wrap"}}>
-            <input type="text" placeholder="Search students..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} style={{padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",fontSize:".85rem",flex:1,minWidth:200,outline:"none",fontFamily:"inherit"}} />
+          <div style={{display:"flex",gap:10,width:mob?"100%":"auto",flexWrap:"wrap"}}>
+            <button onClick={() => setShowWorkspaceTplModal(true)} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:700,display:"flex",alignItems:"center",gap:6,background:"#F0FDF4",border:"1px solid #86EFAC",color:"#15803D",cursor:"pointer",boxShadow:"0 2px 8px rgba(21,128,61,0.15)",whiteSpace:"nowrap"}}>
+              📝 Workspace WhatsApp Templates ({((activeEvent?.whatsAppTemplates && activeEvent.whatsAppTemplates.length > 0) ? activeEvent.whatsAppTemplates.length : 3)})
+            </button>
             <button onClick={handleRefresh} disabled={refreshing || releasingAll || downloadingBulk} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:600,display:"flex",alignItems:"center",gap:6,background:"white",border:"1px solid var(--bd)",color:"var(--dt)",cursor:(refreshing || releasingAll || downloadingBulk)?"wait":"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",whiteSpace:"nowrap"}}>
               {refreshing ? "..." : "↻"} Refresh
             </button>
             <button onClick={handleReleaseAll} disabled={releasingAll || refreshing || downloadingBulk} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:600,display:"flex",alignItems:"center",gap:6,background:"var(--dt)",color:"white",border:"none",cursor:(releasingAll || refreshing || downloadingBulk)?"wait":"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.1)",whiteSpace:"nowrap"}}>
               {releasingAll ? "Releasing..." : "📢 Release All"}
             </button>
+            <button onClick={() => {
+              const targetList = selectedIds.length > 0
+                ? filteredRegs.filter(r => selectedIds.includes(r.id || r['Transaction ID']))
+                : filteredRegs;
+              if (targetList.length === 0) return alert("No approved students selected or available to send.");
+              setShowBulkWhatsAppModal(true);
+            }} style={{
+              padding:"8px 18px",
+              borderRadius:8,
+              fontSize:".85rem",
+              fontWeight:800,
+              display:"flex",
+              alignItems:"center",
+              gap:6,
+              background: selectedIds.length > 0 ? "linear-gradient(135deg, #15803D, #166534)" : "#25D366",
+              color:"white",
+              border:"none",
+              cursor:"pointer",
+              boxShadow:"0 2px 8px rgba(37,211,102,0.35)",
+              whiteSpace:"nowrap"
+            }}>
+              <span>🚀</span> Send All WhatsApp {selectedIds.length > 0 ? `(${selectedIds.length} Selected)` : `(${filteredRegs.length})`}
+            </button>
             <button onClick={handleBulkDownload} disabled={downloadingBulk || releasingAll || refreshing} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:600,display:"flex",alignItems:"center",gap:6,background:"var(--sf)",color:"white",border:"none",cursor:(downloadingBulk || releasingAll || refreshing)?"wait":"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.1)",whiteSpace:"nowrap"}}>
               {downloadingBulk ? `Generating ZIP (${downloadProgress}/${filteredRegs.length})...` : "📦 Bulk Download ZIP"}
             </button>
           </div>
+        </div>
+
+        {/* Search + Interactive Multi-Filter Toggles */}
+        <div style={{marginBottom: 16, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap"}}>
+          <input type="text" placeholder="Search students..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} style={{padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",fontSize:".85rem",width:220,outline:"none",fontFamily:"inherit"}} />
+          
+          {(() => {
+            const basePool = certRegs.filter(r => {
+              if (!searchQuery) return true;
+              const q = searchQuery.toLowerCase();
+              return Object.values(r).some(v => String(v).toLowerCase().includes(q));
+            });
+
+            const cOpened = basePool.filter(r => r.passOpenCount && r.passOpenCount > 0).length;
+            const cUnopened = basePool.filter(r => !r.passOpenCount || r.passOpenCount === 0).length;
+            const cReleased = basePool.filter(r => r.certificateReleased && !r.certificateHold).length;
+            const cPendingRel = basePool.filter(r => !r.certificateReleased && !r.certificateHold).length;
+
+            const isAnyFilterActive = certOpenPillFilter !== null || certReleasePillFilter !== null;
+
+            return (
+              <div style={{display:"flex",alignItems:"center",gap:6,background:"#F8FAFC",padding:"4px 8px",borderRadius:10,border:"1.5px solid #CBD5E1",flexWrap:"wrap"}}>
+                <span style={{fontSize:".75rem",fontWeight:800,color:"#334155",display:"flex",alignItems:"center",gap:3}}>
+                  <span>🎯</span> Filter Rows:
+                </span>
+                
+                {/* Opened Pill */}
+                <button
+                  type="button"
+                  onClick={() => setCertOpenPillFilter(prev => prev === "opened" ? null : "opened")}
+                  style={{
+                    padding: "4px 9px",
+                    borderRadius: 6,
+                    border: certOpenPillFilter === "opened" ? "2px solid #1E40AF" : "1px solid #BFDBFE",
+                    background: certOpenPillFilter === "opened" ? "#1D4ED8" : "#EFF6FF",
+                    color: certOpenPillFilter === "opened" ? "white" : "#1D4ED8",
+                    fontSize: ".74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    boxShadow: certOpenPillFilter === "opened" ? "0 2px 6px rgba(29,78,216,0.35)" : "none"
+                  }}
+                  title={certOpenPillFilter === "opened" ? "Click to remove filter" : "Filter ONLY students who have opened their certificate pass"}
+                >
+                  <span>👁️</span> Opened ({cOpened}) {certOpenPillFilter === "opened" && "✓"}
+                </button>
+
+                {/* Unopened Pill */}
+                <button
+                  type="button"
+                  onClick={() => setCertOpenPillFilter(prev => prev === "unopened" ? null : "unopened")}
+                  style={{
+                    padding: "4px 9px",
+                    borderRadius: 6,
+                    border: certOpenPillFilter === "unopened" ? "2px solid #475569" : "1px solid #CBD5E1",
+                    background: certOpenPillFilter === "unopened" ? "#475569" : "white",
+                    color: certOpenPillFilter === "unopened" ? "white" : "#64748B",
+                    fontSize: ".74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    boxShadow: certOpenPillFilter === "unopened" ? "0 2px 6px rgba(71,85,105,0.35)" : "none"
+                  }}
+                  title={certOpenPillFilter === "unopened" ? "Click to remove filter" : "Filter ONLY students who have NOT opened their pass"}
+                >
+                  <span>⚪</span> Unopened ({cUnopened}) {certOpenPillFilter === "unopened" && "✓"}
+                </button>
+
+                <span style={{color:"#CBD5E1",fontSize:".8rem",margin:"0 2px"}}>|</span>
+
+                {/* Released Pill */}
+                <button
+                  type="button"
+                  onClick={() => setCertReleasePillFilter(prev => prev === "released" ? null : "released")}
+                  style={{
+                    padding: "4px 9px",
+                    borderRadius: 6,
+                    border: certReleasePillFilter === "released" ? "2px solid #15803D" : "1px solid #BBF7D0",
+                    background: certReleasePillFilter === "released" ? "#15803D" : "#F0FDF4",
+                    color: certReleasePillFilter === "released" ? "white" : "#166534",
+                    fontSize: ".74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    boxShadow: certReleasePillFilter === "released" ? "0 2px 6px rgba(21,128,61,0.35)" : "none"
+                  }}
+                  title={certReleasePillFilter === "released" ? "Click to remove filter" : "Filter ONLY released certificates"}
+                >
+                  <span>📢</span> Released ({cReleased}) {certReleasePillFilter === "released" && "✓"}
+                </button>
+
+                {/* Pending Release Pill */}
+                <button
+                  type="button"
+                  onClick={() => setCertReleasePillFilter(prev => prev === "pending" ? null : "pending")}
+                  style={{
+                    padding: "4px 9px",
+                    borderRadius: 6,
+                    border: certReleasePillFilter === "pending" ? "2px solid #D97706" : "1px solid #FDE68A",
+                    background: certReleasePillFilter === "pending" ? "#D97706" : "#FFFBEB",
+                    color: certReleasePillFilter === "pending" ? "white" : "#92400E",
+                    fontSize: ".74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    boxShadow: certReleasePillFilter === "pending" ? "0 2px 6px rgba(217,119,6,0.35)" : "none"
+                  }}
+                  title={certReleasePillFilter === "pending" ? "Click to remove filter" : "Filter ONLY pending release certificates"}
+                >
+                  <span>⏳</span> Pending ({cPendingRel}) {certReleasePillFilter === "pending" && "✓"}
+                </button>
+
+                {/* Reset Filters */}
+                {isAnyFilterActive && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCertOpenPillFilter(null);
+                      setCertReleasePillFilter(null);
+                    }}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #FECACA",
+                      background: "#FEF2F2",
+                      color: "#DC2626",
+                      fontSize: ".72rem",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      marginLeft: 4
+                    }}
+                    title="Clear all active filters"
+                  >
+                    ✕ Reset ({filteredRegs.length} shown)
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {loading ? <p>Loading certificates...</p> : (
@@ -21204,6 +21394,17 @@ function AdminCertificates({ mob, C, auth }) {
                   let vDate = r.certViewDate ? new Date(r.certViewDate).toLocaleString() : "-";
                   let dDate = r.certDownloadDate ? new Date(r.certDownloadDate).toLocaleString() : "-";
 
+                  const rowId = r.id || r['Transaction ID'];
+                  const isSelected = selectedIds.includes(rowId);
+                  const waLogs = (r.logHistory || []).filter(lg => lg.type === "whatsapp" || (lg.action && String(lg.action).toLowerCase().includes("whatsapp")));
+                  const waCount = Math.max(r.whatsAppCount || 0, waLogs.length);
+                  const lastWaLog = waLogs[waLogs.length - 1];
+                  const lastWaType = r.lastWhatsAppType || lastWaLog?.messageType || lastWaLog?.action || "Certificate Notice";
+                  const lastWaDate = r.lastWhatsAppAt || lastWaLog?.timestamp;
+                  const waTooltip = waCount > 0 
+                    ? `WhatsApp sent ${waCount} time${waCount > 1 ? 's' : ''}. Last: ${lastWaType} on ${lastWaDate ? new Date(lastWaDate).toLocaleDateString() : 'recent'}`
+                    : "Send WhatsApp Certificate Link";
+
                   return (
                     <tr 
                       key={i} 
@@ -21211,17 +21412,50 @@ function AdminCertificates({ mob, C, auth }) {
                       style={{
                         borderBottom:"1px solid #eee",
                         cursor: "pointer",
-                        background: previewCertRegId === r.id ? "#E8F4F8" : "transparent",
+                        background: isSelected ? "#F0FDF4" : previewCertRegId === r.id ? "#E8F4F8" : "transparent",
                         transition: "background-color 0.2s"
                       }}
                     >
+                      <td style={{padding:"12px 8px",textAlign:"center"}} onClick={(e)=>e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            setSelectedIds(prev => prev.includes(rowId) ? prev.filter(x => x !== rowId) : [...prev, rowId]);
+                          }}
+                          style={{cursor:"pointer",width:16,height:16,accentColor:"#15803D"}}
+                          title="Select this student"
+                        />
+                      </td>
                       <td style={{padding:"12px",textAlign:"center"}} onClick={(e)=>e.stopPropagation()}>
-                        <div style={{display:"flex",justifyContent:"center",gap:8}}>
-                          <button onClick={(e)=>{e.stopPropagation(); handlePreview(r, ev);}} style={{padding:"6px 12px",borderRadius:6,fontSize:".75rem",background:"white",border:"1px solid var(--bd)",cursor:"pointer",fontWeight:600}}>Preview</button>
-                          <button onClick={(e)=>{e.stopPropagation(); toggleRelease(r);}} disabled={r.certificateHold} style={{padding:"6px 12px",borderRadius:6,fontSize:".75rem",background:r.certificateHold?"#eaeaea":r.certificateReleased?"#f5f5f5":"var(--dt)",color:r.certificateHold?"#aaa":r.certificateReleased?"#333":"white",border:r.certificateReleased?"1px solid #ccc":"none",cursor:r.certificateHold?"not-allowed":"pointer",fontWeight:600}}>
+                        <div style={{display:"flex",justifyContent:"center",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                          <button onClick={(e)=>{e.stopPropagation(); handlePreview(r, ev);}} style={{padding:"5px 8px",borderRadius:6,fontSize:".74rem",background:"white",border:"1px solid var(--bd)",cursor:"pointer",fontWeight:600}}>Preview</button>
+                          <button 
+                            onClick={(e)=>{e.stopPropagation(); setSelectedWhatsAppReg(r);}} 
+                            style={{
+                              padding:"5px 9px",
+                              borderRadius:6,
+                              fontSize:".74rem",
+                              background: waCount > 0 ? "#DCFCE7" : "#F8FAFC",
+                              border: waCount > 0 ? "1.5px solid #22C55E" : "1px solid #86EFAC",
+                              color: waCount > 0 ? "#15803D" : "#475569",
+                              cursor:"pointer",
+                              fontWeight: waCount > 0 ? 800 : 700,
+                              display:"flex",
+                              alignItems:"center",
+                              gap:4
+                            }}
+                            title={waTooltip}
+                          >
+                            <span>💬</span> WhatsApp {waCount > 0 ? `(${waCount})` : ""}
+                          </button>
+                          <button onClick={(e)=>{e.stopPropagation(); setHistoryModalReg(r);}} style={{padding:"5px 7px",borderRadius:6,fontSize:".74rem",background:"#FFF4EC",color:"var(--sf)",border:"1px solid #FDDBB8",cursor:"pointer",fontWeight:700}} title="View Audit Logs & Pass Open History">
+                            📜 Logs {r.logHistory && r.logHistory.length > 0 ? `(${r.logHistory.length})` : ""}
+                          </button>
+                          <button onClick={(e)=>{e.stopPropagation(); toggleRelease(r);}} disabled={r.certificateHold} style={{padding:"5px 8px",borderRadius:6,fontSize:".74rem",background:r.certificateHold?"#eaeaea":r.certificateReleased?"#f5f5f5":"var(--dt)",color:r.certificateHold?"#aaa":r.certificateReleased?"#333":"white",border:r.certificateReleased?"1px solid #ccc":"none",cursor:r.certificateHold?"not-allowed":"pointer",fontWeight:600}}>
                             {r.certificateReleased ? "Revoke" : "Release"}
                           </button>
-                          <button onClick={(e)=>{e.stopPropagation(); toggleHold(r);}} style={{padding:"6px 12px",borderRadius:6,fontSize:".75rem",background:r.certificateHold?"#FEE2E2":"#f5f5f5",color:r.certificateHold?"#991B1B":"#666",border:r.certificateHold?"1px solid #FCA5A5":"1px solid #ccc",cursor:"pointer",fontWeight:600}}>
+                          <button onClick={(e)=>{e.stopPropagation(); toggleHold(r);}} style={{padding:"5px 8px",borderRadius:6,fontSize:".74rem",background:r.certificateHold?"#FEE2E2":"#f5f5f5",color:r.certificateHold?"#991B1B":"#666",border:r.certificateHold?"1px solid #FCA5A5":"1px solid #ccc",cursor:"pointer",fontWeight:600}}>
                             {r.certificateHold ? "Unhold" : "Hold"}
                           </button>
                         </div>
