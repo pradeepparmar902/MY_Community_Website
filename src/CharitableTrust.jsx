@@ -18843,7 +18843,8 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
     const baseUrl = `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}`.replace(/\/?$/, '');
     const certUrl = `${baseUrl}/?cert=${encodeURIComponent(rTxn || "")}`;
     const inviteUrl = `${baseUrl}/?invite=${encodeURIComponent(rTxn || "")}`;
-    const defaultUrl = reg.isCertMode ? certUrl : inviteUrl;
+    const docUrl = reg.customDocId ? `${baseUrl}/?doc=${encodeURIComponent(reg.customDocId)}&pass=${encodeURIComponent(rTxn || "")}` : null;
+    const defaultUrl = docUrl || (reg.isCertMode ? certUrl : inviteUrl);
 
     let processed = (tplString || "")
       .replace(/\{STUDENT_NAME\}/g, rName || "Student")
@@ -21587,7 +21588,7 @@ function AdminCertificates({ mob, C, setC, auth }) {
               <span>🚀</span> Send All WhatsApp {selectedIds.length > 0 ? `(${selectedIds.length} Selected)` : `(${filteredRegs.length})`}
             </button>
             <button onClick={handleBulkDownload} disabled={downloadingBulk || releasingAll || refreshing} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:600,display:"flex",alignItems:"center",gap:6,background:"var(--sf)",color:"white",border:"none",cursor:(downloadingBulk || releasingAll || refreshing)?"wait":"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.1)",whiteSpace:"nowrap"}}>
-              {downloadingBulk ? `Generating ZIP (${downloadProgress}/${filteredRegs.length})...` : "📦 Bulk Download ZIP"}
+              {downloadingBulk ? `Generating ZIP (${downloadProgress}/${filteredRegs.length})...` : `📦 Bulk Download (${currentDocTpl?.name || 'ZIP'})`}
             </button>
           </div>
         </div>
@@ -22069,6 +22070,7 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEventId, setSelectedEventId] = useState(null);
+  const [activeDocType, setActiveDocType] = useState("invite");
 
   // Global guest modals
   const [showGlobalGuestsModal, setShowGlobalGuestsModal] = useState(false);
@@ -22363,15 +22365,23 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
     setReleasingAll(false);
   };
 
+  const availableDocTemplates = [
+    { id: 'invite', name: 'Official Invite Letter', icon: '💌', bgUrl: activeEvent?.inviteBgUrl, isDefault: true },
+    ...(activeEvent?.issueCertificates ? [{ id: 'cert', name: 'Certificate Pass', icon: '🎓', bgUrl: activeEvent?.certBgUrl }] : []),
+    ...(activeEvent?.pdfTemplates || []).map(t => ({ id: t.id, name: t.name, icon: '🎟️', bgUrl: t.bgUrl, customTpl: t }))
+  ];
+  const currentDocTpl = availableDocTemplates.find(d => d.id === activeDocType) || availableDocTemplates[0];
+
   const handlePreview = async (r, ev) => {
     const fieldsData = {...r};
     const sName = fieldsData["Full Name"] || fieldsData["Name"] || fieldsData["Participant Name"] || "Student";
     try {
-      const url = await generateCertificatePDF(ev, fieldsData, sName, 'invite', 'url');
+      const targetDoc = currentDocTpl?.customTpl || currentDocTpl?.id || 'invite';
+      const url = await generateCertificatePDF(ev, fieldsData, sName, targetDoc, 'url');
       setPreviewCertUrl(url);
       setPreviewCertRegId(r.id);
     } catch (e) {
-      alert("Error generating invite letter: " + e.message);
+      alert(`Error generating ${currentDocTpl?.name || 'document'}: ` + e.message);
     }
   };
 
@@ -22437,14 +22447,17 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       const ev = inviteEvents.find(e => e.id === selectedEventId);
       if (!ev) throw new Error("Active event not found.");
       
+      const targetDoc = currentDocTpl?.customTpl || currentDocTpl?.id || 'invite';
+      const docPrefix = (currentDocTpl?.name || "Document").replace(/[^a-zA-Z0-9]/g, '_');
+
       for (const r of targetList) {
         const fieldsData = {...r};
         const sName = fieldsData["Full Name"] || fieldsData["Name"] || fieldsData["Participant Name"] || "Student";
         
-        const pdfBlob = await generateCertificatePDF(ev, fieldsData, sName, "invite", "blob");
+        const pdfBlob = await generateCertificatePDF(ev, fieldsData, sName, targetDoc, "blob");
         if (pdfBlob) {
           const safeName = sName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-          zip.file(`Invite_${safeName}_${r.id.substring(0,5)}.pdf`, pdfBlob);
+          zip.file(`${docPrefix}_${safeName}_${r.id.substring(0,5)}.pdf`, pdfBlob);
         }
         count++;
         setDownloadProgress(count);
@@ -22453,7 +22466,7 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       const zipBlob = await zip.generateAsync({ type: "blob" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(zipBlob);
-      link.download = `Invite_Letters_${new Date().getTime()}.zip`;
+      link.download = `${docPrefix}_${new Date().getTime()}.zip`;
       link.click();
       setBulkSelectMode(null);
     } catch (e) {
@@ -22887,6 +22900,88 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
           })()}
         </div>
 
+        {/* Document Template Tabs Bar (Multi-Template Workspace) */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14,borderBottom:"2px solid #CBD5E1",paddingBottom:4,overflowX:"auto",flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <span style={{fontSize:".78rem",fontWeight:800,color:"#334155",textTransform:"uppercase",display:"flex",alignItems:"center",gap:4,marginRight:4}}>
+              <span>📑</span> ACTIVE DOCUMENT TEMPLATE:
+            </span>
+            {availableDocTemplates.map(tab => {
+              const isActive = tab.id === (currentDocTpl?.id || 'invite');
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveDocType(tab.id);
+                    setPreviewCertUrl(null);
+                    setPreviewCertRegId(null);
+                  }}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px 8px 0 0",
+                    border: isActive ? "2px solid #15803D" : "1px solid #CBD5E1",
+                    borderBottom: isActive ? "3px solid #15803D" : "1px solid #CBD5E1",
+                    background: isActive ? "#F0FDF4" : "white",
+                    color: isActive ? "#15803D" : "#334155",
+                    fontSize: ".84rem",
+                    fontWeight: isActive ? 800 : 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    boxShadow: isActive ? "0 2px 8px rgba(21,128,61,0.15)" : "none",
+                    whiteSpace: "nowrap",
+                    transform: isActive ? "translateY(-1px)" : "none",
+                    transition: "all 0.15s"
+                  }}
+                >
+                  <span style={{fontSize:"1rem"}}>{tab.icon || '📄'}</span>
+                  <span>{tab.name}</span>
+                  {tab.bgUrl ? (
+                    <span style={{fontSize:".68rem",background:"#DCFCE7",color:"#15803D",padding:"1px 6px",borderRadius:4,fontWeight:800}}>
+                      ✓ Configured
+                    </span>
+                  ) : (
+                    <span style={{fontSize:".68rem",background:"#FEF3C7",color:"#B45309",padding:"1px 6px",borderRadius:4,fontWeight:800}}>
+                      ⚠️ Needs Image
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              const name = prompt("Enter Name for new PDF Template (e.g. Food Coupon & Dinner Pass, Token Number, Gate Pass):");
+              if (name && name.trim()) {
+                const cleanName = name.trim();
+                const tplId = "doc_" + Date.now();
+                const newTpl = {
+                  id: tplId,
+                  name: cleanName,
+                  bgUrl: "",
+                  map: {},
+                  fontSize: 30,
+                  fontColor: "#000000"
+                };
+                const updatedTpls = [...(activeEvent.pdfTemplates || []), newTpl];
+                const updatedEvents = (C.events || []).map(e => (e.id === activeEvent.id || e.title === activeEvent.title) ? { ...e, pdfTemplates: updatedTpls } : e);
+                const updatedC = { ...C, events: updatedEvents };
+                if (setC) setC(updatedC);
+                fbSave(updatedC, auth?.idToken);
+                setActiveDocType(tplId);
+                alert(`Created "${cleanName}"! You can configure its background image in Content Editor -> Events.`);
+              }
+            }}
+            style={{padding:"6px 12px",borderRadius:6,fontSize:".75rem",fontWeight:800,background:"#F1F5F9",border:"1px solid #CBD5E1",color:"#334155",cursor:"pointer",display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}
+          >
+            <span>➕</span> + Add New Template
+          </button>
+        </div>
+
         {loading ? <p>Loading inviteLetters...</p> : (
           <div style={{borderRadius:12,boxShadow:"0 10px 30px rgba(0,0,0,0.06)",overflow:"hidden",border:"1px solid #E0E0E0",background:"white",overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:".85rem",minWidth:900}}>
@@ -23069,7 +23164,12 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       {/* WhatsApp Applicant Messenger Modal */}
       {selectedWhatsAppReg && (
         <WhatsAppApplicantMessengerModal
-          reg={{ ...selectedWhatsAppReg, isInviteMode: true }}
+          reg={{ 
+            ...selectedWhatsAppReg, 
+            isInviteMode: true, 
+            activeDocTpl: currentDocTpl,
+            customDocId: currentDocTpl?.customTpl ? currentDocTpl.id : null 
+          }}
           onClose={() => setSelectedWhatsAppReg(null)}
           C={C}
           auth={auth}
