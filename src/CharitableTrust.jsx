@@ -14214,7 +14214,13 @@ function UserDashboard({ C, globalProfile, globalAuthToken, onClose }) {
                         {lg.timestamp ? new Date(lg.timestamp).toLocaleString() : ""}
                       </span>
                     </div>
-                    {lg.type === 'whatsapp' || (lg.action && String(lg.action).toLowerCase().includes('whatsapp')) ? (
+                    {lg.type === 'pass_open' || (lg.action && String(lg.action).toLowerCase().includes('pass / invite opened')) ? (
+                      <div style={{marginBottom:6}}>
+                        <span style={{background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #93C5FD",padding:"3px 8px",borderRadius:6,fontSize:".76rem",fontWeight:800,display:"inline-flex",alignItems:"center",gap:4}}>
+                          <span>👁️</span> {lg.action} • {lg.device || 'Mobile'}
+                        </span>
+                      </div>
+                    ) : lg.type === 'whatsapp' || (lg.action && String(lg.action).toLowerCase().includes('whatsapp')) ? (
                       <div style={{marginBottom:6}}>
                         <span style={{background:"#DCFCE7",color:"#15803D",border:"1px solid #86EFAC",padding:"3px 8px",borderRadius:6,fontSize:".76rem",fontWeight:800,display:"inline-flex",alignItems:"center",gap:4}}>
                           <span>💬</span> {lg.action || `WhatsApp Sent (${lg.messageType || 'Update'})`}
@@ -19933,7 +19939,26 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                         </span>
                       )}
                     </td>
-                    <td style={{padding:"12px",whiteSpace:"nowrap",fontWeight:600,color:"#111827"}}>{r['Transaction ID'] || "-"}</td>
+                    <td style={{padding:"12px",whiteSpace:"nowrap",color:"#111827"}}>
+                      <div style={{fontWeight:700,fontFamily:"monospace",color:"#0F172A"}}>{r['Transaction ID'] || "-"}</div>
+                      <div style={{marginTop:3}}>
+                        {(r.passOpenCount && r.passOpenCount > 0) ? (
+                          <span 
+                            style={{background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #BFDBFE",padding:"1px 6px",borderRadius:10,fontSize:".68rem",fontWeight:800,display:"inline-flex",alignItems:"center",gap:3}} 
+                            title={`Pass opened ${r.passOpenCount} time${r.passOpenCount > 1 ? 's' : ''}. Last: ${new Date(r.lastPassOpenedAt || r._submittedAt).toLocaleString()}`}
+                          >
+                            <span>👁️</span> {r.passOpenCount} {r.passOpenCount === 1 ? 'Open' : 'Opens'}
+                          </span>
+                        ) : (
+                          <span 
+                            style={{background:"#F8FAFC",color:"#94A3B8",border:"1px solid #E2E8F0",padding:"1px 6px",borderRadius:10,fontSize:".68rem",fontWeight:600}} 
+                            title="Recipient has not clicked/opened their invitation pass link yet"
+                          >
+                            ⚪ Unopened
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td style={{padding:"12px",whiteSpace:"nowrap"}}>
                       <select 
                         value={r['Status'] || "Pending"} 
@@ -24197,6 +24222,54 @@ function DirectInvitePassView({ C, auth }) {
 
         if (matched) {
           setRegData(matched);
+
+          // ── Pass / Link Open Tracker: Automatically log when recipient opens their WhatsApp link
+          try {
+            const now = new Date().toISOString();
+            const currentCount = parseInt(matched.passOpenCount || 0, 10);
+            const newCount = currentCount + 1;
+            const deviceType = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? "Mobile" : "Desktop";
+            
+            const existingLogs = Array.isArray(matched.logHistory) ? matched.logHistory : [];
+            const openLog = {
+              timestamp: now,
+              actor: "Student (Recipient)",
+              action: `Pass / Invite Opened (${newCount}${newCount === 1 ? 'st' : newCount === 2 ? 'nd' : newCount === 3 ? 'rd' : 'th'} time)`,
+              type: "pass_open",
+              openCount: newCount,
+              device: deviceType,
+              remarks: `Student opened digital invitation pass link via WhatsApp on ${deviceType}.`
+            };
+            const newLogs = [...existingLogs, openLog];
+            
+            const updatePayload = {
+              ...matched,
+              passOpenCount: newCount,
+              lastPassOpenedAt: now,
+              firstPassOpenedAt: matched.firstPassOpenedAt || now,
+              logHistory: newLogs
+            };
+            delete updatePayload.id;
+            delete updatePayload._submittedAt;
+
+            fbUpdateRegistration(matched.id, updatePayload, auth?.idToken).catch(async () => {
+              // Fallback anonymous Firestore REST update
+              const projectId = getFB().projectId;
+              const fields = {
+                passOpenCount: { integerValue: String(newCount) },
+                lastPassOpenedAt: { stringValue: now },
+                firstPassOpenedAt: { stringValue: matched.firstPassOpenedAt || now }
+              };
+              await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/registrations/${matched.id}?updateMask.fieldPaths=passOpenCount&updateMask.fieldPaths=lastPassOpenedAt&updateMask.fieldPaths=firstPassOpenedAt`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ fields })
+              });
+            });
+          } catch(trackErr) {
+            console.warn("Pass open tracking error:", trackErr);
+          }
+
           const evName = matched.eventName || matched.eventTitle || matched.eventId || "Education felicitation 2026";
           const ev = (C.events || []).find(e => e.id === matched.eventId || e.title === evName || e.titleGu === evName) || {
             title: "Education Felicitation 2026",
