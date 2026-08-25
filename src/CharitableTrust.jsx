@@ -6610,9 +6610,8 @@ const ANAV = [
   {id:"access",icon:"🔐",label:"Access Control"},
   {id:"backup",icon:"💾",label:"Backup & Restore"},
   {id:"profile",icon:"👤",label:"My Profile"},
-  {id:"meritlist",label:"Reports & Lists",icon:"📑"},
-  {id:"inviteletters",label:"Invite Letters",icon:"📩"},
-  {id:"certificates",label:"Certificates",icon:"🎓"}
+  {id:"meritlist",label:"Reports & Lists",icon:"📊"},
+  {id:"inviteletters",label:"Letters & Certificates",icon:"📑"}
 ];
 
 const ADMIN_MANUAL_DATA = {
@@ -7411,8 +7410,7 @@ function Admin({ C, setC, setPage, auth, onLogout, onShowLogin }) {
           {tab==="registrations" && hasAccess.includes("registrations") && <AdminRegistrations mob={mob} C={C} setC={setC} auth={auth}/>}
           {tab==="volunteers"&& hasAccess.includes("volunteers") && <Volunteers mob={mob} auth={auth} C={C}/>}
           {tab==="meritlist" && hasAccess.includes("meritlist") && <AdminMeritList mob={mob} C={C} auth={auth}/>}
-          {tab==="inviteletters" && hasAccess.includes("inviteletters") && <AdminInviteLetters mob={mob} C={C} setC={setC} auth={auth}/>}
-          {tab==="certificates" && hasAccess.includes("certificates") && <AdminCertificates mob={mob} C={C} auth={auth}/>}
+          {(tab==="inviteletters" || tab==="certificates") && (hasAccess.includes("inviteletters") || hasAccess.includes("certificates")) && <AdminInviteLetters mob={mob} C={C} setC={setC} auth={auth}/>}
           {tab==="team"      && hasAccess.includes("team") && <AdminTeam mob={mob} C={C} setC={setC} auth={auth}/>}
           {tab==="gallery"   && hasAccess.includes("gallery") && <AdminGallery mob={mob} C={C} setC={setC} auth={auth}/>}
           {tab==="achievements" && hasAccess.includes("achievements") && <AdminAchievements mob={mob} C={C} setC={setC} auth={auth}/>}
@@ -14168,8 +14166,16 @@ function UserDashboard({ C, globalProfile, globalAuthToken, onClose }) {
                 </div>
                 {(() => {
                   const awds = regs.filter(r => {
-                    const isReleased = r.certificateReleased === true || r.certificateReleased === "true";
-                    if (!isReleased || r.certificateHold) return false;
+                    const isCertRel = Boolean(r.certificateReleased && !r.certificateHold);
+                    const rEvName = (r.eventName || r.eventTitle || r["Event Name"] || r["Event"] || "").trim().toLowerCase();
+                    const ev = (C.events || []).find(e => {
+                      if (rEvName && e.title && e.title.trim().toLowerCase() === rEvName) return true;
+                      if (r.eventId && e.id === r.eventId) return true;
+                      return false;
+                    }) || {};
+                    const hasReleasedAwardDocs = (ev.pdfTemplates || []).some(tpl => tpl.targetSection === 'awards' && r.releasedDocs && r.releasedDocs[tpl.id] && (!r.heldDocs || !r.heldDocs[tpl.id]));
+                    
+                    if (!isCertRel && !hasReleasedAwardDocs) return false;
                     return matchesSubTab(r, subTab);
                   }).map(r => {
                     const rEvName = (r.eventName || r.eventTitle || r["Event Name"] || r["Event"] || "").trim().toLowerCase();
@@ -14229,61 +14235,106 @@ function UserDashboard({ C, globalProfile, globalAuthToken, onClose }) {
                                 <div style={{fontSize:".7rem",color:"var(--mu)",fontWeight:600,textTransform:"uppercase"}}>Transaction ID</div>
                                 <div style={{fontSize:".85rem",fontWeight:600,color:"var(--dt)",fontFamily:"monospace"}}>{a.reg['Transaction ID'] || a.reg.id || "N/A"}</div>
                               </div>
-                              <div style={{marginTop:"auto", display:"flex", gap:8, width:"100%"}}>
-                                <button 
-                                  disabled={!a.ev.certBgUrl}
-                                  onClick={async (e) => {
-                                    const btn = e.currentTarget;
-                                    const orig = btn.innerHTML;
-                                    btn.disabled = true;
-                                    btn.innerText = "...";
-                                    try {
-                                      const evtName = a.ev.title || "Event";
-                                      const evtDate = a.ev.date ? `${a.ev.date} ${a.ev.month}` : "2025";
-                                      const fieldsData = { "Event Name": evtName, "Date": evtDate, ...a.reg };
-                                      if (globalAuthToken) {
-                                        const cleanData = { ...a.reg, certViewDate: new Date().toISOString() };
-                                        delete cleanData.id; delete cleanData._submittedAt;
-                                        await fbUpdateRegistration(a.reg.id, cleanData, globalAuthToken);
+                              <div style={{marginTop:"auto", display:"flex", flexDirection:"column", gap:8, width:"100%"}}>
+                                {a.reg.certificateReleased && (
+                                  <div style={{display:"flex", gap:8, width:"100%"}}>
+                                    <button 
+                                      disabled={!a.ev.certBgUrl}
+                                      onClick={async (e) => {
+                                        const btn = e.currentTarget;
+                                        const orig = btn.innerHTML;
+                                        btn.disabled = true;
+                                        btn.innerText = "...";
+                                        try {
+                                          const evtName = a.ev.title || "Event";
+                                          const evtDate = a.ev.date ? `${a.ev.date} ${a.ev.month}` : "2025";
+                                          const fieldsData = { "Event Name": evtName, "Date": evtDate, ...a.reg };
+                                          if (globalAuthToken) {
+                                            const cleanData = { ...a.reg, certViewDate: new Date().toISOString() };
+                                            delete cleanData.id; delete cleanData._submittedAt;
+                                            await fbUpdateRegistration(a.reg.id, cleanData, globalAuthToken);
+                                          }
+                                          const url = await generateCertificatePDF(a.ev, fieldsData, sName, 'cert', 'url'); if(url) setPreviewFile({ url, type: 'pdf', title: `Certificate - ${sName}` });
+                                        } catch(err) {
+                                          alert(err.message);
+                                        }
+                                        btn.disabled = false;
+                                        btn.innerHTML = orig;
+                                      }} 
+                                      style={{flex:1, padding:"10px",borderRadius:8,background:(!a.ev.certBgUrl) ? "#ccc" : "#f5f5f5",color:(!a.ev.certBgUrl) ? "white" : "var(--dt)",border:"1px solid " + ((!a.ev.certBgUrl) ? "#ccc" : "var(--dt)"),fontWeight:600,cursor:(!a.ev.certBgUrl) ? "not-allowed" : "pointer",display:"flex",justifyContent:"center",alignItems:"center"}}
+                                    >
+                                      👁 Preview
+                                    </button>
+                                    <button 
+                                      disabled={!a.ev.certBgUrl}
+                                      onClick={async (e) => {
+                                        const btn = e.currentTarget;
+                                        const orig = btn.innerHTML;
+                                        btn.disabled = true;
+                                        btn.innerText = "...";
+                                        try {
+                                          const evtName = a.ev.title || "Event";
+                                          const evtDate = a.ev.date ? `${a.ev.date} ${a.ev.month}` : "2025";
+                                          const fieldsData = { "Event Name": evtName, "Date": evtDate, ...a.reg };
+                                          if (globalAuthToken && !a.reg.certDownloadDate) {
+                                            const cleanData = { ...a.reg, certDownloadDate: new Date().toISOString() };
+                                            delete cleanData.id; delete cleanData._submittedAt;
+                                            await fbUpdateRegistration(a.reg.id, cleanData, globalAuthToken);
+                                          }
+                                          await generateCertificatePDF(a.ev, fieldsData, sName, 'cert', 'download');
+                                        } catch(err) {
+                                          alert(err.message);
+                                        }
+                                        btn.disabled = false;
+                                        btn.innerHTML = orig;
+                                      }} 
+                                      style={{flex:1, padding:"10px",borderRadius:8,background:(!a.ev.certBgUrl) ? "#ccc" : "var(--dt)",color:"white",border:"none",fontWeight:600,cursor:(!a.ev.certBgUrl) ? "not-allowed" : "pointer",display:"flex",justifyContent:"center",alignItems:"center",boxShadow:"0 2px 6px rgba(0,0,0,0.15)"}}
+                                    >
+                                      ⬇ Download
+                                    </button>
+                                  </div>
+                                )}
+
+                                {/* Extra Award Documents targeting Education Awards */}
+                                {(a.ev.pdfTemplates || []).filter(tpl => tpl.targetSection === 'awards' && a.reg.releasedDocs && a.reg.releasedDocs[tpl.id] && (!a.reg.heldDocs || !a.reg.heldDocs[tpl.id])).map(tpl => (
+                                  <button
+                                    key={tpl.id}
+                                    disabled={!tpl.bgUrl}
+                                    onClick={async (e) => {
+                                      const btn = e.currentTarget;
+                                      const orig = btn.innerHTML;
+                                      btn.disabled = true;
+                                      btn.innerText = "...";
+                                      try {
+                                        const evtName = a.ev.title || "Event";
+                                        const evtDate = a.ev.date ? `${a.ev.date} ${a.ev.month}` : "2025";
+                                        const fieldsData = { "Event Name": evtName, "Date": evtDate, ...a.reg };
+                                        await generateCertificatePDF(a.ev, fieldsData, sName, tpl, 'download');
+                                      } catch(err) {
+                                        alert(err.message);
                                       }
-                                      const url = await generateCertificatePDF(a.ev, fieldsData, sName, 'cert', 'url'); if(url) setPreviewFile({ url, type: 'pdf', title: `Certificate - ${sName}` });
-                                    } catch(err) {
-                                      alert(err.message);
-                                    }
-                                    btn.disabled = false;
-                                    btn.innerHTML = orig;
-                                  }} 
-                                  style={{flex:1, padding:"10px",borderRadius:8,background:(!a.ev.certBgUrl) ? "#ccc" : "#f5f5f5",color:(!a.ev.certBgUrl) ? "white" : "var(--dt)",border:"1px solid " + ((!a.ev.certBgUrl) ? "#ccc" : "var(--dt)"),fontWeight:600,cursor:(!a.ev.certBgUrl) ? "not-allowed" : "pointer",display:"flex",justifyContent:"center",alignItems:"center"}}
-                                >
-                                  👁 Preview
-                                </button>
-                                <button 
-                                  disabled={!a.ev.certBgUrl}
-                                  onClick={async (e) => {
-                                    const btn = e.currentTarget;
-                                    const orig = btn.innerHTML;
-                                    btn.disabled = true;
-                                    btn.innerText = "...";
-                                    try {
-                                      const evtName = a.ev.title || "Event";
-                                      const evtDate = a.ev.date ? `${a.ev.date} ${a.ev.month}` : "2025";
-                                      const fieldsData = { "Event Name": evtName, "Date": evtDate, ...a.reg };
-                                      if (globalAuthToken && !a.reg.certDownloadDate) {
-                                        const cleanData = { ...a.reg, certDownloadDate: new Date().toISOString() };
-                                        delete cleanData.id; delete cleanData._submittedAt;
-                                        await fbUpdateRegistration(a.reg.id, cleanData, globalAuthToken);
-                                      }
-                                      await generateCertificatePDF(a.ev, fieldsData, sName, 'cert', 'download');
-                                    } catch(err) {
-                                      alert(err.message);
-                                    }
-                                    btn.disabled = false;
-                                    btn.innerHTML = orig;
-                                  }} 
-                                  style={{flex:1, padding:"10px",borderRadius:8,background:(!a.ev.certBgUrl) ? "#ccc" : "var(--dt)",color:"white",border:"none",fontWeight:600,cursor:(!a.ev.certBgUrl) ? "not-allowed" : "pointer",display:"flex",justifyContent:"center",alignItems:"center",boxShadow:"0 2px 6px rgba(0,0,0,0.15)"}}
-                                >
-                                  ⬇ Download
-                                </button>
+                                      btn.disabled = false;
+                                      btn.innerHTML = orig;
+                                    }}
+                                    style={{
+                                      width:"100%",
+                                      padding:"7px 10px",
+                                      borderRadius:6,
+                                      background: (!tpl.bgUrl) ? "#F1F5F9" : "#F0FDF4",
+                                      color: (!tpl.bgUrl) ? "#94A3B8" : "#15803D",
+                                      border: (!tpl.bgUrl) ? "1px solid #E2E8F0" : "1px solid #86EFAC",
+                                      fontSize:".75rem",
+                                      fontWeight:700,
+                                      cursor: (!tpl.bgUrl) ? "not-allowed" : "pointer",
+                                      display:"flex",
+                                      alignItems:"center",
+                                      justifyContent:"center",
+                                      gap:4
+                                    }}
+                                  >
+                                    <span>🎓</span> Download {tpl.name} (PDF)
+                                  </button>
+                                ))}
                               </div>
                             </div>
                           </div>
@@ -14429,9 +14480,9 @@ function UserDashboard({ C, globalProfile, globalAuthToken, onClose }) {
                                 </div>
 
                                 {/* Custom PDF Template Passes (e.g. Token Number, Food Coupon, Gate Pass) */}
-                                {(a.ev.pdfTemplates || []).filter(tpl => a.reg.releasedDocs && a.reg.releasedDocs[tpl.id] && (!a.reg.heldDocs || !a.reg.heldDocs[tpl.id])).length > 0 && (
+                                {(a.ev.pdfTemplates || []).filter(tpl => tpl.targetSection !== 'awards' && a.reg.releasedDocs && a.reg.releasedDocs[tpl.id] && (!a.reg.heldDocs || !a.reg.heldDocs[tpl.id])).length > 0 && (
                                   <div style={{display:"flex",flexDirection:"column",gap:6,borderTop:"1px dashed #CBD5E1",paddingTop:8}}>
-                                    {(a.ev.pdfTemplates || []).filter(tpl => a.reg.releasedDocs && a.reg.releasedDocs[tpl.id] && (!a.reg.heldDocs || !a.reg.heldDocs[tpl.id])).map(tpl => (
+                                    {(a.ev.pdfTemplates || []).filter(tpl => tpl.targetSection !== 'awards' && a.reg.releasedDocs && a.reg.releasedDocs[tpl.id] && (!a.reg.heldDocs || !a.reg.heldDocs[tpl.id])).map(tpl => (
                                       <button
                                         key={tpl.id}
                                         disabled={!tpl.bgUrl}
@@ -22157,9 +22208,9 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   const activeEvent = inviteEvents.find(e => e.id === selectedEventId) || {};
 
   const availableDocTemplates = [
-    { id: 'invite', name: 'Official Invite Letter', icon: '💌', bgUrl: activeEvent?.inviteBgUrl, isDefault: true },
-    ...(activeEvent?.issueCertificates ? [{ id: 'cert', name: 'Certificate Pass', icon: '🎓', bgUrl: activeEvent?.certBgUrl }] : []),
-    ...(activeEvent?.pdfTemplates || []).map(t => ({ id: t.id, name: t.name, icon: '🎟️', bgUrl: t.bgUrl, customTpl: t }))
+    { id: 'invite', name: 'Official Invite Letter', icon: '💌', bgUrl: activeEvent?.inviteBgUrl, targetSection: 'invites', isDefault: true },
+    ...(activeEvent?.issueCertificates ? [{ id: 'cert', name: 'Certificate Pass', icon: '🎓', bgUrl: activeEvent?.certBgUrl, targetSection: 'awards' }] : []),
+    ...(activeEvent?.pdfTemplates || []).map(t => ({ id: t.id, name: t.name, icon: '🎟️', bgUrl: t.bgUrl, targetSection: t.targetSection || 'invites', customTpl: t }))
   ];
   const currentDocTpl = availableDocTemplates.find(d => d.id === activeDocType) || availableDocTemplates[0];
 
@@ -22672,8 +22723,8 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       <div style={{padding:mob?"16px":"32px",width:"100%",boxSizing:"border-box"}}>
          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24,flexDirection:mob?"column":"row",gap:16}}>
            <div>
-             <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",margin:0}}>Invite Letters Workspaces</h2>
-             <p style={{fontSize:".85rem",color:"var(--mu)",marginTop:4}}>Select an event below to manage invite letters and send WhatsApp invitation passes.</p>
+             <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",margin:0}}>Letters & Certificates Workspaces</h2>
+             <p style={{fontSize:".85rem",color:"var(--mu)",marginTop:4}}>Select an event below to manage invite letters, certificates, token passes, and custom PDF templates in one unified hub.</p>
            </div>
            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
              <button onClick={() => setShowInviteTplModal(true)} style={{padding:"10px 18px",borderRadius:8,fontSize:".85rem",fontWeight:700,display:"flex",alignItems:"center",gap:8,background:"#DCFCE7",border:"1px solid #86EFAC",color:"#15803D",cursor:"pointer",boxShadow:"0 2px 8px rgba(21,128,61,0.15)"}}>
@@ -22801,8 +22852,8 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
         </div>
         <div style={{display:"flex",flexDirection:mob?"column":"row",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,gap:16}}>
           <div>
-            <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",margin:0}}>Invite Letters Console</h2>
-            <p style={{fontSize:".85rem",color:"var(--mu)",marginTop:4}}>Manage and release invite letters for: <strong>{activeEvent.title}</strong></p>
+            <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",margin:0}}>Letters & Certificates Console</h2>
+            <p style={{fontSize:".85rem",color:"var(--mu)",marginTop:4}}>Manage, release, and broadcast official documents for: <strong>{activeEvent.title}</strong></p>
           </div>
           <div style={{display:"flex",gap:12,width:mob?"100%":"auto",flexWrap:"wrap"}}>
             <button onClick={() => setShowWorkspaceTplModal(true)} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:700,display:"flex",alignItems:"center",gap:6,background:"#F0FDF4",border:"1px solid #86EFAC",color:"#15803D",cursor:"pointer",boxShadow:"0 2px 8px rgba(21,128,61,0.15)",whiteSpace:"nowrap"}}>
@@ -23009,8 +23060,8 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
         </div>
 
         {/* Document Template Tabs Bar (Multi-Template Workspace) */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14,borderBottom:"2px solid #CBD5E1",paddingBottom:4,overflowX:"auto",flexWrap:"wrap"}}>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14,borderBottom:"2px solid #CBD5E1",paddingBottom:8,overflowX:"auto",flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
             <span style={{fontSize:".78rem",fontWeight:800,color:"#334155",textTransform:"uppercase",display:"flex",alignItems:"center",gap:4,marginRight:4}}>
               <span>📑</span> ACTIVE DOCUMENT TEMPLATE:
             </span>
@@ -23060,34 +23111,68 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
             })}
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              const name = prompt("Enter Name for new PDF Template (e.g. Food Coupon & Dinner Pass, Token Number, Gate Pass):");
-              if (name && name.trim()) {
-                const cleanName = name.trim();
-                const tplId = "doc_" + Date.now();
-                const newTpl = {
-                  id: tplId,
-                  name: cleanName,
-                  bgUrl: "",
-                  map: {},
-                  fontSize: 30,
-                  fontColor: "#000000"
-                };
-                const updatedTpls = [...(activeEvent.pdfTemplates || []), newTpl];
-                const updatedEvents = (C.events || []).map(e => (e.id === activeEvent.id || e.title === activeEvent.title) ? { ...e, pdfTemplates: updatedTpls } : e);
-                const updatedC = { ...C, events: updatedEvents };
-                if (setC) setC(updatedC);
-                fbSave(updatedC, auth?.idToken);
-                setActiveDocType(tplId);
-                alert(`Created "${cleanName}"! You can configure its background image in Content Editor -> Events.`);
-              }
-            }}
-            style={{padding:"6px 12px",borderRadius:6,fontSize:".75rem",fontWeight:800,background:"#F1F5F9",border:"1px solid #CBD5E1",color:"#334155",cursor:"pointer",display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}
-          >
-            <span>➕</span> + Add New Template
-          </button>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {/* Dashboard Placement Indicator & Selector for Active Template */}
+            <div style={{background:"#F8FAFC",border:"1.5px solid #CBD5E1",borderRadius:8,padding:"4px 10px",display:"flex",alignItems:"center",gap:6,fontSize:".74rem"}}>
+              <span style={{fontWeight:800,color:"#475569"}}>🎯 Member Portal Placement:</span>
+              {currentDocTpl?.id === 'invite' ? (
+                <span style={{fontWeight:800,color:"#D2691E",background:"#FFF7ED",padding:"2px 8px",borderRadius:4,border:"1px solid #FFEDD5"}}>
+                  💌 Special Invites
+                </span>
+              ) : currentDocTpl?.id === 'cert' ? (
+                <span style={{fontWeight:800,color:"#15803D",background:"#F0FDF4",padding:"2px 8px",borderRadius:4,border:"1px solid #DCFCE7"}}>
+                  🎓 Education Awards
+                </span>
+              ) : (
+                <select
+                  value={currentDocTpl?.customTpl?.targetSection || "invites"}
+                  onChange={(e) => {
+                    const newSection = e.target.value;
+                    const updatedTpls = (activeEvent.pdfTemplates || []).map(t => t.id === currentDocTpl.id ? { ...t, targetSection: newSection } : t);
+                    const updatedEvents = (C.events || []).map(ev => (ev.id === activeEvent.id || ev.title === activeEvent.title) ? { ...ev, pdfTemplates: updatedTpls } : ev);
+                    const updatedC = { ...C, events: updatedEvents };
+                    if (setC) setC(updatedC);
+                    fbSave(updatedC, auth?.idToken);
+                    alert(`"${currentDocTpl.name}" will now appear in "${newSection === 'awards' ? 'Education Awards' : 'Special Invites'}" on the Member Portal!`);
+                  }}
+                  style={{padding:"3px 8px",borderRadius:4,border:"1px solid #94A3B8",fontSize:".74rem",fontWeight:700,background:"white",color:"#0F172A",cursor:"pointer"}}
+                >
+                  <option value="invites">💌 Special Invites (Passes / Coupons)</option>
+                  <option value="awards">🎓 Education Awards (Certificates)</option>
+                </select>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const name = prompt("Enter Name for new PDF Template (e.g. Food Coupon & Dinner Pass, Token Number, Gate Pass):");
+                if (name && name.trim()) {
+                  const cleanName = name.trim();
+                  const tplId = "doc_" + Date.now();
+                  const newTpl = {
+                    id: tplId,
+                    name: cleanName,
+                    targetSection: "invites",
+                    bgUrl: "",
+                    map: {},
+                    fontSize: 30,
+                    fontColor: "#000000"
+                  };
+                  const updatedTpls = [...(activeEvent.pdfTemplates || []), newTpl];
+                  const updatedEvents = (C.events || []).map(e => (e.id === activeEvent.id || e.title === activeEvent.title) ? { ...e, pdfTemplates: updatedTpls } : e);
+                  const updatedC = { ...C, events: updatedEvents };
+                  if (setC) setC(updatedC);
+                  fbSave(updatedC, auth?.idToken);
+                  setActiveDocType(tplId);
+                  alert(`Created "${cleanName}"! You can configure its background image in Content Editor -> Events.`);
+                }
+              }}
+              style={{padding:"6px 12px",borderRadius:6,fontSize:".75rem",fontWeight:800,background:"#15803D",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}
+            >
+              <span>➕</span> + Add New Template
+            </button>
+          </div>
         </div>
 
         {loading ? <p>Loading inviteLetters...</p> : (
