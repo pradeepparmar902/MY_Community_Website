@@ -22256,11 +22256,21 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       if (inviteOpenPillFilter === "unopened" && hasOpened) return false;
     }
     if (inviteReleasePillFilter) {
-      if (inviteReleasePillFilter === "released" && (!r.inviteLetterReleased || r.inviteLetterHold)) return false;
-      if (inviteReleasePillFilter === "pending" && (r.inviteLetterReleased || r.inviteLetterHold)) return false;
+      const activeDocId = currentDocTpl?.id || 'invite';
+      const st = getDocReleaseStatus(r, activeDocId);
+      if (inviteReleasePillFilter === "released" && !st.isReleased) return false;
+      if (inviteReleasePillFilter === "pending" && (st.isReleased || st.isHeld)) return false;
     }
     return true;
   });
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredRegs.length && filteredRegs.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredRegs.map(r => r.id || r['Transaction ID']));
+    }
+  };
 
   const fetchRegs = async () => {
     try {
