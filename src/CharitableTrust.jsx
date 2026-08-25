@@ -18949,6 +18949,9 @@ function AdminRegistrations({ mob, C, setC, auth }) {
   const [whatsAppModalReg, setWhatsAppModalReg] = useState(null);
   const [showBulkWhatsAppModal, setShowBulkWhatsAppModal] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [statusPillFilter, setStatusPillFilter] = useState(null);
+  const [openPillFilter, setOpenPillFilter] = useState(null);
+  const [selectedOnlyFilter, setSelectedOnlyFilter] = useState(false);
 
   const saveToFb = async (newC) => {
     try {
@@ -19158,6 +19161,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [viewing, setViewing] = useState(null);
+
 
   const handleRefresh = async () => {
     setRefreshing(true);
