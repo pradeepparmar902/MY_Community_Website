@@ -23219,10 +23219,10 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
 
             {/* Right Side: Sleek, Compact Directory List with Space-Efficient Filter Bar */}
             <div style={{flex:1.4,borderLeft:mob?"none":"1.5px solid #E2E8F0",paddingLeft:mob?0:20}}>
-              {/* Header & Single-Row Search + Dropdown Filter */}
+              {/* Header & Single-Row Search + Compact Filter Pills with +N More (No Scroll Needed) */}
               <div style={{marginBottom:10}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <span style={{fontSize:".95rem",fontWeight:800,color:"#0F172A"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <span style={{fontSize:".92rem",fontWeight:800,color:"#0F172A"}}>
                     Contacts Directory ({filteredDirectoryGuests.length} / {globalGuests.length})
                   </span>
                   {directoryGroupFilter !== "All" && (
@@ -23236,24 +23236,81 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
                   )}
                 </div>
 
-                {/* Compact Filter Row (Search Box + Group Select Dropdown) */}
-                <div style={{display:"flex",gap:8,alignItems:"center",background:"#F8FAFC",padding:8,borderRadius:8,border:"1px solid #CBD5E1"}}>
-                  <div style={{flex:1.2,position:"relative"}}>
+                {/* Single Compact Row: Reduced Search Box + Quick Filter Pills + More Dropdown */}
+                <div style={{display:"flex",gap:6,alignItems:"center",background:"#F8FAFC",padding:"6px 8px",borderRadius:8,border:"1px solid #CBD5E1",flexWrap:"wrap"}}>
+                  {/* Reduced Search Box */}
+                  <div style={{width: 145, flexShrink: 0}}>
                     <input 
                       type="text" 
-                      placeholder="🔍 Search name, phone, role..." 
+                      placeholder="🔍 Search..." 
                       value={directorySearch}
                       onChange={e => setDirectorySearch(e.target.value)}
-                      style={{width:"100%",padding:"6px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".78rem",fontFamily:"inherit",boxSizing:"border-box",background:"white"}}
+                      style={{width:"100%",padding:"5px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".75rem",fontFamily:"inherit",boxSizing:"border-box",background:"white"}}
                     />
                   </div>
-                  <div style={{flex:1,display:"flex",alignItems:"center",gap:4}}>
+
+                  {/* Quick Filter Pills (Top 2-3 + "+N more...") */}
+                  <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap",flex:1}}>
+                    <button
+                      type="button"
+                      onClick={() => setDirectoryGroupFilter("All")}
+                      style={{
+                        padding:"3px 7px",
+                        borderRadius:6,
+                        fontSize:".69rem",
+                        fontWeight:800,
+                        cursor:"pointer",
+                        border: directoryGroupFilter === "All" ? "1px solid #0D4B5E" : "1px solid #CBD5E1",
+                        background: directoryGroupFilter === "All" ? "#0D4B5E" : "white",
+                        color: directoryGroupFilter === "All" ? "white" : "#475569"
+                      }}
+                    >
+                      All ({globalGuests.length})
+                    </button>
+                    {uniqueGroups.slice(0, 2).map(grp => {
+                      const count = globalGuests.filter(g => getContactGroups(g).includes(grp)).length;
+                      const isActive = directoryGroupFilter === grp;
+                      return (
+                        <button
+                          key={grp}
+                          type="button"
+                          onClick={() => setDirectoryGroupFilter(grp)}
+                          style={{
+                            padding:"3px 7px",
+                            borderRadius:6,
+                            fontSize:".69rem",
+                            fontWeight:700,
+                            cursor:"pointer",
+                            border: isActive ? "1px solid #0D4B5E" : "1px solid #CBD5E1",
+                            background: isActive ? "#0D4B5E" : "#FFFFFF",
+                            color: isActive ? "white" : "#334155"
+                          }}
+                        >
+                          {grp} ({count})
+                        </button>
+                      );
+                    })}
+
+                    {/* Dropdown for All / Remaining Groups */}
                     <select
                       value={directoryGroupFilter}
                       onChange={e => setDirectoryGroupFilter(e.target.value)}
-                      style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".78rem",fontWeight:700,background:"white",color:"#0F172A",fontFamily:"inherit",cursor:"pointer"}}
+                      style={{
+                        padding:"3px 6px",
+                        borderRadius:6,
+                        border: uniqueGroups.slice(2).includes(directoryGroupFilter) ? "1px solid #0D4B5E" : "1px solid #CBD5E1",
+                        fontSize:".69rem",
+                        fontWeight:700,
+                        background: uniqueGroups.slice(2).includes(directoryGroupFilter) ? "#0D4B5E" : "white",
+                        color: uniqueGroups.slice(2).includes(directoryGroupFilter) ? "white" : "#0F172A",
+                        cursor:"pointer",
+                        outline:"none",
+                        maxWidth: 150
+                      }}
                     >
-                      <option value="All">👥 All Groups ({globalGuests.length})</option>
+                      <option value="All">
+                        {uniqueGroups.length > 2 ? `+ ${uniqueGroups.length - 2} more groups...` : "More Groups..."}
+                      </option>
                       {uniqueGroups.map(grp => {
                         const count = globalGuests.filter(g => getContactGroups(g).includes(grp)).length;
                         return (
@@ -23265,53 +23322,6 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
                     </select>
                   </div>
                 </div>
-
-                {/* Single-Line Horizontal Scrollable Quick Filter Pills */}
-                {uniqueGroups.length > 0 && (
-                  <div style={{display:"flex",gap:5,overflowX:"auto",whiteSpace:"nowrap",paddingTop:8,paddingBottom:2,scrollbarWidth:"thin"}}>
-                    <button
-                      type="button"
-                      onClick={() => setDirectoryGroupFilter("All")}
-                      style={{
-                        padding:"2px 8px",
-                        borderRadius:12,
-                        fontSize:".7rem",
-                        fontWeight:700,
-                        cursor:"pointer",
-                        border: directoryGroupFilter === "All" ? "1px solid #0D4B5E" : "1px solid #CBD5E1",
-                        background: directoryGroupFilter === "All" ? "#0D4B5E" : "white",
-                        color: directoryGroupFilter === "All" ? "white" : "#475569",
-                        flexShrink:0
-                      }}
-                    >
-                      All ({globalGuests.length})
-                    </button>
-                    {uniqueGroups.map(grp => {
-                      const count = globalGuests.filter(g => getContactGroups(g).includes(grp)).length;
-                      const isActive = directoryGroupFilter === grp;
-                      return (
-                        <button
-                          key={grp}
-                          type="button"
-                          onClick={() => setDirectoryGroupFilter(grp)}
-                          style={{
-                            padding:"2px 8px",
-                            borderRadius:12,
-                            fontSize:".7rem",
-                            fontWeight:700,
-                            cursor:"pointer",
-                            border: isActive ? "1px solid #0D4B5E" : "1px solid #E2E8F0",
-                            background: isActive ? "#0D4B5E" : "#F1F5F9",
-                            color: isActive ? "white" : "#334155",
-                            flexShrink:0
-                          }}
-                        >
-                          {grp} ({count})
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
 
               {/* Contact Cards List with Compact Group Badges */}
