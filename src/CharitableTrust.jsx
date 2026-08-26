@@ -22335,8 +22335,11 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
 
   // Global guest modals
   const [showGlobalGuestsModal, setShowGlobalGuestsModal] = useState(false);
+  const [showDirectoryModal, setShowDirectoryModal] = useState(false);
   const [showImportGuestModal, setShowImportGuestModal] = useState(false);
-  const [guestForm, setGuestForm] = useState({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member" });
+  const [guestForm, setGuestForm] = useState({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member", groups: ["CWC Member"] });
+  const [editingGuest, setEditingGuest] = useState(null);
+  const [directoryGroupFilter, setDirectoryGroupFilter] = useState("All");
   const [showImportContactGroupModal, setShowImportContactGroupModal] = useState(false);
   const [selectedContactGroup, setSelectedContactGroup] = useState("All");
   const [addingGuest, setAddingGuest] = useState(false);
