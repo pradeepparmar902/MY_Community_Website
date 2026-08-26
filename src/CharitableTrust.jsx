@@ -22763,13 +22763,14 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   };
 
   const handleDeleteGlobalGuest = async (g) => {
-    if(!window.confirm(`Delete ${g["Full Name"]} from the global directory? This won't remove them from events they were already imported to.`)) return;
+    if (!window.confirm(`Are you sure you want to delete "${g["Full Name"]}" from the Special Guests Directory?`)) return;
+    setRegs(prev => prev.filter(x => x.id !== g.id));
     try {
-       await fbUpdateRegistration(g.id, { isGlobalGuest: false, deletedGuest: true }, auth?.idToken);
-       alert("Guest removed from directory.");
-       fetchRegs();
+      await fbUpdateRegistration(g.id, { isGlobalGuest: false, deletedGuest: true }, auth?.idToken);
+      alert("✅ Contact removed from directory successfully.");
+      fetchRegs();
     } catch(err) {
-       alert("Error removing guest: " + err.message);
+      alert("Notice: Removed locally. " + err.message);
     }
   };
 
