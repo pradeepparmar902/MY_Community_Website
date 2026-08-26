@@ -24752,9 +24752,21 @@ function FormattedChatText({ text, onQuickClick }) {
 
 // ── Application Record Card ─────────────────────────────────────────────────────────────
 // ── WhatsApp Message Formatter Helpers ───────────────────────────────────────────
+const getChatbotPortalUrl = () => {
+  try {
+    const cached = localStorage.getItem("trustConfig");
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed.whatsAppPortalUrl) return parsed.whatsAppPortalUrl.replace(/\/?$/, '');
+      if (parsed.seoCanonical) return parsed.seoCanonical.replace(/\/?$/, '');
+    }
+  } catch(e) {}
+  return "https://www.mmp-cwc.com";
+};
+
 const generateVibhagSummaryWhatsAppText = (summaryData) => {
   if (!summaryData) return "";
-  const { total, approved, pending, rejected, vibhagList, scopeTitle } = summaryData;
+  const { total, approved, pending, rejected, vibhagList } = summaryData;
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
@@ -24797,8 +24809,7 @@ const generateVibhagSummaryWhatsAppText = (summaryData) => {
   }
 
   text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-  const portalUrl = (C.whatsAppPortalUrl || C.seoCanonical || "https://www.mmp-cwc.com/").replace(/\/?$/, "");
-  text += `🌐 *Live Portal:* ${portalUrl}/`;
+  text += `🌐 *Live Portal:* ${getChatbotPortalUrl()}/`;
   return text;
 };
 
@@ -24838,8 +24849,7 @@ const generateApplicationWhatsAppText = (app) => {
   text += `📌 *Status  :* ${statusBadge}\n`;
   text += `💬 *Remarks :* ${remarks}\n`;
   text += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-  const portalUrl2 = (C.whatsAppPortalUrl || C.seoCanonical || "https://www.mmp-cwc.com/").replace(/\/?$/, "");
-  text += `🌐 *Portal:* ${portalUrl2}/`;
+  text += `🌐 *Portal:* ${getChatbotPortalUrl()}/`;
   return text;
 };
 
