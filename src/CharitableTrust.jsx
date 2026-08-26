@@ -22459,7 +22459,7 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
 
   const handleAddGlobalGuest = async (e) => {
     e.preventDefault();
-    if (!guestForm.fullName) return alert("Full Name is required.");
+    if (!guestForm.fullName || !guestForm.fullName.trim()) return alert("Full Name is required.");
     
     const assignedGroups = (guestForm.groups && guestForm.groups.length > 0)
       ? guestForm.groups
@@ -22468,20 +22468,20 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
     const groupStr = assignedGroups.join(", ");
 
     setAddingGuest(true);
-    if (editingGuest) {
-      // Update existing contact
-      try {
+    try {
+      if (editingGuest) {
+        // Update existing contact
         const updatedData = {
           ...editingGuest,
-          "Full Name": guestForm.fullName,
-          "Participant Name": guestForm.fullName,
-          "Name": guestForm.fullName,
-          "Mobile": guestForm.mobile,
-          "Mobile Number": guestForm.mobile,
-          "Email": guestForm.email,
-          "Address": guestForm.address,
-          "Designation": guestForm.designation,
-          "Organization": guestForm.designation,
+          "Full Name": guestForm.fullName.trim(),
+          "Participant Name": guestForm.fullName.trim(),
+          "Name": guestForm.fullName.trim(),
+          "Mobile": guestForm.mobile?.trim() || "",
+          "Mobile Number": guestForm.mobile?.trim() || "",
+          "Email": guestForm.email?.trim() || "",
+          "Address": guestForm.address?.trim() || "",
+          "Designation": guestForm.designation?.trim() || "",
+          "Organization": guestForm.designation?.trim() || "",
           "Group": groupStr,
           "Category": groupStr,
           "Vibhag": assignedGroups[0] || "General Committee",
@@ -22492,45 +22492,43 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
         delete cleanCopy.id;
         delete cleanCopy._submittedAt;
         await fbUpdateRegistration(editingGuest.id, cleanCopy, auth?.idToken);
-        alert("Contact details and groups updated successfully!");
+        alert("✅ Contact details and groups updated successfully!");
         setEditingGuest(null);
         setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member", groups: ["CWC Member"] });
         fetchRegs();
-      } catch (err) {
-        alert("Error updating contact: " + err.message);
-      }
-    } else {
-      // Create new contact
-      const newGlobalGuest = {
-        "Full Name": guestForm.fullName,
-        "Participant Name": guestForm.fullName,
-        "Name": guestForm.fullName,
-        "Mobile": guestForm.mobile,
-        "Mobile Number": guestForm.mobile,
-        "Email": guestForm.email,
-        "Address": guestForm.address,
-        "Designation": guestForm.designation,
-        "Organization": guestForm.designation,
-        "Group": groupStr,
-        "Category": groupStr,
-        "Vibhag": assignedGroups[0] || "General Committee",
-        groups: assignedGroups,
-        Groups: assignedGroups,
-        isGlobalGuest: true,
-        _submittedAt: Date.now(),
-        formId: "global_guest_directory"
-      };
+      } else {
+        // Create new contact
+        const newGlobalGuest = {
+          "Transaction ID": "GST-" + Date.now().toString().slice(-6),
+          "Full Name": guestForm.fullName.trim(),
+          "Participant Name": guestForm.fullName.trim(),
+          "Name": guestForm.fullName.trim(),
+          "Mobile": guestForm.mobile?.trim() || "",
+          "Mobile Number": guestForm.mobile?.trim() || "",
+          "Email": guestForm.email?.trim() || "",
+          "Address": guestForm.address?.trim() || "",
+          "Designation": guestForm.designation?.trim() || "",
+          "Organization": guestForm.designation?.trim() || "",
+          "Group": groupStr,
+          "Category": groupStr,
+          "Vibhag": assignedGroups[0] || "General Committee",
+          groups: assignedGroups,
+          Groups: assignedGroups,
+          isGlobalGuest: true,
+          _submittedAt: Date.now(),
+          formId: "global_guest_directory"
+        };
 
-      try {
         await fbSubmitRegistration(newGlobalGuest, auth?.idToken);
-        alert("Global guest added to directory with assigned groups!");
+        alert("✅ Global guest added to directory with assigned groups!");
         setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member", groups: ["CWC Member"] });
         fetchRegs();
-      } catch (err) {
-        alert("Error adding global guest: " + err.message);
       }
+    } catch (err) {
+      alert("Error saving contact: " + err.message);
+    } finally {
+      setAddingGuest(false);
     }
-    setAddingGuest(false);
   };
 
   const fileInputRef = useRef(null);
@@ -22910,84 +22908,328 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
     setDownloadingBulk(false);
   };
 
-  const renderGlobalGuestsModal = () => (
-    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div style={{background:"white",borderRadius:12,padding:32,width:"100%",maxWidth:800,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 40px rgba(0,0,0,0.2)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24}}>
-           <div>
-             <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",marginTop:0,marginBottom:4}}>Global Special Guests</h2>
-             <p style={{fontSize:".85rem",color:"var(--mu)",margin:0}}>Add guests here once, and import them to any event.</p>
-           </div>
-           <button onClick={()=>setShowGlobalGuestsModal(false)} style={{background:"none",border:"none",fontSize:"1.5rem",cursor:"pointer"}}>×</button>
-        </div>
+  const renderGlobalGuestsModal = () => {
+    // Extract unique groups across all global guests for the filter bar
+    const allGroupsSet = new Set();
+    globalGuests.forEach(g => {
+      getContactGroups(g).forEach(grp => allGroupsSet.add(grp));
+    });
+    const uniqueGroups = Array.from(allGroupsSet).sort();
 
-        <div style={{display:"flex",gap:24,flexDirection:mob?"column":"row"}}>
-          <div style={{flex:1}}>
-            <h3 style={{fontSize:"1rem",borderBottom:"1px solid var(--bd)",paddingBottom:8,marginBottom:16}}>Add New Guest</h3>
-            <form onSubmit={handleAddGlobalGuest} style={{display:"flex",flexDirection:"column",gap:16}}>
-              <div>
-                <label style={{display:"block",fontSize:".85rem",fontWeight:600,marginBottom:6}}>Full Name (Required)</label>
-                <input required type="text" value={guestForm.fullName} onChange={e=>setGuestForm({...guestForm, fullName: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",boxSizing:"border-box",fontFamily:"inherit"}} />
-              </div>
-              <div style={{display:"flex",gap:16}}>
-                <div style={{flex:1}}>
-                  <label style={{display:"block",fontSize:".85rem",fontWeight:600,marginBottom:6}}>Designation / Role</label>
-                  <input type="text" placeholder="e.g. CWC Member, Trustee, Lead" value={guestForm.designation} onChange={e=>setGuestForm({...guestForm, designation: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",boxSizing:"border-box",fontFamily:"inherit"}} />
-                </div>
-                <div style={{flex:1}}>
-                  <label style={{display:"block",fontSize:".85rem",fontWeight:600,marginBottom:6}}>Contact Group / Team</label>
-                  <input type="text" placeholder="e.g. CWC Members, Trustees, Volunteers" value={guestForm.group} onChange={e=>setGuestForm({...guestForm, group: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",boxSizing:"border-box",fontFamily:"inherit"}} />
-                </div>
-              </div>
-              <div style={{display:"flex",gap:16}}>
-                <div style={{flex:1}}>
-                  <label style={{display:"block",fontSize:".85rem",fontWeight:600,marginBottom:6}}>Mobile</label>
-                  <input type="text" value={guestForm.mobile} onChange={e=>setGuestForm({...guestForm, mobile: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",boxSizing:"border-box",fontFamily:"inherit"}} />
-                </div>
-                <div style={{flex:1}}>
-                  <label style={{display:"block",fontSize:".85rem",fontWeight:600,marginBottom:6}}>Email</label>
-                  <input type="email" value={guestForm.email} onChange={e=>setGuestForm({...guestForm, email: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",boxSizing:"border-box",fontFamily:"inherit"}} />
-                </div>
-              </div>
-              <div>
-                <label style={{display:"block",fontSize:".85rem",fontWeight:600,marginBottom:6}}>Address</label>
-                <textarea rows="2" value={guestForm.address} onChange={e=>setGuestForm({...guestForm, address: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",boxSizing:"border-box",fontFamily:"inherit"}}></textarea>
-              </div>
-              <button type="submit" disabled={addingGuest} style={{padding:"10px 20px",borderRadius:8,border:"none",background:"var(--dt)",color:"white",cursor:addingGuest?"wait":"pointer",fontWeight:600,marginTop:8}}>
-                {addingGuest ? "Saving..." : "Add to Directory"}
-              </button>
-            </form>
+    // Filter guests based on directoryGroupFilter
+    const filteredDirectoryGuests = directoryGroupFilter === "All"
+      ? globalGuests
+      : globalGuests.filter(g => getContactGroups(g).includes(directoryGroupFilter));
 
-            <div style={{marginTop:24,borderTop:"1px solid var(--bd)",paddingTop:16}}>
-              <label style={{display:"block",fontSize:".85rem",fontWeight:600,marginBottom:8}}>Import from Excel (.xlsx/.xls)</label>
-              <input type="file" ref={fileInputRef} accept=".xlsx,.xls" onChange={handleExcelUpload} style={{display:"none"}} />
-              <button onClick={() => fileInputRef.current?.click()} disabled={uploadingExcel} style={{width:"100%",padding:"10px",borderRadius:8,background:"#F5F5F5",color:"var(--dt)",border:"1px solid var(--bd)",fontWeight:600,cursor:uploadingExcel?"wait":"pointer"}}>
-                {uploadingExcel ? "Uploading..." : "📂 Upload Excel File"}
-              </button>
-            </div>
+    return (
+      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div style={{background:"white",borderRadius:16,padding:mob?16:28,width:"100%",maxWidth:950,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 25px 50px rgba(0,0,0,0.3)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,borderBottom:"1.5px solid #E2E8F0",paddingBottom:12}}>
+             <div>
+               <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",margin:0,fontSize:"1.3rem",display:"flex",alignItems:"center",gap:8}}>
+                 <span>👥</span> Special Guests & Committee Directory
+               </h2>
+               <p style={{fontSize:".82rem",color:"var(--mu)",margin:"4px 0 0 0"}}>
+                 Add contacts once, assign them to multiple groups, and import them seamlessly into any workspace.
+               </p>
+             </div>
+             <button 
+               onClick={()=>{
+                 setShowGlobalGuestsModal(false); 
+                 setShowDirectoryModal(false);
+                 setEditingGuest(null);
+                 setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member", groups: ["CWC Member"] });
+               }} 
+               style={{background:"#F1F5F9",border:"none",borderRadius:"50%",width:34,height:34,cursor:"pointer",fontWeight:800,fontSize:"1.1rem",color:"#475569"}}
+             >
+               ✕
+             </button>
           </div>
 
-          <div style={{flex:1.5,borderLeft:mob?"none":"1px solid var(--bd)",paddingLeft:mob?0:24}}>
-            <h3 style={{fontSize:"1rem",borderBottom:"1px solid var(--bd)",paddingBottom:8,marginBottom:16}}>Directory List</h3>
-            <div style={{display:"flex",flexDirection:"column",gap:12,maxHeight:400,overflowY:"auto",paddingRight:8}}>
-              {globalGuests.map(g => (
-                <div key={g.id} style={{padding:12,border:"1px solid #eee",borderRadius:8,background:"#fafafa",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                   <div>
-                     <div style={{fontWeight:600,color:"#333"}}>{g["Full Name"]}</div>
-                     <div style={{fontSize:".8rem",color:"var(--mu)"}}>{g.Designation || "No Designation"} {g.Mobile ? `• ${g.Mobile}` : ""}</div>
-                   </div>
-                   <button onClick={()=>handleDeleteGlobalGuest(g)} style={{background:"none",border:"none",color:"#991B1B",fontSize:".8rem",cursor:"pointer",textDecoration:"underline"}}>Remove</button>
+          <div style={{display:"flex",gap:24,flexDirection:mob?"column":"row"}}>
+            {/* Left Side Form: Add / Edit Contact */}
+            <div style={{flex:1.1}}>
+              <form onSubmit={handleAddGlobalGuest} style={{display:"flex",flexDirection:"column",gap:12}}>
+                {editingGuest && (
+                  <div style={{background:"#EFF6FF",border:"1.5px solid #93C5FD",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:".82rem",color:"#1E40AF",fontWeight:800}}>✏️ Editing Contact: {editingGuest["Full Name"]}</span>
+                    <button type="button" onClick={() => {
+                      setEditingGuest(null);
+                      setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member", groups: ["CWC Member"] });
+                    }} style={{background:"none",border:"none",color:"#EF4444",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}>Cancel Edit</button>
+                  </div>
+                )}
+
+                <div>
+                  <label style={{display:"block",fontSize:".82rem",fontWeight:700,marginBottom:4}}>Full Name (Required) *</label>
+                  <input type="text" required placeholder="e.g. Harish Makwana" value={guestForm.fullName} onChange={e=>setGuestForm({...guestForm, fullName: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".88rem"}} />
                 </div>
-              ))}
-              {globalGuests.length === 0 && <div style={{color:"var(--mu)",fontSize:".9rem"}}>Directory is empty.</div>}
+
+                <div style={{display:"flex",gap:12}}>
+                  <div style={{flex:1}}>
+                    <label style={{display:"block",fontSize:".82rem",fontWeight:700,marginBottom:4}}>Designation / Role</label>
+                    <input type="text" placeholder="e.g. Trustee, CWC Member" value={guestForm.designation} onChange={e=>setGuestForm({...guestForm, designation: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".85rem"}} />
+                  </div>
+                  <div style={{flex:1}}>
+                    <label style={{display:"block",fontSize:".82rem",fontWeight:700,marginBottom:4}}>Mobile Number</label>
+                    <input type="text" placeholder="e.g. 9819728011" value={guestForm.mobile} onChange={e=>setGuestForm({...guestForm, mobile: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".85rem"}} />
+                  </div>
+                </div>
+
+                {/* Multi-Group Selector */}
+                <div style={{background:"#F8FAFC",padding:"12px",borderRadius:10,border:"1.5px solid #CBD5E1"}}>
+                  <label style={{display:"block",fontSize:".82rem",fontWeight:800,color:"#0F172A",marginBottom:4}}>
+                    🏷️ Assign Multiple Contact Groups:
+                  </label>
+                  <div style={{fontSize:".72rem",color:"#64748B",marginBottom:8}}>
+                    Click to add/remove groups. One person can belong to multiple committees.
+                  </div>
+                  
+                  {/* Active Group Badges */}
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+                    {(guestForm.groups || []).map((grp, gIdx) => (
+                      <span key={gIdx} style={{background:"#DBEAFE",color:"#1E40AF",border:"1px solid #93C5FD",padding:"3px 8px",borderRadius:12,fontSize:".74rem",fontWeight:700,display:"inline-flex",alignItems:"center",gap:5}}>
+                        <span>👥 {grp}</span>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            const updated = (guestForm.groups || []).filter((_, k) => k !== gIdx);
+                            setGuestForm({ ...guestForm, groups: updated, group: updated.join(", ") });
+                          }}
+                          style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer",padding:0,fontWeight:800,fontSize:".8rem"}}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                    {(guestForm.groups || []).length === 0 && (
+                      <span style={{fontSize:".75rem",color:"#94A3B8",fontStyle:"italic"}}>No groups assigned yet. Click a group below.</span>
+                    )}
+                  </div>
+
+                  {/* Quick Add Suggested Groups */}
+                  <div style={{display:"flex",flexWrap:"wrap",gap:5,alignItems:"center",marginBottom:8}}>
+                    <span style={{fontSize:".7rem",color:"#475569",fontWeight:700}}>Quick Add:</span>
+                    {["CWC Member", "Trustee", "Education Committee", "Core Committee", "Volunteer", "Kalyan Team", "Special Guest of Honor"].map(quickG => {
+                      const isSelected = (guestForm.groups || []).includes(quickG);
+                      return (
+                        <button
+                          key={quickG}
+                          type="button"
+                          onClick={() => {
+                            const cur = guestForm.groups || [];
+                            const updated = isSelected ? cur.filter(x => x !== quickG) : [...cur, quickG];
+                            setGuestForm({ ...guestForm, groups: updated, group: updated.join(", ") });
+                          }}
+                          style={{
+                            padding:"3px 7px",
+                            borderRadius:6,
+                            fontSize:".7rem",
+                            fontWeight:700,
+                            cursor:"pointer",
+                            background: isSelected ? "#2563EB" : "white",
+                            color: isSelected ? "white" : "#334155",
+                            border: isSelected ? "1px solid #1D4ED8" : "1px solid #CBD5E1"
+                          }}
+                        >
+                          {isSelected ? ("✓ " + quickG) : ("+ " + quickG)}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Custom Group Name Input */}
+                  <div style={{display:"flex",gap:6}}>
+                    <input 
+                      type="text" 
+                      placeholder="Type custom group (e.g. Audit Team)..." 
+                      id="custom_group_dir_inp"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const val = e.target.value?.trim();
+                          if (val) {
+                            const cur = guestForm.groups || [];
+                            if (!cur.includes(val)) {
+                              const updated = [...cur, val];
+                              setGuestForm({ ...guestForm, groups: updated, group: updated.join(", ") });
+                            }
+                            e.target.value = "";
+                          }
+                        }
+                      }}
+                      style={{flex:1,padding:"6px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".8rem",fontFamily:"inherit"}} 
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        const inp = document.getElementById("custom_group_dir_inp");
+                        const val = inp?.value?.trim();
+                        if (val) {
+                          const cur = guestForm.groups || [];
+                          if (!cur.includes(val)) {
+                            const updated = [...cur, val];
+                            setGuestForm({ ...guestForm, groups: updated, group: updated.join(", ") });
+                          }
+                          inp.value = "";
+                        }
+                      }}
+                      style={{padding:"6px 12px",background:"#0D4B5E",color:"white",border:"none",borderRadius:6,fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{display:"flex",gap:12}}>
+                  <div style={{flex:1}}>
+                    <label style={{display:"block",fontSize:".82rem",fontWeight:700,marginBottom:4}}>Email</label>
+                    <input type="email" placeholder="Optional" value={guestForm.email} onChange={e=>setGuestForm({...guestForm, email: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".85rem"}} />
+                  </div>
+                  <div style={{flex:1}}>
+                    <label style={{display:"block",fontSize:".82rem",fontWeight:700,marginBottom:4}}>Address / Location</label>
+                    <input type="text" placeholder="e.g. Mahim, Mumbai" value={guestForm.address} onChange={e=>setGuestForm({...guestForm, address: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".85rem"}} />
+                  </div>
+                </div>
+
+                <button type="submit" disabled={addingGuest} style={{padding:"11px 20px",borderRadius:8,border:"none",background:editingGuest ? "linear-gradient(135deg, #15803D, #166534)" : "var(--dt)",color:"white",cursor:addingGuest?"wait":"pointer",fontWeight:800,fontSize:".9rem",marginTop:6,boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>
+                  {addingGuest ? "Saving..." : editingGuest ? "💾 Save Updated Contact" : "➕ Add to Directory"}
+                </button>
+              </form>
+
+              <div style={{marginTop:20,borderTop:"1px solid #E2E8F0",paddingTop:14}}>
+                <label style={{display:"block",fontSize:".82rem",fontWeight:700,marginBottom:6}}>Import Contacts from Excel (.xlsx/.xls)</label>
+                <input type="file" ref={fileInputRef} accept=".xlsx,.xls" onChange={handleExcelUpload} style={{display:"none"}} />
+                <button onClick={() => fileInputRef.current?.click()} disabled={uploadingExcel} style={{width:"100%",padding:"9px",borderRadius:8,background:"#F8FAFC",color:"var(--dt)",border:"1.5px solid #CBD5E1",fontWeight:700,cursor:uploadingExcel?"wait":"pointer",fontSize:".82rem"}}>
+                  {uploadingExcel ? "Uploading..." : "📂 Upload Excel File"}
+                </button>
+              </div>
+            </div>
+
+            {/* Right Side: Directory List with Group Filter Pills & Edit Action */}
+            <div style={{flex:1.4,borderLeft:mob?"none":"1.5px solid #E2E8F0",paddingLeft:mob?0:20}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <h3 style={{fontSize:"1rem",fontWeight:800,color:"#0F172A",margin:0}}>
+                  Directory List ({filteredDirectoryGuests.length} / {globalGuests.length})
+                </h3>
+              </div>
+
+              {/* Group Filter Pills */}
+              <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12,background:"#F1F5F9",padding:6,borderRadius:8}}>
+                <button
+                  type="button"
+                  onClick={() => setDirectoryGroupFilter("All")}
+                  style={{
+                    padding:"3px 8px",
+                    borderRadius:6,
+                    fontSize:".72rem",
+                    fontWeight:800,
+                    cursor:"pointer",
+                    border:"none",
+                    background: directoryGroupFilter === "All" ? "#0D4B5E" : "transparent",
+                    color: directoryGroupFilter === "All" ? "white" : "#475569"
+                  }}
+                >
+                  All ({globalGuests.length})
+                </button>
+                {uniqueGroups.map(grp => {
+                  const count = globalGuests.filter(g => getContactGroups(g).includes(grp)).length;
+                  const isActive = directoryGroupFilter === grp;
+                  return (
+                    <button
+                      key={grp}
+                      type="button"
+                      onClick={() => setDirectoryGroupFilter(grp)}
+                      style={{
+                        padding:"3px 8px",
+                        borderRadius:6,
+                        fontSize:".72rem",
+                        fontWeight:800,
+                        cursor:"pointer",
+                        border:"none",
+                        background: isActive ? "#0D4B5E" : "white",
+                        color: isActive ? "white" : "#334155",
+                        boxShadow: isActive ? "none" : "0 1px 2px rgba(0,0,0,0.05)"
+                      }}
+                    >
+                      {grp} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Contact Cards List */}
+              <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:440,overflowY:"auto",paddingRight:6}}>
+                {filteredDirectoryGuests.map(g => {
+                  const cGroups = getContactGroups(g);
+                  return (
+                    <div key={g.id} style={{padding:"10px 12px",border:"1px solid #E2E8F0",borderRadius:10,background:"#FAFAFA",display:"flex",flexDirection:"column",gap:5}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                        <div>
+                          <div style={{fontWeight:800,color:"#0F172A",fontSize:".88rem"}}>{g["Full Name"]}</div>
+                          <div style={{fontSize:".78rem",color:"#64748B",marginTop:2}}>
+                            {g.Designation || "No Designation"} {g.Mobile ? (" • 📱 " + g.Mobile) : ""}
+                          </div>
+                        </div>
+                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setEditingGuest(g);
+                              setGuestForm({
+                                fullName: g["Full Name"] || g.Name || "",
+                                mobile: g.Mobile || g["Mobile Number"] || "",
+                                email: g.Email || "",
+                                address: g.Address || "",
+                                designation: g.Designation || "",
+                                group: cGroups.join(", "),
+                                groups: cGroups
+                              });
+                            }} 
+                            style={{background:"#EFF6FF",border:"1px solid #BFDBFE",color:"#1D4ED8",fontSize:".74rem",fontWeight:700,cursor:"pointer",padding:"3px 8px",borderRadius:6}}
+                          >
+                            ✏️ Edit
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={()=>handleDeleteGlobalGuest(g)} 
+                            style={{background:"none",border:"none",color:"#DC2626",fontSize:".74rem",cursor:"pointer",textDecoration:"underline"}}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Assigned Multi-Group Badges */}
+                      <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>
+                        {cGroups.map((grp, k) => (
+                          <span 
+                            key={k} 
+                            onClick={() => setDirectoryGroupFilter(grp)}
+                            style={{background:"#DCFCE7",color:"#15803D",padding:"2px 6px",borderRadius:6,fontSize:".68rem",fontWeight:700,border:"1px solid #86EFAC",cursor:"pointer"}}
+                            title={"Filter directory by " + grp}
+                          >
+                            👥 {grp}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredDirectoryGuests.length === 0 && (
+                  <div style={{color:"var(--mu)",fontSize:".85rem",padding:16,textAlign:"center",background:"#F8FAFC",borderRadius:8}}>
+                    No contacts found in group "{directoryGroupFilter}".
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
-  let availableFields = [];
+  let availableFields = [];  let availableFields = [];
   if (selectedEventId) {
     const ev = inviteEvents.find(e => e.id === selectedEventId);
     const keys = new Set(Object.keys(ev?.inviteMap || {}));
