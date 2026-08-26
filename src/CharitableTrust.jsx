@@ -5235,7 +5235,7 @@ function ContentEditor({ C, setC, setPage, auth, hasAccess, master }) {
         </G2>
         <F label="Meta Description" path="seoDescription" ta hint="Summarizes your site for Google search results"/>
         <F label="Meta Keywords (Comma Separated)" path="seoKeywords" hint="e.g. Mumbai Meghwal Panchayat, MMP, Mumbai Meghwal Samaj, Vidya Gohil Charitable Trust"/>
-        <F label="Canonical Site URL" path="seoCanonical" hint="e.g. https://pradeepparmar902.github.io/MMP-CWC-Website/"/>
+        <F label="Canonical Site URL" path="seoCanonical" hint="e.g. https://www.mmp-cwc.com/"/>
         <G2>
           <F label="Social Share Title (OG / WhatsApp)" path="seoOgTitle"/>
           <F label="Social Share Description (OG / WhatsApp)" path="seoOgDesc" ta/>
@@ -10329,7 +10329,7 @@ function AdminEvents({ mob, C, setC, auth }) {
                   {/* List of Custom Templates */}
                   <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:10}}>
                     {(ev.pdfTemplates || []).map((tpl, tplIdx) => {
-                      const directUrl = `https://pradeepparmar902.github.io/MY_Community_Website/?doc=${tpl.id}&pass={TXN_ID}`;
+                      const directUrl = `https://www.mmp-cwc.com/?doc=${tpl.id}&pass={TXN_ID}`;
                       return (
                         <div key={tpl.id} style={{background:"white",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1",display:"flex",flexDirection:"column",gap:6}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:6}}>
@@ -13060,7 +13060,7 @@ function PaymentSettings({ mob, C, setC, auth }) {
         <F label="Meta Description" path="seoDescription" ta help="Summarizes your site for Google search results"/>
         <F label="Meta Keywords (Comma Separated)" path="seoKeywords" help="e.g. Mumbai Meghwal Panchayat, MMP, Mumbai Meghwal Samaj"/>
         <F label="Author / Organization Name" path="seoAuthor"/>
-        <F label="Canonical Site URL" path="seoCanonical" help="e.g. https://pradeepparmar902.github.io/MMP-CWC-Website/"/>
+        <F label="Canonical Site URL" path="seoCanonical" help="e.g. https://www.mmp-cwc.com/"/>
         <F label="Social Share Title (OG / WhatsApp)" path="seoOgTitle"/>
         <F label="Social Share Description (OG / WhatsApp)" path="seoOgDesc" ta/>
       </Sec>
@@ -15065,11 +15065,11 @@ function WhatsAppAdminManager({ C, setC, auth }) {
                   </label>
                   <input
                     type="text"
-                    value={C.whatsAppPortalUrl !== undefined ? C.whatsAppPortalUrl : "https://pradeepparmar902.github.io/MY_Community_Website/"}
+                    value={C.whatsAppPortalUrl !== undefined ? C.whatsAppPortalUrl : "https://www.mmp-cwc.com/"}
                     onChange={e => {
                       if (setC) setC({ ...C, whatsAppPortalUrl: e.target.value });
                     }}
-                    placeholder="e.g. https://pradeepparmar902.github.io/MY_Community_Website/"
+                    placeholder="e.g. https://www.mmp-cwc.com/"
                     style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".88rem",fontWeight:700,color:"#2563EB",boxSizing:"border-box",background:"white"}}
                   />
                 </div>
@@ -18032,7 +18032,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, auth, onLogSent
       rawTemplateText = activeTemplate?.text || defaultApprovedTpl;
     }
 
-    const baseUrl = `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}`.replace(/\/?$/, '');
+    const baseUrl = `${C.whatsAppPortalUrl || "https://www.mmp-cwc.com/"}`.replace(/\/?$/, '');
     const certUrl = `${baseUrl}/?cert=${encodeURIComponent(rTxn || "")}`;
     const inviteUrl = `${baseUrl}/?invite=${encodeURIComponent(rTxn || "")}`;
     const defaultUrl = (selectedTplId === "tpl_cert_notice" || activeTemplate?.name?.toLowerCase().includes("certificate")) ? certUrl : inviteUrl;
@@ -18055,8 +18055,8 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, auth, onLogSent
       .replace(/\{HELPLINE_PHONES\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209 / +91 9967821964")
       .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209");
 
-    if (rTxn && rTxn !== 'N/A' && processed.includes("https://pradeepparmar902.github.io/MY_Community_Website/") && !processed.includes("?invite=") && !processed.includes("?pass=") && !processed.includes("?cert=")) {
-      processed = processed.replace("https://pradeepparmar902.github.io/MY_Community_Website/", defaultUrl);
+    if (rTxn && rTxn !== 'N/A' && processed.includes("https://www.mmp-cwc.com/") && !processed.includes("?invite=") && !processed.includes("?pass=") && !processed.includes("?cert=")) {
+      processed = processed.replace("https://www.mmp-cwc.com/", defaultUrl);
     }
     return processed;
   };
@@ -18924,12 +18924,12 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
                   <div style={{fontSize:".74rem",fontWeight:800,color:"#334155"}}>🔗 DIRECT URL GENERATOR HELPER:</div>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:"white",padding:"6px 10px",borderRadius:6,border:"1px solid #E2E8F0"}}>
                     <span style={{fontSize:".75rem",color:"#1E293B",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                      🎓 <strong>Certificate URL:</strong> https://pradeepparmar902.github.io/MY_Community_Website/?cert={'{TXN_ID}'}
+                      🎓 <strong>Certificate URL:</strong> https://www.mmp-cwc.com/?cert={'{TXN_ID}'}
                     </span>
                     <button
                       type="button"
                       onClick={() => {
-                        insertPlaceholder(' https://pradeepparmar902.github.io/MY_Community_Website/?cert={TXN_ID}');
+                        insertPlaceholder(' https://www.mmp-cwc.com/?cert={TXN_ID}');
                         alert("Inserted Certificate URL into template!");
                       }}
                       style={{padding:"3px 8px",background:"#2563EB",color:"white",border:"none",borderRadius:4,fontSize:".7rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
@@ -18940,12 +18940,12 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
 
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:"white",padding:"6px 10px",borderRadius:6,border:"1px solid #E2E8F0"}}>
                     <span style={{fontSize:".75rem",color:"#1E293B",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                      💌 <strong>Invite Pass URL:</strong> https://pradeepparmar902.github.io/MY_Community_Website/?invite={'{TXN_ID}'}
+                      💌 <strong>Invite Pass URL:</strong> https://www.mmp-cwc.com/?invite={'{TXN_ID}'}
                     </span>
                     <button
                       type="button"
                       onClick={() => {
-                        insertPlaceholder(' https://pradeepparmar902.github.io/MY_Community_Website/?invite={TXN_ID}');
+                        insertPlaceholder(' https://www.mmp-cwc.com/?invite={TXN_ID}');
                         alert("Inserted Invite Pass URL into template!");
                       }}
                       style={{padding:"3px 8px",background:"#15803D",color:"white",border:"none",borderRadius:4,fontSize:".7rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
@@ -18956,7 +18956,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
 
                   {/* List each custom PDF template created for this event */}
                   {(event?.pdfTemplates || []).map(tpl => {
-                    const customLink = `https://pradeepparmar902.github.io/MY_Community_Website/?doc=${tpl.id}&pass={TXN_ID}`;
+                    const customLink = `https://www.mmp-cwc.com/?doc=${tpl.id}&pass={TXN_ID}`;
                     return (
                       <div key={tpl.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:"#F0FDF4",padding:"6px 10px",borderRadius:6,border:"1px solid #86EFAC"}}>
                         <span style={{fontSize:".75rem",color:"#166534",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
@@ -19062,7 +19062,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
   const [selectedTplId, setSelectedTplId] = useState(defaultTpl?.id || "tpl_student_pass");
 
   const formatTemplateString = (tplString, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks) => {
-    const baseUrl = `${C.whatsAppPortalUrl || "https://pradeepparmar902.github.io/MY_Community_Website/"}`.replace(/\/?$/, '');
+    const baseUrl = `${C.whatsAppPortalUrl || "https://www.mmp-cwc.com/"}`.replace(/\/?$/, '');
     const certUrl = `${baseUrl}/?cert=${encodeURIComponent(rTxn || "")}`;
     const inviteUrl = `${baseUrl}/?invite=${encodeURIComponent(rTxn || "")}`;
     const docUrl = reg.customDocId ? `${baseUrl}/?doc=${encodeURIComponent(reg.customDocId)}&pass=${encodeURIComponent(rTxn || "")}` : null;
@@ -24797,7 +24797,8 @@ const generateVibhagSummaryWhatsAppText = (summaryData) => {
   }
 
   text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-  text += "🌐 *Live Portal:* https://pradeepparmar902.github.io/MY_Community_Website/";
+  const portalUrl = (C.whatsAppPortalUrl || C.seoCanonical || "https://www.mmp-cwc.com/").replace(/\/?$/, "");
+  text += `🌐 *Live Portal:* ${portalUrl}/`;
   return text;
 };
 
@@ -24837,7 +24838,8 @@ const generateApplicationWhatsAppText = (app) => {
   text += `📌 *Status  :* ${statusBadge}\n`;
   text += `💬 *Remarks :* ${remarks}\n`;
   text += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-  text += "🌐 *Portal:* https://pradeepparmar902.github.io/MY_Community_Website/";
+  const portalUrl2 = (C.whatsAppPortalUrl || C.seoCanonical || "https://www.mmp-cwc.com/").replace(/\/?$/, "");
+  text += `🌐 *Portal:* ${portalUrl2}/`;
   return text;
 };
 
@@ -26634,7 +26636,7 @@ function DirectInvitePassView({ C, auth }) {
               <div style={{fontSize:"2.2rem",marginBottom:12}}>⚠️</div>
               <h3 style={{fontSize:"1.1rem",color:"#DC2626",margin:"0 0 8px 0"}}>{error}</h3>
               <p style={{fontSize:".85rem",color:"#64748B",marginBottom:20}}>Please check your Transaction ID or contact our helpline for assistance.</p>
-              <a href="https://pradeepparmar902.github.io/MY_Community_Website/" style={{display:"inline-block",padding:"10px 20px",background:"#1E293B",color:"white",borderRadius:8,textDecoration:"none",fontSize:".85rem",fontWeight:700}}>
+              <a href="https://www.mmp-cwc.com/" style={{display:"inline-block",padding:"10px 20px",background:"#1E293B",color:"white",borderRadius:8,textDecoration:"none",fontSize:".85rem",fontWeight:700}}>
                 ← Go to Community Website
               </a>
             </div>
@@ -26732,7 +26734,7 @@ function DirectInvitePassView({ C, auth }) {
                 </button>
 
                 <a
-                  href="https://pradeepparmar902.github.io/MY_Community_Website/"
+                  href="https://www.mmp-cwc.com/"
                   style={{
                     padding: "12px 16px",
                     background: "#F1F5F9",
