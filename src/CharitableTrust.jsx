@@ -22340,6 +22340,8 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   const [guestForm, setGuestForm] = useState({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member", groups: ["CWC Member"] });
   const [editingGuest, setEditingGuest] = useState(null);
   const [directoryGroupFilter, setDirectoryGroupFilter] = useState("All");
+  const [directorySearch, setDirectorySearch] = useState("");
+  const [expandedCardGroups, setExpandedCardGroups] = useState({});
   const [showImportContactGroupModal, setShowImportContactGroupModal] = useState(false);
   const [selectedContactGroup, setSelectedContactGroup] = useState("All");
   const [addingGuest, setAddingGuest] = useState(false);
@@ -23215,121 +23217,211 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
               </div>
             </div>
 
-            {/* Right Side: Directory List with Group Filter Pills & Edit Action */}
+            {/* Right Side: Sleek, Compact Directory List with Space-Efficient Filter Bar */}
             <div style={{flex:1.4,borderLeft:mob?"none":"1.5px solid #E2E8F0",paddingLeft:mob?0:20}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <h3 style={{fontSize:"1rem",fontWeight:800,color:"#0F172A",margin:0}}>
-                  Directory List ({filteredDirectoryGuests.length} / {globalGuests.length})
-                </h3>
-              </div>
+              {/* Header & Single-Row Search + Dropdown Filter */}
+              <div style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <span style={{fontSize:".95rem",fontWeight:800,color:"#0F172A"}}>
+                    Contacts Directory ({filteredDirectoryGuests.length} / {globalGuests.length})
+                  </span>
+                  {directoryGroupFilter !== "All" && (
+                    <button 
+                      type="button" 
+                      onClick={() => setDirectoryGroupFilter("All")}
+                      style={{background:"none",border:"none",color:"#2563EB",fontSize:".74rem",fontWeight:700,cursor:"pointer"}}
+                    >
+                      Reset Filter (Show All)
+                    </button>
+                  )}
+                </div>
 
-              {/* Group Filter Pills */}
-              <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:12,background:"#F1F5F9",padding:6,borderRadius:8}}>
-                <button
-                  type="button"
-                  onClick={() => setDirectoryGroupFilter("All")}
-                  style={{
-                    padding:"3px 8px",
-                    borderRadius:6,
-                    fontSize:".72rem",
-                    fontWeight:800,
-                    cursor:"pointer",
-                    border:"none",
-                    background: directoryGroupFilter === "All" ? "#0D4B5E" : "transparent",
-                    color: directoryGroupFilter === "All" ? "white" : "#475569"
-                  }}
-                >
-                  All ({globalGuests.length})
-                </button>
-                {uniqueGroups.map(grp => {
-                  const count = globalGuests.filter(g => getContactGroups(g).includes(grp)).length;
-                  const isActive = directoryGroupFilter === grp;
-                  return (
+                {/* Compact Filter Row (Search Box + Group Select Dropdown) */}
+                <div style={{display:"flex",gap:8,alignItems:"center",background:"#F8FAFC",padding:8,borderRadius:8,border:"1px solid #CBD5E1"}}>
+                  <div style={{flex:1.2,position:"relative"}}>
+                    <input 
+                      type="text" 
+                      placeholder="🔍 Search name, phone, role..." 
+                      value={directorySearch}
+                      onChange={e => setDirectorySearch(e.target.value)}
+                      style={{width:"100%",padding:"6px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".78rem",fontFamily:"inherit",boxSizing:"border-box",background:"white"}}
+                    />
+                  </div>
+                  <div style={{flex:1,display:"flex",alignItems:"center",gap:4}}>
+                    <select
+                      value={directoryGroupFilter}
+                      onChange={e => setDirectoryGroupFilter(e.target.value)}
+                      style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".78rem",fontWeight:700,background:"white",color:"#0F172A",fontFamily:"inherit",cursor:"pointer"}}
+                    >
+                      <option value="All">👥 All Groups ({globalGuests.length})</option>
+                      {uniqueGroups.map(grp => {
+                        const count = globalGuests.filter(g => getContactGroups(g).includes(grp)).length;
+                        return (
+                          <option key={grp} value={grp}>
+                            👥 {grp} ({count})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Single-Line Horizontal Scrollable Quick Filter Pills */}
+                {uniqueGroups.length > 0 && (
+                  <div style={{display:"flex",gap:5,overflowX:"auto",whiteSpace:"nowrap",paddingTop:8,paddingBottom:2,scrollbarWidth:"thin"}}>
                     <button
-                      key={grp}
                       type="button"
-                      onClick={() => setDirectoryGroupFilter(grp)}
+                      onClick={() => setDirectoryGroupFilter("All")}
                       style={{
-                        padding:"3px 8px",
-                        borderRadius:6,
-                        fontSize:".72rem",
-                        fontWeight:800,
+                        padding:"2px 8px",
+                        borderRadius:12,
+                        fontSize:".7rem",
+                        fontWeight:700,
                         cursor:"pointer",
-                        border:"none",
-                        background: isActive ? "#0D4B5E" : "white",
-                        color: isActive ? "white" : "#334155",
-                        boxShadow: isActive ? "none" : "0 1px 2px rgba(0,0,0,0.05)"
+                        border: directoryGroupFilter === "All" ? "1px solid #0D4B5E" : "1px solid #CBD5E1",
+                        background: directoryGroupFilter === "All" ? "#0D4B5E" : "white",
+                        color: directoryGroupFilter === "All" ? "white" : "#475569",
+                        flexShrink:0
                       }}
                     >
-                      {grp} ({count})
+                      All ({globalGuests.length})
                     </button>
-                  );
-                })}
-              </div>
-
-              {/* Contact Cards List */}
-              <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:440,overflowY:"auto",paddingRight:6}}>
-                {filteredDirectoryGuests.map(g => {
-                  const cGroups = getContactGroups(g);
-                  return (
-                    <div key={g.id} style={{padding:"10px 12px",border:"1px solid #E2E8F0",borderRadius:10,background:"#FAFAFA",display:"flex",flexDirection:"column",gap:5}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                        <div>
-                          <div style={{fontWeight:800,color:"#0F172A",fontSize:".88rem"}}>{g["Full Name"]}</div>
-                          <div style={{fontSize:".78rem",color:"#64748B",marginTop:2}}>
-                            {g.Designation || "No Designation"} {g.Mobile ? (" • 📱 " + g.Mobile) : ""}
-                          </div>
-                        </div>
-                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                          <button 
-                            type="button"
-                            onClick={() => {
-                              setEditingGuest(g);
-                              setGuestForm({
-                                fullName: g["Full Name"] || g.Name || "",
-                                mobile: g.Mobile || g["Mobile Number"] || "",
-                                email: g.Email || "",
-                                address: g.Address || "",
-                                designation: g.Designation || "",
-                                group: cGroups.join(", "),
-                                groups: cGroups
-                              });
-                            }} 
-                            style={{background:"#EFF6FF",border:"1px solid #BFDBFE",color:"#1D4ED8",fontSize:".74rem",fontWeight:700,cursor:"pointer",padding:"3px 8px",borderRadius:6}}
-                          >
-                            ✏️ Edit
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={()=>handleDeleteGlobalGuest(g)} 
-                            style={{background:"none",border:"none",color:"#DC2626",fontSize:".74rem",cursor:"pointer",textDecoration:"underline"}}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Assigned Multi-Group Badges */}
-                      <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2}}>
-                        {cGroups.map((grp, k) => (
-                          <span 
-                            key={k} 
-                            onClick={() => setDirectoryGroupFilter(grp)}
-                            style={{background:"#DCFCE7",color:"#15803D",padding:"2px 6px",borderRadius:6,fontSize:".68rem",fontWeight:700,border:"1px solid #86EFAC",cursor:"pointer"}}
-                            title={"Filter directory by " + grp}
-                          >
-                            👥 {grp}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-                {filteredDirectoryGuests.length === 0 && (
-                  <div style={{color:"var(--mu)",fontSize:".85rem",padding:16,textAlign:"center",background:"#F8FAFC",borderRadius:8}}>
-                    No contacts found in group "{directoryGroupFilter}".
+                    {uniqueGroups.map(grp => {
+                      const count = globalGuests.filter(g => getContactGroups(g).includes(grp)).length;
+                      const isActive = directoryGroupFilter === grp;
+                      return (
+                        <button
+                          key={grp}
+                          type="button"
+                          onClick={() => setDirectoryGroupFilter(grp)}
+                          style={{
+                            padding:"2px 8px",
+                            borderRadius:12,
+                            fontSize:".7rem",
+                            fontWeight:700,
+                            cursor:"pointer",
+                            border: isActive ? "1px solid #0D4B5E" : "1px solid #E2E8F0",
+                            background: isActive ? "#0D4B5E" : "#F1F5F9",
+                            color: isActive ? "white" : "#334155",
+                            flexShrink:0
+                          }}
+                        >
+                          {grp} ({count})
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
+              </div>
+
+              {/* Contact Cards List with Compact Group Badges */}
+              <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:450,overflowY:"auto",paddingRight:4}}>
+                {(() => {
+                  let list = filteredDirectoryGuests;
+                  if (directorySearch && directorySearch.trim()) {
+                    const q = directorySearch.trim().toLowerCase();
+                    list = list.filter(g => {
+                      const name = String(g["Full Name"] || g.Name || "").toLowerCase();
+                      const mobile = String(g.Mobile || g["Mobile Number"] || "").toLowerCase();
+                      const desig = String(g.Designation || "").toLowerCase();
+                      const grps = getContactGroups(g).join(" ").toLowerCase();
+                      return name.includes(q) || mobile.includes(q) || desig.includes(q) || grps.includes(q);
+                    });
+                  }
+
+                  if (list.length === 0) {
+                    return (
+                      <div style={{color:"var(--mu)",fontSize:".84rem",padding:16,textAlign:"center",background:"#F8FAFC",borderRadius:8,border:"1px dashed #CBD5E1"}}>
+                        No matching contacts found {directorySearch ? `for "${directorySearch}"` : `in "${directoryGroupFilter}"`}.
+                      </div>
+                    );
+                  }
+
+                  return list.map(g => {
+                    const cGroups = getContactGroups(g);
+                    const isExpanded = !!expandedCardGroups[g.id];
+                    const visibleGroups = isExpanded ? cGroups : cGroups.slice(0, 3);
+                    const hiddenCount = cGroups.length - visibleGroups.length;
+
+                    return (
+                      <div key={g.id} style={{padding:"9px 12px",border:"1px solid #E2E8F0",borderRadius:10,background:"#FAFAFA",display:"flex",flexDirection:"column",gap:4,transition:"all .15s"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                          <div>
+                            <div style={{fontWeight:800,color:"#0F172A",fontSize:".88rem",display:"flex",alignItems:"center",gap:6}}>
+                              <span>{g["Full Name"]}</span>
+                              {g.Designation && (
+                                <span style={{fontSize:".72rem",fontWeight:600,color:"#0D4B5E",background:"#E0F2FE",padding:"1px 6px",borderRadius:4}}>
+                                  {g.Designation}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{fontSize:".76rem",color:"#64748B",marginTop:2}}>
+                              {g.Mobile ? ("📱 " + g.Mobile) : "No Mobile"} {g.Address ? (" • 📍 " + g.Address) : ""}
+                            </div>
+                          </div>
+                          <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                setEditingGuest(g);
+                                setGuestForm({
+                                  fullName: g["Full Name"] || g.Name || "",
+                                  mobile: g.Mobile || g["Mobile Number"] || "",
+                                  email: g.Email || "",
+                                  address: g.Address || "",
+                                  designation: g.Designation || "",
+                                  group: cGroups.join(", "),
+                                  groups: cGroups
+                                });
+                              }} 
+                              style={{background:"#EFF6FF",border:"1px solid #BFDBFE",color:"#1D4ED8",fontSize:".74rem",fontWeight:800,cursor:"pointer",padding:"3px 8px",borderRadius:6}}
+                            >
+                              ✏️ Edit
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={()=>handleDeleteGlobalGuest(g)} 
+                              style={{background:"none",border:"none",color:"#DC2626",fontSize:".74rem",cursor:"pointer",textDecoration:"underline"}}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Compact Multi-Group Badges with +N More Pill */}
+                        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2,alignItems:"center"}}>
+                          {visibleGroups.map((grp, k) => (
+                            <span 
+                              key={k} 
+                              onClick={() => setDirectoryGroupFilter(grp)}
+                              style={{background:"#DCFCE7",color:"#15803D",padding:"2px 6px",borderRadius:6,fontSize:".67rem",fontWeight:700,border:"1px solid #86EFAC",cursor:"pointer"}}
+                              title={"Filter by " + grp}
+                            >
+                              👥 {grp}
+                            </span>
+                          ))}
+                          {hiddenCount > 0 && (
+                            <span 
+                              onClick={() => setExpandedCardGroups(prev => ({ ...prev, [g.id]: true }))}
+                              style={{background:"#FEF3C7",color:"#92400E",border:"1px solid #FDE68A",padding:"2px 6px",borderRadius:6,fontSize:".67rem",fontWeight:800,cursor:"pointer"}}
+                              title="Click to view all groups"
+                            >
+                              +{hiddenCount} more...
+                            </span>
+                          )}
+                          {isExpanded && cGroups.length > 3 && (
+                            <span 
+                              onClick={() => setExpandedCardGroups(prev => ({ ...prev, [g.id]: false }))}
+                              style={{background:"#F1F5F9",color:"#64748B",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:6,fontSize:".67rem",fontWeight:700,cursor:"pointer"}}
+                            >
+                              Collapse ▴
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
           </div>
