@@ -24779,19 +24779,20 @@ const generateVibhagSummaryWhatsAppText = (summaryData) => {
   text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
   
   if (vibhagList && vibhagList.length > 0) {
-    text += "📍 *VIBHAG-WISE BREAKDOWN TABLE:*\n";
+    text += "📍 *VIBHAG-WISE BREAKDOWN:*\n";
+    text += "_(T: Total │ P: Pending │ A: Approved │ R: Rejected)_\n";
     text += "```\n";
-    text += "#  Vibhag Name       Tot Pend Appr Rej\n";
-    text += "── ───────────────── ─── ──── ──── ───\n";
+    text += "#  Vibhag          T  P  A  R\n";
+    text += "── ────────────── ── ── ── ──\n";
 
     let sumTot = 0, sumPen = 0, sumApp = 0, sumRej = 0;
     vibhagList.forEach(([vName, vStat], idx) => {
       const numStr = String(idx + 1).padStart(2, "0");
-      let cleanV = vName.length > 17 ? vName.slice(0, 15) + ".." : vName.padEnd(17, " ");
-      const tStr = String(vStat.total).padStart(3, " ");
-      const pStr = String(vStat.pending).padStart(4, " ");
-      const aStr = String(vStat.approved).padStart(4, " ");
-      const rStr = String(vStat.rejected || 0).padStart(3, " ");
+      let cleanV = vName.length > 14 ? vName.slice(0, 12) + ".." : vName.padEnd(14, " ");
+      const tStr = String(vStat.total).padStart(2, " ");
+      const pStr = String(vStat.pending).padStart(2, " ");
+      const aStr = String(vStat.approved).padStart(2, " ");
+      const rStr = String(vStat.rejected || 0).padStart(2, " ");
       sumTot += vStat.total;
       sumPen += vStat.pending;
       sumApp += vStat.approved;
@@ -24799,12 +24800,12 @@ const generateVibhagSummaryWhatsAppText = (summaryData) => {
       text += `${numStr} ${cleanV} ${tStr} ${pStr} ${aStr} ${rStr}\n`;
     });
 
-    text += "── ───────────────── ─── ─── ───\n";
-    const totT = String(sumTot).padStart(3, " ");
-    const totP = String(sumPen).padStart(4, " ");
-    const totA = String(sumApp).padStart(4, " ");
-    const totR = String(sumRej).padStart(3, " ");
-    text += `   TOTAL             ${totT} ${totP} ${totA} ${totR}\n`;
+    text += "── ────────────── ── ── ── ──\n";
+    const totT = String(sumTot).padStart(2, " ");
+    const totP = String(sumPen).padStart(2, " ");
+    const totA = String(sumApp).padStart(2, " ");
+    const totR = String(sumRej).padStart(2, " ");
+    text += `   TOTAL          ${totT} ${totP} ${totA} ${totR}\n`;
     text += "```\n";
   }
 
