@@ -304,54 +304,50 @@ const fbSave = async (content, idToken) => {
   return true;
 };
 
-const generateNextTxnId = async (idToken, preferredPrefix = null) => {
+const generateNextTxnId = async (idToken, preferredPrefix = null, targetEventId = null) => {
   try {
     const rawExisting = await fbFetchRegistrations(idToken);
-    // Ignore trashed/deleted registrations
-    const existing = (Array.isArray(rawExisting) ? rawExisting : []).filter(r => !r.deleted);
+    // Ignore trashed/deleted registrations and global guest directory
+    const existing = (Array.isArray(rawExisting) ? rawExisting : []).filter(r => {
+      if (!r) return false;
+      if (r.deleted === true || r.deleted === "true" || r.isDeleted === true || r.isTrash === true || r.status === "Deleted" || r.Status === "Deleted") return false;
+      return true;
+    });
     
-    let activePrefix = preferredPrefix ? preferredPrefix.trim().toUpperCase().replace(/[-_]$/, "") : null;
-
-    // Detect prefix from existing registrations
-    if (!activePrefix && existing.length > 0) {
-      // Look for EDU26 or most recently used prefix pattern
-      const sorted = [...existing].sort((a, b) => new Date(b._submittedAt || 0) - new Date(a._submittedAt || 0));
-      for (const r of sorted) {
-        const idStr = String(r["Transaction ID"] || r["transactionId"] || r.id || "").trim();
-        const match = idStr.match(/^([A-Za-z0-9_]+)[-_](\d+)$/);
-        if (match && match[1]) {
-          const p = match[1].toUpperCase();
-          if (p === "EDU26" || p === "EDU" || p === "MMP") {
-            activePrefix = p;
-            break;
-          }
-          if (!activePrefix) activePrefix = p;
-        }
-      }
-    }
-
-    if (!activePrefix) {
-      activePrefix = "EDU26";
-    }
+    let activePrefix = preferredPrefix ? preferredPrefix.trim().toUpperCase().replace(/[-_]$/, "") : "EDU26";
+    const prefixRegex = new RegExp(`^${activePrefix}[-_](\\d+)$`, 'i');
 
     let maxNum = 0;
-    if (existing.length > 0) {
+    existing.forEach(r => {
+      const tId = String(r["Transaction ID"] || r["transactionId"] || "").trim();
+      const match = tId.match(prefixRegex);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        // Only accept sequential numbers (< 10000) to ignore any accidental random 6-digit IDs
+        if (!isNaN(num) && num > 0 && num < 10000 && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    });
+
+    // If activePrefix is EDU26 and maxNum is low, also check historical VG- numbering so we don't start below existing entries
+    if (activePrefix === "EDU26") {
       existing.forEach(r => {
-        const idStr = String(r["Transaction ID"] || r["transactionId"] || r.id || "").trim();
-        const match = idStr.match(/[-_]?(\d+)$/);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (!isNaN(num) && num > maxNum) maxNum = num;
+        const tId = String(r["Transaction ID"] || r["transactionId"] || "").trim();
+        const vgMatch = tId.match(/^VG[-_](\\d+)$/i);
+        if (vgMatch) {
+          const num = parseInt(vgMatch[1], 10);
+          if (!isNaN(num) && num > 0 && num < 10000 && num > maxNum) {
+            maxNum = num;
+          }
         }
       });
-      if (maxNum === 0) {
-        maxNum = existing.length;
-      }
     }
+
     const nextNum = maxNum + 1;
     return `${activePrefix}-${nextNum}`;
   } catch (err) {
-    return `EDU26-${1001 + Math.floor(Math.random() * 100)}`;
+    return `${preferredPrefix || "EDU26"}-1`;
   }
 };
 
@@ -487,10 +483,33 @@ const fbFetchRegistrations = async (idToken) => {
   }).filter(Boolean).sort((a,b) => new Date(b._submittedAt || 0).getTime() - new Date(a._submittedAt || 0).getTime());
 };
 
+const fbDeleteDonation = async (docId, idToken) => {
+  if (!docId) throw new Error("Missing document ID");
+  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/donations/${docId}`;
+  const headers = {};
+  const token = idToken || (typeof localStorage !== 'undefined' ? (localStorage.getItem("trustPublicAuthToken") || localStorage.getItem("globalAuthToken")) : "");
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(REG_URL, {
+    method: "DELETE",
+    headers
+  });
+  if (!res.ok && res.status !== 404) {
+    const err = await res.text();
+    throw new Error(`Failed to delete donation (${res.status}): ${err}`);
+  }
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('donation_updated'));
+    }
+  } catch(e) {}
+  return true;
+};
+
 const fbSubmitDonation = async (donationData, idToken) => {
   const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/donations`;
   const headers = { "Content-Type": "application/json" };
-  if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
+  const token = idToken || (typeof localStorage !== 'undefined' ? (localStorage.getItem("trustPublicAuthToken") || localStorage.getItem("globalAuthToken")) : "");
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch(REG_URL, {
     method: "POST",
     headers: headers,
@@ -501,7 +520,15 @@ const fbSubmitDonation = async (donationData, idToken) => {
       }
     })
   });
-  if (!res.ok) throw new Error("Donation save failed");
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Donation save failed (${res.status}): ${errText}`);
+  }
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('donation_updated', { detail: donationData }));
+    }
+  } catch(e) {}
   return true;
 };
 
@@ -2071,7 +2098,7 @@ function Events({ C, lang, globalAuthToken, globalProfile, onPublicLogin, forceS
     let txId = formData["Transaction ID"] || formData["transactionId"] || formData["Tx ID"];
     if (!txId) {
       const preferredPrefix = selectedEvent?.event?.txnPrefix || C?.txnPrefix || "EDU26";
-      txId = await generateNextTxnId(activeToken, preferredPrefix);
+      txId = await generateNextTxnId(activeToken, preferredPrefix, selectedEvent?.event?.id);
     }
     
     // 3. MANDATORY DATABASE SUBMISSION (DO NOT PROCEED IF THIS FAILS!)
@@ -4852,6 +4879,7 @@ function TemplateMapper({ imgUrl, mapData, fontSize, onChange }) {
           onBlur={handleFontSizeSave}
           style={{flex: 1, minWidth: 200, cursor: "pointer"}} 
         />
+        
       </div>
     </div>
   );
@@ -6626,7 +6654,7 @@ const ANAV = [
   {id:"backup",icon:"💾",label:"Backup & Restore"},
   {id:"profile",icon:"👤",label:"My Profile"},
   {id:"meritlist",label:"Reports & Lists",icon:"📊"},
-  {id:"inviteletters",label:"Letters & Certificates",icon:"📑"}
+  {id:"inviteletters",label:"Letters, Invites & Passes",icon:"💌"}
 ];
 
 const ADMIN_MANUAL_DATA = {
@@ -8697,7 +8725,18 @@ function Overview({ mob, C, setC, auth }) {
                     <tbody>{analyticsData.recentDonations.length > 0 ? analyticsData.recentDonations.map((r,i)=>(
                       <tr key={i} style={{borderBottom:"1px solid var(--bd)"}}>
                         <td style={{padding:"10px 12px",color:"var(--mu)",fontFamily:"monospace",fontSize:".75rem"}}>{r.receiptNo || r.id}</td>
-                        <td style={{padding:"10px 12px",fontWeight:600}}>{r.name}</td>
+                        <td style={{padding:"10px 12px",fontWeight:600}}>
+                <div>{r.name}</div>
+                {r.isOffline || r.paymentMode === "Offline" ? (
+                  <span style={{background:"#FEF3C7",color:"#92400E",fontSize:".65rem",padding:"1px 6px",borderRadius:4,fontWeight:800}}>Offline / Manual</span>
+                ) : (
+                  <span style={{background:"#DCFCE7",color:"#166534",fontSize:".65rem",padding:"1px 6px",borderRadius:4,fontWeight:800}}>Online Razorpay</span>
+                )}
+              </td>
+              <td style={{padding:"10px 12px",fontSize:".75rem",color:"#475569"}}>
+                <strong>{r.vibhag || "-"}</strong>
+                {r.eventCode && <div style={{fontSize:".65rem",color:"#64748B"}}>Event: {r.eventCode}</div>}
+              </td>
                         <td style={{padding:"10px 12px",fontWeight:700,color:"var(--sf)"}}>Rs.{Number(r.amount).toLocaleString()}</td>
                         <td style={{padding:"10px 12px"}}><span style={{fontSize:".72rem",padding:"3px 9px",borderRadius:12,background:"var(--tl)",color:"var(--dt)",fontWeight:600}}>{r.program}</span></td>
                         <td style={{padding:"10px 12px",color:"var(--mu)",fontSize:".78rem"}}>{r.date}</td>
@@ -8813,22 +8852,30 @@ const MultiSelect = ({ options, value, onChange, width = 100 }) => {
 
 function Donations({ mob, auth, C }) {
   const [q,setQ]=useState(""); 
-  const [colF, setColF] = useState({ id: [], donor: [], amountOp: ">=", amountVal: "", program: [], date: [], pan: [], status: [], statusBtns: "All" });
+  const [colF, setColF] = useState({ id: [], donor: [], amountOp: ">=", amountVal: "", program: [], date: [], pan: [], status: [], statusBtns: "All", mode: "All" });
   const [data, setData] = useState([]);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showAddOfflineModal, setShowAddOfflineModal] = useState(false);
+
+  const loadDonations = async () => {
+    setLoading(true);
+    try {
+      const token = auth?.idToken || auth?._tokenResponse?.idToken || (typeof localStorage !== 'undefined' ? (localStorage.getItem("trustPublicAuthToken") || localStorage.getItem("globalAuthToken")) : "");
+      const res = await fbFetchDonations(token);
+      setData(res || []);
+    } catch(e) { 
+      console.error("Donations load error:", e); 
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const token = auth?.idToken || auth?._tokenResponse?.idToken;
-        const res = await fbFetchDonations(token);
-        setData(res);
-      } catch(e) { console.error(e); }
-      setLoading(false);
-    };
-    if (auth) load();
+    loadDonations();
+    const handleDonationEvent = () => { loadDonations(); };
+    window.addEventListener('donation_updated', handleDonationEvent);
+    return () => { window.removeEventListener('donation_updated', handleDonationEvent); };
   }, [auth]);
 
   const generateReceipt = async (r, action) => {
@@ -8978,7 +9025,7 @@ function Donations({ mob, auth, C }) {
     setLoading(false);
   };
 
-  const allData = data.length > 0 ? data : DDATA;
+  const allData = Array.isArray(data) ? data : [];
   const uniqueIds = [...new Set(allData.map(d => d.id).filter(Boolean))];
   const uniqueDonors = [...new Set(allData.map(d => d.name).filter(Boolean))];
   const uniquePrograms = [...new Set(allData.map(d => d.program).filter(Boolean))];
@@ -9013,7 +9060,9 @@ function Donations({ mob, auth, C }) {
     const matchStatus = colF.status.length === 0 || colF.status.includes(currentStatus);
     const matchStatusBtn = colF.statusBtns === "All" || currentStatus === colF.statusBtns;
     
-    return matchQ && matchId && matchDonor && matchAmount && matchProgram && matchDate && matchPan && matchStatus && matchStatusBtn;
+    const isOff = d.isOffline || d.paymentMode === "Offline" || String(d.paymentMethod || "").toLowerCase().includes("offline");
+    const matchMode = colF.mode === "All" || (colF.mode === "Offline" && isOff) || (colF.mode === "Online" && !isOff);
+    return matchQ && matchId && matchDonor && matchAmount && matchProgram && matchDate && matchPan && matchStatus && matchStatusBtn && matchMode;
   });
 
   const downloadCSV = () => {
@@ -9043,11 +9092,24 @@ function Donations({ mob, auth, C }) {
 
   return (
     <div>
-      <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
-        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search ID or Name..." style={{padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",fontSize:".85rem",fontFamily:"inherit",flex:1,minWidth:140}}/>
-        <div style={{display:"flex",gap:6}}>{["All","Verified","Pending"].map(v=><button key={v} onClick={()=>setColF({...colF, statusBtns: v})} style={{padding:"8px 14px",borderRadius:8,background:colF.statusBtns===v?"var(--dt)":"white",color:colF.statusBtns===v?"white":"var(--tm2)",border:`1px solid ${colF.statusBtns===v?"var(--dt)":"var(--bd)"}`,cursor:"pointer",fontWeight:600,fontSize:".8rem"}}>{v}</button>)}</div>
-        <button onClick={downloadCSV} className="bs" style={{padding:"8px 14px",borderRadius:8,fontWeight:600,fontSize:".8rem", background:"var(--sf)", color:"white", border:"none", cursor:"pointer"}}>Download CSV</button>
-        <button className="bs" style={{padding:"8px 14px",borderRadius:8,fontWeight:600,fontSize:".8rem"}}>+ Add</button>
+      <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{display:"flex",gap:8,flex:1,minWidth:220,alignItems:"center"}}>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search ID, Donor, Vibhag, Receipt..." style={{padding:"8px 12px",borderRadius:8,border:"1px solid var(--bd)",fontSize:".85rem",fontFamily:"inherit",flex:1}}/>
+          <button onClick={loadDonations} disabled={loading} style={{padding:"8px 12px",borderRadius:8,background:"#F1F5F9",border:"1px solid #CBD5E1",color:"#334155",fontWeight:700,fontSize:".8rem",cursor:"pointer",display:"flex",alignItems:"center",gap:4}} title="Reload live donations from database">
+            <span>🔄</span> {loading ? "..." : "Refresh"}
+          </button>
+        </div>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:4,background:"#F8FAFC",padding:"3px 6px",borderRadius:8,border:"1px solid #CBD5E1"}}>
+            <span style={{fontSize:".72rem",fontWeight:700,color:"#64748B",alignSelf:"center",paddingRight:4}}>Mode:</span>
+            {["All","Online","Offline"].map(m=><button key={m} onClick={()=>setColF(p=>({...p, mode: m}))} style={{padding:"4px 8px",borderRadius:6,background:colF.mode===m?(m==="Offline"?"#EA580C":"#1D4ED8"):"transparent",color:colF.mode===m?"white":"#475569",border:"none",cursor:"pointer",fontWeight:700,fontSize:".74rem"}}>{m}</button>)}
+          </div>
+          <div style={{display:"flex",gap:4}}>{["All","Verified","Pending"].map(v=><button key={v} onClick={()=>setColF(p=>({...p, statusBtns: v}))} style={{padding:"6px 12px",borderRadius:6,background:colF.statusBtns===v?"var(--dt)":"white",color:colF.statusBtns===v?"white":"var(--tm2)",border:`1px solid ${colF.statusBtns===v?"var(--dt)":"var(--bd)"}`,cursor:"pointer",fontWeight:600,fontSize:".76rem"}}>{v}</button>)}</div>
+          <button onClick={downloadCSV} style={{padding:"7px 12px",borderRadius:6,fontWeight:700,fontSize:".78rem", background:"var(--sf)", color:"white", border:"none", cursor:"pointer",boxShadow:"0 2px 4px rgba(0,0,0,0.1)"}}>📥 Export CSV</button>
+          <button onClick={()=>setShowAddOfflineModal(true)} style={{padding:"7px 14px",borderRadius:6,background:"#15803D",color:"white",border:"none",fontWeight:800,fontSize:".78rem",cursor:"pointer",boxShadow:"0 2px 4px rgba(21,128,61,0.2)",display:"flex",alignItems:"center",gap:4}}>
+            <span>➕</span> Add Offline
+          </button>
+        </div>
       </div>
       <div className="ac" style={{padding:16,overflowX:"auto"}}>
         <table className="tt" style={{width:"100%",borderCollapse:"collapse",fontSize:".8rem",minWidth:500}}>
@@ -9060,6 +9122,9 @@ function Donations({ mob, auth, C }) {
               <th style={{padding:"9px 12px",textAlign:"left",fontSize:".72rem",letterSpacing:.5,textTransform:"uppercase"}}>
                 <div style={{marginBottom:4}}>DONOR</div>
                 <MultiSelect options={uniqueDonors} value={colF.donor} onChange={v=>setColF({...colF, donor: v})} width={100} />
+              </th>
+              <th style={{padding:"9px 12px",textAlign:"left",fontSize:".72rem",letterSpacing:.5,textTransform:"uppercase"}}>
+                <div style={{marginBottom:4}}>VIBHAG</div>
               </th>
               <th style={{padding:"9px 12px",textAlign:"left",fontSize:".72rem",letterSpacing:.5,textTransform:"uppercase"}}>
                 <div style={{marginBottom:4}}>AMOUNT</div>
@@ -9125,6 +9190,26 @@ function Donations({ mob, auth, C }) {
                   {r.status === "Verified" && (
                     <button onClick={()=>handleRegenerate(r)} style={{padding:"4px 9px",borderRadius:6,background:"#FEECEC",border:"none",color:"#D93025",cursor:"pointer",fontSize:".72rem",fontWeight:600}}>Regenerate</button>
                   )}
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm(`Are you sure you want to permanently delete donation record "${r.name}" (${r.receiptNo || r.id}) of ₹${r.amount}?`)) return;
+                      try {
+                        setLoading(true);
+                        const targetId = r._docId || r.id;
+                        await fbDeleteDonation(targetId, auth?.idToken);
+                        setData(prev => prev.filter(x => (x._docId ? x._docId !== r._docId : x.id !== r.id)));
+                        alert("✅ Donation record deleted successfully!");
+                      } catch(err) {
+                        alert("Failed to delete donation: " + err.message);
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    style={{padding:"4px 8px",borderRadius:6,background:"#FEF2F2",border:"1px solid #FECACA",color:"#DC2626",cursor:"pointer",fontSize:".72rem",fontWeight:700}}
+                    title="Delete this donation record"
+                  >
+                    🗑️
+                  </button>
                 </div>
               </td>
             </tr>
@@ -10261,6 +10346,25 @@ function AdminEvents({ mob, C, setC, auth }) {
                   {ev.certBgUrl && <div style={{fontSize:".7rem",color:"var(--sf)",marginTop:6}}>✅ Template mapped successfully.</div>}
                 </div>
                 
+                {/* Transaction ID Prefix & Numbering Setting */}
+                <div style={{gridColumn:"1/-1", marginTop: 8, padding: 12, background: "#F8FAFC", borderRadius: 8, border: "1px solid #CBD5E1", display:"flex", gap:12, alignItems:"center", flexWrap:"wrap"}}>
+                  <div style={{flex: 1, minWidth: 160}}>
+                    <label style={{display:"block", fontSize:".75rem", fontWeight:700, color:"#334155", marginBottom:4}}>
+                      🏷️ Transaction ID Prefix (Stored in Firebase):
+                    </label>
+                    <input
+                      type="text"
+                      value={ev.txnPrefix || ""}
+                      onChange={e => updateItem(i, "txnPrefix", e.target.value.toUpperCase().trim())}
+                      placeholder="e.g. EDU26, VG, CWC"
+                      style={{width:"100%", padding:"6px 10px", borderRadius:6, border:"1px solid #CBD5E1", fontSize:".82rem", fontWeight:700, fontFamily:"monospace", boxSizing:"border-box"}}
+                    />
+                  </div>
+                  <div style={{fontSize:".72rem", color:"#64748B", flexBasis:"100%", marginTop:2}}>
+                    New applicants for this event will receive sequential IDs: <strong>{(ev.txnPrefix || "EDU26")}-1</strong>, <strong>{(ev.txnPrefix || "EDU26")}-2</strong>...
+                  </div>
+                </div>
+
                 {/* Internal Admin Workspace Checkbox */}
                 <div style={{gridColumn:"1/-1", marginTop: 8, padding: 10, background: ev.isInternalOnly ? "#EFF6FF" : "#F8FAFC", borderRadius: 8, border: ev.isInternalOnly ? "1.5px solid #60A5FA" : "1px solid #E2E8F0"}}>
                   <label style={{fontSize:".78rem",fontWeight:800,display:"flex",alignItems:"center",gap:8,cursor:"pointer",color:ev.isInternalOnly ? "#1D4ED8" : "#334155"}}>
@@ -10709,6 +10813,56 @@ function Volunteers({ mob, auth, C }) {
           ))}</tbody>
         </table>
       </div>
+
+      {/* ── Modal: Add Offline Donation Modal in Admin Panel ── */}
+      {showAddOfflineModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100001,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"white",borderRadius:12,width:"100%",maxWidth:520,boxShadow:"0 24px 48px rgba(0,0,0,0.3)",overflow:"hidden"}}>
+            <div style={{padding:"14px 20px",background:"linear-gradient(135deg, #15803D, #166534)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <h3 style={{margin:0,fontSize:"1.05rem",fontWeight:800}}>➕ Record Offline Donation</h3>
+              <button onClick={()=>setShowAddOfflineModal(false)} style={{background:"none",border:"none",color:"white",fontSize:"1.2rem",cursor:"pointer"}}>✕</button>
+            </div>
+            <div style={{padding:20}}>
+              <OfflineDonationEntryCard
+                initialData={{
+                  initialDate: new Date().toISOString().split('T')[0],
+                  defaultPurpose: "Education Felicitation 2026",
+                  defaultVibhag: "10 MAHALAXMI",
+                  defaultEventCode: "EDU26"
+                }}
+                onSubmit={async (formData) => {
+                  try {
+                    const donRecord = {
+                      name: formData.name.trim(),
+                      amount: parseFloat(formData.amount) || 0,
+                      date: formData.date,
+                      program: formData.purpose || "Education Felicitation 2026",
+                      purpose: formData.purpose || "Education Felicitation 2026",
+                      vibhag: formData.vibhag || "General",
+                      eventCode: formData.eventCode || "EDU26",
+                      receiptNo: formData.receiptNo || `RCP-${Math.floor(1000 + Math.random() * 9000)}`,
+                      internalReceiptNo: formData.receiptNo || `RCP-${Math.floor(1000 + Math.random() * 9000)}`,
+                      paymentMode: "Offline",
+                      paymentMethod: "Offline / Cash / Cheque",
+                      status: "Verified",
+                      isOffline: true,
+                      id: `DON-OFF-${Math.floor(100000 + Math.random() * 900000)}`,
+                      recordedBy: auth?.email || "Admin",
+                      recordedAt: new Date().toISOString()
+                    };
+                    await fbSubmitDonation(donRecord, auth?.idToken);
+                    alert("✅ Offline donation recorded successfully!");
+                    setShowAddOfflineModal(false);
+                    loadDonations();
+                  } catch(err) {
+                    alert("Failed to save donation: " + err.message);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -15601,7 +15755,7 @@ function ChatbotAccessManager({ C, setC, auth }) {
     };
 
     fetchAll();
-  }, [C.committeeMobiles, auth?.idToken]);
+  }, [auth?.idToken]);
 
   const saveMobilesToFirebase = async (updatedList) => {
     const newC = { ...C, committeeMobiles: updatedList };
@@ -15624,20 +15778,29 @@ function ChatbotAccessManager({ C, setC, auth }) {
     }
   };
 
-  const updateMemberScope = (targetMobile, newScope, newVibhag) => {
+  const updateMemberScope = (targetMobile, newScope, newVibhag, forceCollector = null) => {
     const cleanTarget = String(targetMobile).replace(/\D/g, "").slice(-10);
     const existingConfig = Array.isArray(C.committeeMobiles) ? [...C.committeeMobiles] : [];
     
     const userObj = allRegisteredUsers.find(u => u.mobile === cleanTarget);
     const foundIdx = existingConfig.findIndex(m => (typeof m === "string" ? m : m.mobile) === cleanTarget);
+    const existingItem = foundIdx !== -1 ? existingConfig[foundIdx] : (userObj || {});
 
-    let assignedVibhag = "Individual Only";
+    let assignedVibhag = existingItem.vibhag || "Individual Only";
+    let autoRole = existingItem.role || "Applicant";
+    let isCollector = forceCollector !== null ? forceCollector : Boolean(existingItem.isDonationCollector);
+
     if (newScope === "vibhag") {
       assignedVibhag = (newVibhag && newVibhag !== "All Vibhags" && newVibhag !== "Individual Only")
-        ? newVibhag
+        ? (Array.isArray(newVibhag) ? newVibhag.join(", ") : newVibhag)
         : (userObj?.vibhag && userObj.vibhag !== "All Vibhags" && userObj.vibhag !== "Individual Only" ? userObj.vibhag : "10 MAHALAXMI");
+      autoRole = `Vibhag Admin (${assignedVibhag})`;
     } else if (newScope === "all") {
       assignedVibhag = "All Vibhags";
+      autoRole = "Super Admin";
+    } else if (newScope === "individual") {
+      assignedVibhag = "Individual Only";
+      autoRole = isCollector ? "Donation Collector" : "Applicant";
     }
 
     const updatedEntry = {
@@ -15646,7 +15809,10 @@ function ChatbotAccessManager({ C, setC, auth }) {
       name: userObj?.name || "Member",
       scope: newScope,
       vibhag: assignedVibhag,
-      role: userObj?.role || (newScope === "all" ? "Super Admin" : newScope === "vibhag" ? "Vibhag Head" : "Applicant"),
+      vibhags: (newScope === "vibhag" && assignedVibhag) ? assignedVibhag.split(",").map(s=>s.trim()).filter(Boolean) : [],
+      role: autoRole,
+      isDonationCollector: isCollector,
+      roleType: newScope,
       addedAt: userObj?.addedAt || new Date().toLocaleDateString("en-IN")
     };
 
@@ -15658,6 +15824,31 @@ function ChatbotAccessManager({ C, setC, auth }) {
 
     setAllRegisteredUsers(prev => prev.map(u => u.mobile === cleanTarget ? updatedEntry : u));
     saveMobilesToFirebase(existingConfig);
+  };
+
+  const toggleMemberVibhag = (targetMobile, vibhagName) => {
+    const cleanTarget = String(targetMobile).replace(/\D/g, "").slice(-10);
+    const userObj = allRegisteredUsers.find(u => u.mobile === cleanTarget);
+    const currentRaw = userObj?.vibhag || "10 MAHALAXMI";
+    let currentVibhags = (currentRaw === "All Vibhags" || currentRaw === "Individual Only") 
+      ? [] 
+      : currentRaw.split(",").map(s => s.trim()).filter(Boolean);
+    
+    if (currentVibhags.includes(vibhagName)) {
+      currentVibhags = currentVibhags.filter(v => v !== vibhagName);
+      if (currentVibhags.length === 0) currentVibhags = ["10 MAHALAXMI"];
+    } else {
+      currentVibhags.push(vibhagName);
+    }
+
+    updateMemberScope(cleanTarget, "vibhag", currentVibhags.join(", "));
+  };
+
+  const toggleMemberCollector = (targetMobile) => {
+    const cleanTarget = String(targetMobile).replace(/\D/g, "").slice(-10);
+    const userObj = allRegisteredUsers.find(u => u.mobile === cleanTarget);
+    const currentCollector = Boolean(userObj?.isDonationCollector);
+    updateMemberScope(cleanTarget, userObj?.scope || "individual", userObj?.vibhag, !currentCollector);
   };
 
   const toggleKbEnabled = (kbId) => {
@@ -16438,6 +16629,7 @@ function ChatbotAccessManager({ C, setC, auth }) {
                 const name = form.cName.value.trim();
                 const mobile = form.cMobile.value.trim().replace(/\D/g, "").slice(-10);
                 const role = form.cRole.value.trim();
+                const isCollectorChecked = form.isCollector?.checked || accessScope === "all";
                 if (!mobile || mobile.length !== 10) return alert("Please enter a valid 10-digit mobile number.");
 
                 const newEntry = { 
@@ -16445,7 +16637,9 @@ function ChatbotAccessManager({ C, setC, auth }) {
                   mobile, 
                   scope: accessScope,
                   vibhag: accessScope === "vibhag" ? selectedVibhag : accessScope === "all" ? "All Vibhags" : "Individual Only",
-                  role: role || (accessScope === "all" ? "Super Admin" : accessScope === "vibhag" ? `${selectedVibhag} Head` : "Applicant"), 
+                  role: role || (accessScope === "all" ? "Super Admin" : accessScope === "vibhag" ? `${selectedVibhag} Head` : isCollectorChecked ? "Donation Collector" : "Applicant"),
+                  isDonationCollector: isCollectorChecked,
+                  roleType: accessScope,
                   addedAt: new Date().toLocaleDateString("en-IN") 
                 };
                 
@@ -16481,25 +16675,32 @@ function ChatbotAccessManager({ C, setC, auth }) {
                   </label>
                   <label style={{flex:1,textAlign:"center",padding:"7px 4px",borderRadius:6,fontSize:".73rem",fontWeight:accessScope==="vibhag"?800:600,background:accessScope==="vibhag"?"#D97706":"transparent",color:accessScope==="vibhag"?"white":"#78350F",cursor:"pointer",userSelect:"none"}}>
                     <input type="radio" name="newScope" value="vibhag" checked={accessScope==="vibhag"} onChange={()=>setAccessScope("vibhag")} style={{display:"none"}}/>
-                    📍 Vibhag
+                    📍 Vibhag Admin
                   </label>
                   <label style={{flex:1,textAlign:"center",padding:"7px 4px",borderRadius:6,fontSize:".73rem",fontWeight:accessScope==="all"?800:600,background:accessScope==="all"?"#2563EB":"transparent",color:accessScope==="all"?"white":"#1E40AF",cursor:"pointer",userSelect:"none"}}>
                     <input type="radio" name="newScope" value="all" checked={accessScope==="all"} onChange={()=>setAccessScope("all")} style={{display:"none"}}/>
-                    🌐 ALL
+                    🌐 Super Admin (ALL)
                   </label>
                 </div>
               </div>
 
+              <div>
+                <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Additional Permission Role:</label>
+                <label style={{display:"flex",alignItems:"center",gap:6,padding:"8px 12px",borderRadius:6,border:"1px solid #86EFAC",background:"#F0FDF4",cursor:"pointer",fontSize:".8rem",fontWeight:700,color:"#166534"}}>
+                  <input type="checkbox" name="isCollector" defaultChecked={accessScope==="all"} style={{cursor:"pointer",width:16,height:16}} />
+                  <span>💰 Donation Collector Role</span>
+                </label>
+              </div>
+
               {accessScope === "vibhag" && (
                 <div>
-                  <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Select Assigned Vibhag:</label>
-                  <select 
-                    value={selectedVibhag} 
-                    onChange={e=>setSelectedVibhag(e.target.value)}
-                    style={{width:"100%",padding:"10px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box",fontWeight:600}}
-                  >
-                    {VIBHAG_LIST.map(v => <option key={v} value={v}>{v}</option>)}
-                  </select>
+                  <label style={{fontSize:".78rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Select Assigned Vibhag(s):</label>
+                  <MultiVibhagDropdown
+                    selectedVibhags={selectedVibhag ? selectedVibhag.split(",").map(s=>s.trim()) : ["10 MAHALAXMI"]}
+                    onChange={vArr => setSelectedVibhag(vArr.join(", "))}
+                    allVibhags={VIBHAG_LIST}
+                    width="100%"
+                  />
                 </div>
               )}
 
@@ -16580,101 +16781,119 @@ function ChatbotAccessManager({ C, setC, auth }) {
                           {/* Interactive Radio Scope Selector */}
                           <td style={{padding:"10px 16px"}}>
                             <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                              <div style={{display:"inline-flex",background:"#F1F5F9",padding:3,borderRadius:8,border:"1px solid #CBD5E1",gap:2,width:"fit-content"}}>
-                                <label style={{
-                                  padding: "4px 8px",
-                                  borderRadius: 6,
-                                  fontSize: ".72rem",
-                                  fontWeight: currentScope === "individual" ? 800 : 600,
-                                  background: currentScope === "individual" ? "#475569" : "transparent",
-                                  color: currentScope === "individual" ? "white" : "#475569",
-                                  cursor: "pointer",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 4,
-                                  userSelect: "none"
-                                }}>
-                                  <input 
-                                    type="radio" 
-                                    name={`scope_row_${idx}`} 
-                                    value="individual" 
-                                    checked={currentScope === "individual"} 
-                                    onChange={() => updateMemberScope(item.mobile, "individual", item.vibhag)}
-                                    style={{display:"none"}}
-                                  />
-                                  📱 Mobile/Txn
-                                </label>
+                              {/* Primary Access Scope Selector */}
+                                <div style={{display:"inline-flex",background:"#F1F5F9",padding:3,borderRadius:8,border:"1px solid #CBD5E1",gap:2,width:"fit-content"}}>
+                                  <label style={{
+                                    padding: "4px 7px",
+                                    borderRadius: 6,
+                                    fontSize: ".72rem",
+                                    fontWeight: currentScope === "individual" ? 800 : 600,
+                                    background: currentScope === "individual" ? "#475569" : "transparent",
+                                    color: currentScope === "individual" ? "white" : "#475569",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 3,
+                                    userSelect: "none"
+                                  }}>
+                                    <input 
+                                      type="radio" 
+                                      name={`scope_row_${idx}`} 
+                                      value="individual" 
+                                      checked={currentScope === "individual"} 
+                                      onChange={() => updateMemberScope(item.mobile, "individual", item.vibhag)}
+                                      style={{display:"none"}}
+                                    />
+                                    📱 User (Txn)
+                                  </label>
 
-                                <label style={{
-                                  padding: "4px 8px",
-                                  borderRadius: 6,
-                                  fontSize: ".72rem",
-                                  fontWeight: currentScope === "vibhag" ? 800 : 600,
-                                  background: currentScope === "vibhag" ? "#D97706" : "transparent",
-                                  color: currentScope === "vibhag" ? "white" : "#78350F",
-                                  cursor: "pointer",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 4,
-                                  userSelect: "none"
-                                }}>
-                                  <input 
-                                    type="radio" 
-                                    name={`scope_row_${idx}`} 
-                                    value="vibhag" 
-                                    checked={currentScope === "vibhag"} 
-                                    onChange={() => updateMemberScope(item.mobile, "vibhag", item.vibhag && item.vibhag !== "Individual Only" && item.vibhag !== "All Vibhags" ? item.vibhag : "10 MAHALAXMI")}
-                                    style={{display:"none"}}
-                                  />
-                                  📍 Vibhag
-                                </label>
+                                  <label style={{
+                                    padding: "4px 7px",
+                                    borderRadius: 6,
+                                    fontSize: ".72rem",
+                                    fontWeight: currentScope === "vibhag" ? 800 : 600,
+                                    background: currentScope === "vibhag" ? "#D97706" : "transparent",
+                                    color: currentScope === "vibhag" ? "white" : "#78350F",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 3,
+                                    userSelect: "none"
+                                  }}>
+                                    <input 
+                                      type="radio" 
+                                      name={`scope_row_${idx}`} 
+                                      value="vibhag" 
+                                      checked={currentScope === "vibhag"} 
+                                      onChange={() => updateMemberScope(item.mobile, "vibhag", item.vibhag && item.vibhag !== "Individual Only" && item.vibhag !== "All Vibhags" ? item.vibhag : "10 MAHALAXMI")}
+                                      style={{display:"none"}}
+                                    />
+                                    📍 Vibhag Admin
+                                  </label>
 
-                                <label style={{
-                                  padding: "4px 8px",
-                                  borderRadius: 6,
-                                  fontSize: ".72rem",
-                                  fontWeight: currentScope === "all" ? 800 : 600,
-                                  background: currentScope === "all" ? "#2563EB" : "transparent",
-                                  color: currentScope === "all" ? "white" : "#1E40AF",
-                                  cursor: "pointer",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 4,
-                                  userSelect: "none"
-                                }}>
-                                  <input 
-                                    type="radio" 
-                                    name={`scope_row_${idx}`} 
-                                    value="all" 
-                                    checked={currentScope === "all"} 
-                                    onChange={() => updateMemberScope(item.mobile, "all", "All Vibhags")}
-                                    style={{display:"none"}}
-                                  />
-                                  🌐 ALL
-                                </label>
-                              </div>
+                                  <label style={{
+                                    padding: "4px 7px",
+                                    borderRadius: 6,
+                                    fontSize: ".72rem",
+                                    fontWeight: currentScope === "all" ? 800 : 600,
+                                    background: currentScope === "all" ? "#2563EB" : "transparent",
+                                    color: currentScope === "all" ? "white" : "#1E40AF",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 3,
+                                    userSelect: "none"
+                                  }}>
+                                    <input 
+                                      type="radio" 
+                                      name={`scope_row_${idx}`} 
+                                      value="all" 
+                                      checked={currentScope === "all"} 
+                                      onChange={() => updateMemberScope(item.mobile, "all", "All Vibhags")}
+                                      style={{display:"none"}}
+                                    />
+                                    🌐 Super Admin (ALL)
+                                  </label>
+                                </div>
 
-                              {/* Inline Vibhag Dropdown when Vibhag radio is chosen */}
-                              {currentScope === "vibhag" && (
+                                {/* Independent Multi-Role Toggle: Donation Collector */}
                                 <div style={{display:"flex",alignItems:"center",gap:6}}>
-                                  <span style={{fontSize:".7rem",color:"#B45309",fontWeight:700}}>Assigned:</span>
-                                  <select 
-                                    value={item.vibhag && item.vibhag !== "Individual Only" && item.vibhag !== "All Vibhags" ? item.vibhag : "10 MAHALAXMI"}
-                                    onChange={e => updateMemberScope(item.mobile, "vibhag", e.target.value)}
-                                    style={{
-                                      padding: "4px 8px",
-                                      borderRadius: 6,
-                                      border: "1px solid #FCD34D",
-                                      background: "#FFFBEB",
-                                      fontSize: ".74rem",
-                                      fontWeight: 700,
-                                      color: "#92400E",
-                                      outline: "none",
-                                      cursor: "pointer"
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      toggleMemberCollector(item.mobile);
                                     }}
+                                    style={{
+                                      padding: "3px 9px",
+                                      borderRadius: 6,
+                                      fontSize: ".72rem",
+                                      fontWeight: 800,
+                                      cursor: "pointer",
+                                      border: item.isDonationCollector ? "1px solid #86EFAC" : "1px solid #CBD5E1",
+                                      background: item.isDonationCollector ? "#DCFCE7" : "#F8FAFC",
+                                      color: item.isDonationCollector ? "#15803D" : "#64748B",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 4,
+                                      transition: "all 0.15s ease"
+                                    }}
+                                    title="Click to toggle Donation Collector role ON or OFF"
                                   >
-                                    {VIBHAG_LIST.map(v => <option key={v} value={v}>{v}</option>)}
-                                  </select>
+                                    <span>{item.isDonationCollector ? "✅" : "⚪"}</span>
+                                    <span>💰 Donation Collector: {item.isDonationCollector ? "Active" : "Off"}</span>
+                                  </button>
+                                </div>
+
+                              {/* Multi-Vibhag Selection Dropdown when Vibhag radio is chosen */}
+                              {currentScope === "vibhag" && (
+                                <div style={{marginTop:3}}>
+                                  <MultiVibhagDropdown
+                                    selectedVibhags={item.vibhag}
+                                    onChange={(vArr) => updateMemberScope(item.mobile, "vibhag", vArr.join(", "))}
+                                    allVibhags={VIBHAG_LIST}
+                                    width={230}
+                                  />
                                 </div>
                               )}
                             </div>
@@ -16684,16 +16903,28 @@ function ChatbotAccessManager({ C, setC, auth }) {
                             {item.role || item.vibhag || "Registered User"}
                           </td>
                           <td style={{padding:"12px 16px",textAlign:"center"}}>
-                            <span style={{
-                              background: currentScope === "all" ? "#DBEAFE" : currentScope === "vibhag" ? "#FEF3C7" : "#F1F5F9",
-                              color: currentScope === "all" ? "#1E40AF" : currentScope === "vibhag" ? "#92400E" : "#475569",
-                              padding:"4px 10px",
-                              borderRadius:12,
-                              fontSize:".75rem",
-                              fontWeight:800
-                            }}>
-                              {currentScope === "all" ? "🌐 Super Admin" : currentScope === "vibhag" ? "📍 Vibhag Admin" : "📱 User (Own Txn)"}
-                            </span>
+                            <div style={{display:"flex",flexDirection:"column",gap:3,alignItems:"center"}}>
+                              {currentScope === "all" && (
+                                <span style={{background:"#DCFCE7",color:"#15803D",padding:"3px 8px",borderRadius:10,fontSize:".72rem",fontWeight:800}}>
+                                  🛡️ Super Admin
+                                </span>
+                              )}
+                              {currentScope === "vibhag" && (
+                                <span style={{background:"#EFF6FF",color:"#1D4ED8",padding:"3px 8px",borderRadius:10,fontSize:".72rem",fontWeight:800}}>
+                                  📍 Vibhag Admin
+                                </span>
+                              )}
+                              {currentScope === "individual" && !item.isDonationCollector && !String(item.role||'').toLowerCase().includes('donation') && !String(item.role||'').toLowerCase().includes('collector') && (
+                                <span style={{background:"#F1F5F9",color:"#64748B",padding:"3px 8px",borderRadius:10,fontSize:".72rem",fontWeight:600}}>
+                                  📱 User (Own Txn)
+                                </span>
+                              )}
+                              {item.isDonationCollector && (
+                                <span style={{background:"#FEF3C7",color:"#92400E",padding:"2px 7px",borderRadius:8,fontSize:".69rem",fontWeight:800,border:"1px solid #FCD34D"}}>
+                                  💰 Donation Collector
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td style={{padding:"12px 16px",textAlign:"right"}}>
                             {item.mobile === "9820785209" ? (
@@ -16898,7 +17129,7 @@ function ChatbotAccessManager({ C, setC, auth }) {
                       <td style={{padding:"12px 16px",fontWeight:700,color:"#0F172A"}}>
                         {item.title}
                         {item.adminOnly && (
-                          <div style={{fontSize:".68rem",color:"#B45309",fontWeight:800,marginTop:2}}>🔒 Admin Only</div>
+                          <div style={{fontSize:".68rem",color:"#B45309",fontWeight:800,marginTop:2}}>{lockLabel}</div>
                         )}
                       </td>
                       <td style={{padding:"12px 16px",color:"#475569",fontSize:".8rem",lineHeight:1.4,maxWidth:320,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
@@ -17121,28 +17352,63 @@ function AdminAccess({ C, setC, master, auth }) {
 
         {/* Add Committee Member Box */}
         <div style={{background:"#F8FAFC",border:"1px solid #CBD5E1",borderRadius:12,padding:"16px 20px",marginBottom:20}}>
-          <div style={{fontSize:".85rem",fontWeight:700,color:"#1E293B",marginBottom:10}}>➕ Authorize New Committee Member:</div>
+          <div style={{fontSize:".85rem",fontWeight:700,color:"#1E293B",marginBottom:10}}>➕ Authorize New Member & Assign Role:</div>
           <form 
             onSubmit={e => {
               e.preventDefault();
               const form = e.target;
               const name = form.cName.value.trim();
               const mobile = form.cMobile.value.trim().replace(/\D/g, "").slice(-10);
-              const role = form.cRole.value.trim();
+              const roleType = form.cRoleType.value;
+              const designation = form.cRole.value.trim();
+              const vibhag = form.cVibhag.value;
+
               if (!mobile || mobile.length !== 10) return alert("Please enter a valid 10-digit mobile number.");
               
               const currentList = Array.isArray(C.committeeMobiles) ? C.committeeMobiles : [];
               const exists = currentList.find(m => (typeof m === "string" ? m : m.mobile) === mobile);
               if (exists) return alert("This mobile number is already authorized as a Committee Admin.");
 
-              const newEntry = { name: name || "Committee Member", mobile, role: role || "Committee Admin", addedAt: new Date().toLocaleDateString("en-IN") };
+              let finalRoleLabel = designation;
+              let isCollector = false;
+              let scope = "vibhag";
+
+              if (roleType === "super_admin") {
+                finalRoleLabel = `Super Admin (${designation || 'All Vibhags'})`;
+                scope = "all";
+                isCollector = true;
+              } else if (roleType === "donation_collector") {
+                finalRoleLabel = `Donation Collector (${designation || vibhag})`;
+                scope = "vibhag";
+                isCollector = true;
+              } else if (roleType === "vibhag_admin") {
+                finalRoleLabel = `Vibhag Admin (${vibhag})`;
+                scope = "vibhag";
+                isCollector = false;
+              } else {
+                finalRoleLabel = designation || "Registration Reviewer";
+                scope = "individual";
+                isCollector = false;
+              }
+
+              const newEntry = {
+                name: name || "Committee Member",
+                mobile,
+                role: finalRoleLabel,
+                roleType,
+                isDonationCollector: isCollector,
+                scope,
+                vibhag,
+                addedAt: new Date().toLocaleDateString("en-IN")
+              };
+
               const newC = { ...C, committeeMobiles: [...currentList, newEntry] };
               setC(newC);
               saveToFirebase(newC);
               form.reset();
-              alert(`Mobile number ${mobile} (${newEntry.name}) has been authorized for Chatbot Admin Access!`);
+              alert(`✅ ${name} has been authorized as ${finalRoleLabel}!`);
             }}
-            style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr)) 120px",gap:10,alignItems:"end"}}
+            style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(170px, 1fr))",gap:10,alignItems:"end"}}
           >
             <div>
               <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Member Name:</label>
@@ -17153,8 +17419,30 @@ function AdminAccess({ C, setC, master, auth }) {
               <input name="cMobile" type="tel" placeholder="e.g. 9967821964" required style={{width:"100%",padding:"8px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
             </div>
             <div>
-              <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Vibhag / Designation:</label>
-              <input name="cRole" type="text" placeholder="e.g. Lower Parel / Trustee" style={{width:"100%",padding:"8px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
+              <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Admin Role:</label>
+              <select name="cRoleType" required style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",background:"white",boxSizing:"border-box",fontWeight:700,color:"#0F172A"}}>
+                <option value="donation_collector">💰 Donation Collector (Payment Collections)</option>
+                <option value="super_admin">🛡️ Super Admin (All Permissions + Donations)</option>
+                <option value="vibhag_admin">📍 Vibhag Admin (Registrations Only)</option>
+                <option value="registration_admin">👤 Registration Reviewer</option>
+              </select>
+            </div>
+            <div>
+              <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Vibhag / Location:</label>
+              <select name="cVibhag" style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",background:"white",boxSizing:"border-box"}}>
+                <option value="All Vibhags">All Vibhags</option>
+                <option value="10 MAHALAXMI">10 MAHALAXMI</option>
+                <option value="15 RAMDEV NAGAR">15 RAMDEV NAGAR</option>
+                <option value="2 WALPAKHADI">2 WALPAKHADI</option>
+                <option value="22 LOWER PAREL">22 LOWER PAREL</option>
+                <option value="30 PRATKISHA NAGAR">30 PRATKISHA NAGAR</option>
+                <option value="55 BHAYANDER">55 BHAYANDER</option>
+                <option value="65 KALWA">65 KALWA</option>
+              </select>
+            </div>
+            <div>
+              <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Designation (Optional):</label>
+              <input name="cRole" type="text" placeholder="e.g. Cashier / Trustee" style={{width:"100%",padding:"8px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",background:"white",boxSizing:"border-box"}}/>
             </div>
             <div>
               <button 
@@ -17162,14 +17450,14 @@ function AdminAccess({ C, setC, master, auth }) {
                 style={{
                   width:"100%",
                   padding:"9px 14px",
-                  background:"linear-gradient(135deg, #2563EB, #1D4ED8)",
+                  background:"linear-gradient(135deg, #15803D, #166534)",
                   color:"white",
                   border:"none",
                   borderRadius:6,
-                  fontWeight:700,
+                  fontWeight:800,
                   fontSize:".82rem",
                   cursor:"pointer",
-                  boxShadow:"0 2px 6px rgba(37,99,235,0.25)"
+                  boxShadow:"0 2px 6px rgba(21,128,61,0.25)"
                 }}
               >
                 + Add Member
@@ -17203,9 +17491,19 @@ function AdminAccess({ C, setC, master, auth }) {
                     <td style={{padding:"10px 14px",fontWeight:600,color:"#2563EB",fontFamily:"monospace"}}>+91 {item.mobile}</td>
                     <td style={{padding:"10px 14px",color:"#475569"}}>{item.role}</td>
                     <td style={{padding:"10px 14px",textAlign:"center"}}>
-                      <span style={{background:"#DCFCE7",color:"#15803D",padding:"3px 8px",borderRadius:10,fontSize:".72rem",fontWeight:800}}>
-                        🛡️ Chatbot Admin
-                      </span>
+                      {item.isDonationCollector || String(item.role || '').toLowerCase().includes('donation') || String(item.role || '').toLowerCase().includes('collector') ? (
+                        <span style={{background:"#FEF3C7",color:"#92400E",padding:"3px 8px",borderRadius:10,fontSize:".72rem",fontWeight:800,border:"1px solid #FCD34D",display:"inline-flex",alignItems:"center",gap:3}}>
+                          💰 Donation Collector
+                        </span>
+                      ) : String(item.role || '').toLowerCase().includes('super') ? (
+                        <span style={{background:"#DCFCE7",color:"#15803D",padding:"3px 8px",borderRadius:10,fontSize:".72rem",fontWeight:800,display:"inline-flex",alignItems:"center",gap:3}}>
+                          🛡️ Super Admin
+                        </span>
+                      ) : (
+                        <span style={{background:"#EFF6FF",color:"#1D4ED8",padding:"3px 8px",borderRadius:10,fontSize:".72rem",fontWeight:800,display:"inline-flex",alignItems:"center",gap:3}}>
+                          📍 Registration Admin
+                        </span>
+                      )}
                     </td>
                     <td style={{padding:"10px 14px",textAlign:"right"}}>
                       <button 
@@ -17234,11 +17532,17 @@ function AdminAccess({ C, setC, master, auth }) {
 }
 
 
-function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }) {
+function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C, auth }) {
   const w = useW();
   const mob = w < 768;
   const [eventFilter, setEventFilter] = useState(viewing.eventName || viewing.eventTitle || viewing.eventId || "");
   const [statusFilter, setStatusFilter] = useState(viewing['Status'] || "Pending");
+  const [showDocUploadModal, setShowDocUploadModal] = useState(false);
+  const [showAdminUserPortal, setShowAdminUserPortal] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [uploadDocTarget, setUploadDocTarget] = useState("Marksheet");
+  const [customDocLabel, setCustomDocLabel] = useState("");
+  const [selectedUploadFile, setSelectedUploadFile] = useState(null);
 
   const handleFilterChange = (type, val) => {
     if (type === 'event') setEventFilter(val);
@@ -17282,31 +17586,119 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }
   const [editedReg, setEditedReg] = useState(viewing);
   const [isEditing, setIsEditing] = useState(false);
 
-  // Process uploaded documents (including multi-file comma-separated URLs)
-  const docItems = [];
-  Object.keys(viewing).forEach(k => {
-    const val = viewing[k];
-    if (typeof val === 'string' && val.includes('http')) {
-      const urls = val.split(',').map(s => s.trim()).filter(s => s.startsWith('http'));
-      urls.forEach((url, idx) => {
-        docItems.push({
-          label: urls.length > 1 ? `${k} (${idx + 1})` : k,
-          url: url
+  const getDocItemsFromObj = (obj) => {
+    if (!obj) return [];
+    const items = [];
+    Object.keys(obj).forEach(k => {
+      if (k.startsWith('_') || ['id','eventId','eventName','Status','status','Remarks','remarks','Updated By','updatedBy','logHistory','submitterMob','transactionId'].includes(k)) return;
+      const val = obj[k];
+      if (typeof val === 'string' && (val.includes('http') || val.startsWith('data:image') || val.startsWith('data:application/pdf') || val.startsWith('blob:'))) {
+        const urls = val.split(',').map(s => s.trim()).filter(s => s.startsWith('http') || s.startsWith('data:') || s.startsWith('blob:'));
+        urls.forEach((url, idx) => {
+          const isRevised = k.toLowerCase().includes('revised') || k.toLowerCase().includes('additional');
+          const displayLabel = urls.length > 1 ? `${k} (${idx + 1})` : k;
+          items.push({
+            key: k,
+            label: displayLabel,
+            isRevised,
+            url: url
+          });
         });
-      });
+      }
+    });
+    return items;
+  };
+
+  const docItems = getDocItemsFromObj(editedReg?.id === viewing?.id ? (editedReg || viewing) : viewing);
+
+  const handleDirectDocUpload = async (file, targetField) => {
+    if (!file) {
+      alert("Please select a file (PDF, PNG, JPG) to upload.");
+      return;
     }
-  });
+    setUploadingDoc(true);
+    try {
+      let uploadedUrl = "";
+      try {
+        uploadedUrl = await fbUploadPublicFile(file, auth?.idToken);
+      } catch (err) {
+        console.warn("Storage upload fallback to base64:", err);
+        const reader = new FileReader();
+        uploadedUrl = await new Promise((resolve, reject) => {
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      if (!uploadedUrl) throw new Error("Upload failed to return URL.");
+
+      // Clean field name
+      let baseField = (targetField === "__custom__" ? customDocLabel : targetField).trim();
+      if (!baseField) baseField = "Supporting Document";
+
+      // Build unique revised field key to keep original document untouched for audit
+      let docKey = baseField;
+      if (!docKey.toLowerCase().startsWith("revised") && !docKey.toLowerCase().startsWith("additional")) {
+        docKey = `Revised ${docKey}`;
+      }
+
+      // If that revised key already exists with another document, add revision number
+      if (editedReg[docKey] && editedReg[docKey] !== uploadedUrl) {
+        let rev = 2;
+        while (editedReg[`${docKey} (${rev})`]) {
+          rev++;
+        }
+        docKey = `${docKey} (${rev})`;
+      }
+
+      const existingLogs = Array.isArray(editedReg.logHistory) ? editedReg.logHistory : [];
+      const updatedBy = auth?.email || "Admin";
+      const docLog = {
+        timestamp: new Date().toISOString(),
+        actor: updatedBy,
+        action: `Revised Document Attached: ${docKey}`,
+        status: status || editedReg.Status || "Pending",
+        remarks: `Admin uploaded revised document (${file.name}) on behalf of applicant. Original document preserved for audit.`
+      };
+
+      const updatedReg = {
+        ...editedReg,
+        [docKey]: uploadedUrl,
+        "Updated By": updatedBy,
+        logHistory: [...existingLogs, docLog]
+      };
+
+      setEditedReg(updatedReg);
+      setViewing(updatedReg);
+      setActiveDoc(uploadedUrl);
+      setActiveTab("docs");
+      
+      // Save directly to database
+      await saveVerification(updatedReg, status || editedReg.Status || "Pending", remarks || editedReg.Remarks || "");
+      alert(`✅ Revised document "${docKey}" attached successfully! Original document is preserved.`);
+      setShowDocUploadModal(false);
+      setSelectedUploadFile(null);
+      setCustomDocLabel("");
+    } catch (e) {
+      alert("Failed to upload document: " + e.message);
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
 
   const [activeTab, setActiveTab] = useState(docItems.length > 0 ? "docs" : "details");
 
   useEffect(() => {
-    setActiveDoc(docItems.length > 0 ? docItems[0].url : null);
+    if (!viewing) return;
+    const freshDocs = getDocItemsFromObj(viewing);
+    setActiveDoc(freshDocs.length > 0 ? freshDocs[0].url : null);
     setStatus(viewing['Status'] || 'Pending');
     setRemarks(viewing['Remarks'] || '');
     setEditedReg(viewing);
     setIsEditing(false);
-    setActiveTab(docItems.length > 0 ? "docs" : "details");
-  }, [viewing]);
+    setActiveTab(freshDocs.length > 0 ? "docs" : "details");
+  }, [viewing?.id, viewing?.['Transaction ID']]);
 
   const handleSave = async () => {
     if (status !== 'Approved' && status !== 'Needs Info' && status !== 'Disapproved') {
@@ -17389,7 +17781,7 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }
     }
   });
 
-  const isPdf = activeDoc && activeDoc.toLowerCase().includes('.pdf');
+  const isPdf = activeDoc && (activeDoc.toLowerCase().includes('.pdf') || activeDoc.startsWith('data:application/pdf'));
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:mob?0:16,boxSizing:"border-box"}}>
@@ -17495,19 +17887,43 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }
             <div style={{flex:1,borderRight:mob?"none":"1px solid var(--bd)",display:"flex",flexDirection:"column",background:"#F5F5F7",height:mob?"100%":"auto",overflow:"hidden"}}>
               {docItems.length > 0 ? (
                 <>
-                  <div style={{padding:"10px 14px",background:"white",borderBottom:"1px solid var(--bd)",display:"flex",gap:8,overflowX:"auto",alignItems:"center",flexShrink:0}}>
-                    <span style={{fontSize:".75rem",fontWeight:700,color:"var(--dt)",textTransform:"uppercase",letterSpacing:.5,marginRight:4,whiteSpace:"nowrap"}}>
-                      Attached ({docItems.length}):
-                    </span>
-                    {docItems.map((item, idx) => {
-                      const active = activeDoc === item.url;
-                      return (
-                        <button key={idx} onClick={()=>setActiveDoc(item.url)} style={{padding:"4px 12px",borderRadius:20,border:`1.5px solid ${active?"var(--sf)":"var(--bd)"}`,background:active?"var(--sf)":"white",color:active?"white":"var(--dt)",fontSize:".75rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6,transition:"all .2s"}}>
-                          <span>📄</span>
-                          <span>{item.label}</span>
-                        </button>
-                      );
-                    })}
+                  <div style={{padding:"10px 14px",background:"white",borderBottom:"1px solid var(--bd)",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,flexShrink:0}}>
+                    <div style={{display:"flex",gap:8,overflowX:"auto",alignItems:"center"}}>
+                      <span style={{fontSize:".75rem",fontWeight:700,color:"var(--dt)",textTransform:"uppercase",letterSpacing:.5,marginRight:4,whiteSpace:"nowrap"}}>
+                        Attached ({docItems.length}):
+                      </span>
+                      {docItems.map((item, idx) => {
+                        const active = activeDoc === item.url;
+                        return (
+                          <button key={idx} onClick={()=>setActiveDoc(item.url)} style={{padding:"5px 13px",borderRadius:20,border:`1.5px solid ${active ? (item.isRevised ? "#059669" : "var(--sf)") : (item.isRevised ? "#A7F3D0" : "var(--bd)")}`,background:active ? (item.isRevised ? "#059669" : "var(--sf)") : (item.isRevised ? "#ECFDF5" : "white"),color:active ? "white" : (item.isRevised ? "#065F46" : "var(--dt)"),fontSize:".75rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6,transition:"all .2s",boxShadow:active ? "0 2px 6px rgba(0,0,0,0.15)" : "none"}}>
+                            <span>{item.isRevised ? "🆕" : "📄"}</span>
+                            <span>{item.label}</span>
+                            {item.isRevised && <span style={{fontSize:".65rem",background:active?"rgba(255,255,255,0.25)":"#D1FAE5",color:active?"white":"#047857",padding:"1px 5px",borderRadius:10,fontWeight:800}}>Revised</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      onClick={() => setShowDocUploadModal(true)}
+                      style={{
+                        padding:"5px 12px",
+                        borderRadius:6,
+                        background:"#0D4B5E",
+                        color:"white",
+                        border:"none",
+                        fontSize:".75rem",
+                        fontWeight:700,
+                        cursor:"pointer",
+                        display:"flex",
+                        alignItems:"center",
+                        gap:5,
+                        whiteSpace:"nowrap",
+                        boxShadow:"0 2px 6px rgba(13,75,94,0.25)"
+                      }}
+                      title="Upload or replace revised marksheet/document received via WhatsApp or email"
+                    >
+                      <span>📎</span> Upload / Replace Doc
+                    </button>
                   </div>
 
                   <div style={{flex:1,padding:mob?8:16,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
@@ -17534,24 +17950,48 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }
               
               {/* Input Data List */}
               <div style={{flex:1,overflowY:"auto",padding:mob?"16px":"24px"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
                   <h4 style={{fontSize:".95rem",fontWeight:700,color:"var(--dt)",margin:0,textTransform:"uppercase",letterSpacing:1}}>Submitted Details</h4>
-                  <button 
-                    onClick={() => setIsEditing(!isEditing)} 
-                    style={{
-                      background: "none", 
-                      border: "none", 
-                      color: "var(--dt)", 
-                      cursor: "pointer", 
-                      fontSize: ".85rem", 
-                      fontWeight: 600,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4
-                    }}
-                  >
-                    {isEditing ? "👁 Read Only" : "✏️ Edit Fields"}
-                  </button>
+                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <button 
+                      onClick={() => setShowAdminUserPortal(true)} 
+                      style={{
+                        background: "#EFF6FF", 
+                        border: "1.5px solid #60A5FA", 
+                        color: "#1D4ED8", 
+                        cursor: "pointer", 
+                        fontSize: ".76rem", 
+                        fontWeight: 800,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        boxShadow: "0 1px 3px rgba(37,99,235,0.15)"
+                      }}
+                      title="Open full Applicant Registration Dashboard & Form to edit all fields and upload documents on behalf of applicant"
+                    >
+                      <span>👤</span> Applicant Portal
+                    </button>
+                    <button 
+                      onClick={() => setIsEditing(!isEditing)} 
+                      style={{
+                        background: isEditing ? "#FEF3C7" : "#F8FAFC", 
+                        border: isEditing ? "1.5px solid #F59E0B" : "1px solid #CBD5E1", 
+                        color: isEditing ? "#B45309" : "#334155", 
+                        cursor: "pointer", 
+                        fontSize: ".76rem", 
+                        fontWeight: 700,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "4px 10px",
+                        borderRadius: 6
+                      }}
+                    >
+                      {isEditing ? "👁 Read Only" : "✏️ Quick Edit"}
+                    </button>
+                  </div>
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:16}}>
                   {fieldsToRender.map(f => {
@@ -17864,6 +18304,277 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C }
           )}
         </div>
       </div>
+
+{/* ── Modal 1: Upload / Replace Document Modal ── */}
+        {showDocUploadModal && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:100001,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div style={{background:"white",borderRadius:12,width:"100%",maxWidth:480,padding:24,boxShadow:"0 20px 40px rgba(0,0,0,0.25)",boxSizing:"border-box"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                <h3 style={{margin:0,fontSize:"1.1rem",color:"#0F172A",fontWeight:800,display:"flex",alignItems:"center",gap:6}}>
+                  <span>📎</span> Upload / Replace Document
+                </h3>
+                <button onClick={() => { setShowDocUploadModal(false); setSelectedUploadFile(null); }} style={{background:"none",border:"none",fontSize:"1.2rem",cursor:"pointer",color:"#64748B"}}>✕</button>
+              </div>
+
+              <div style={{fontSize:".8rem",color:"#475569",marginBottom:16,background:"#F1F5F9",padding:"10px 12px",borderRadius:8}}>
+                Upload the revised document (e.g. received from applicant on WhatsApp) for <strong>{editedReg['Full Name'] || editedReg.name || 'Applicant'}</strong> ({editedReg['Transaction ID'] || editedReg.id}).
+              </div>
+
+              <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                <div>
+                  <label style={{display:"block",fontSize:".78rem",fontWeight:700,color:"#334155",marginBottom:4}}>
+                    Select Document Type / Field:
+                  </label>
+                  <select
+                    value={uploadDocTarget}
+                    onChange={e => setUploadDocTarget(e.target.value)}
+                    style={{width:"100%",padding:"9px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",fontWeight:600}}
+                  >
+                    <option value="Marksheet">Marksheet / Result Sheet</option>
+                    <option value="Photo">Passport Photo / Picture</option>
+                    <option value="Caste Certificate">Caste Certificate</option>
+                    <option value="Aadhar Card">Aadhar Card</option>
+                    <option value="Fee Receipt">Fee Receipt / College ID</option>
+                    {docItems.map((d, di) => (
+                      <option key={di} value={d.key}>Existing: {d.label}</option>
+                    ))}
+                    <option value="__custom__">+ Custom Field Name...</option>
+                  </select>
+                </div>
+
+                {uploadDocTarget === "__custom__" && (
+                  <div>
+                    <label style={{display:"block",fontSize:".78rem",fontWeight:700,color:"#334155",marginBottom:4}}>
+                      Custom Field Name:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Revised Semester 2 Marksheet"
+                      value={customDocLabel}
+                      onChange={e => setCustomDocLabel(e.target.value)}
+                      style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".85rem",boxSizing:"border-box"}}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label style={{display:"block",fontSize:".78rem",fontWeight:700,color:"#334155",marginBottom:4}}>
+                    Choose File (PDF, PNG, JPG):
+                  </label>
+                  <input
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg,image/jpg"
+                    onChange={e => setSelectedUploadFile(e.target.files[0] || null)}
+                    style={{width:"100%",padding:"8px",borderRadius:6,border:"1px dashed #94A3B8",fontSize:".82rem",background:"#F8FAFC"}}
+                  />
+                  {selectedUploadFile && (
+                    <div style={{fontSize:".75rem",color:"#15803D",fontWeight:600,marginTop:4}}>
+                      ✓ Selected: {selectedUploadFile.name} ({(selectedUploadFile.size / 1024).toFixed(1)} KB)
+                    </div>
+                  )}
+                </div>
+
+                <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:8}}>
+                  <button
+                    onClick={() => { setShowDocUploadModal(false); setSelectedUploadFile(null); }}
+                    style={{padding:"8px 16px",borderRadius:6,border:"1px solid #CBD5E1",background:"white",color:"#475569",fontSize:".85rem",fontWeight:600,cursor:"pointer"}}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleDirectDocUpload(selectedUploadFile, uploadDocTarget)}
+                    disabled={uploadingDoc || !selectedUploadFile}
+                    style={{
+                      padding:"8px 18px",
+                      borderRadius:6,
+                      border:"none",
+                      background: uploadingDoc ? "#94A3B8" : "#0D4B5E",
+                      color:"white",
+                      fontSize:".85rem",
+                      fontWeight:700,
+                      cursor: (uploadingDoc || !selectedUploadFile) ? "not-allowed" : "pointer",
+                      boxShadow:"0 2px 6px rgba(13,75,94,0.2)"
+                    }}
+                  >
+                    {uploadingDoc ? "Uploading..." : "Upload & Save"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Modal 2: Full Applicant Portal & Registration Editor (On Behalf of User) ── */}
+        {showAdminUserPortal && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:100001,display:"flex",alignItems:"center",justifyContent:"center",padding:mob?0:20}}>
+            <div style={{background:"white",borderRadius:mob?0:12,width:"100%",maxWidth:900,height:mob?"100dvh":"92vh",maxHeight:"100dvh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 48px rgba(0,0,0,0.35)"}}>
+              {/* Header */}
+              <div style={{padding:"14px 20px",background:"linear-gradient(135deg, #0D4B5E, #164E63)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+                <div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <h3 style={{margin:0,fontSize:"1.1rem",fontWeight:800}}>👤 Applicant Portal (On Behalf of User)</h3>
+                    <span style={{background:"#FEF08A",color:"#854D0E",fontSize:".7rem",fontWeight:800,padding:"2px 8px",borderRadius:12}}>
+                      🛡️ Admin Assisted Mode
+                    </span>
+                  </div>
+                  <div style={{fontSize:".76rem",opacity:0.9,marginTop:2}}>
+                    Editing: <strong>{editedReg['Full Name'] || editedReg.name || 'Applicant'}</strong> ({editedReg['Transaction ID'] || editedReg.id}) | Mobile: +91 {editedReg['Mobile Number'] || editedReg.submitterMob || '-'}
+                  </div>
+                </div>
+                <button onClick={() => setShowAdminUserPortal(false)} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",width:32,height:32,borderRadius:"50%",fontSize:"1.1rem",cursor:"pointer"}}>✕</button>
+              </div>
+
+              {/* Notice Banner */}
+              <div style={{background:"#EFF6FF",borderBottom:"1px solid #BFDBFE",padding:"8px 20px",fontSize:".78rem",color:"#1E40AF",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                <span>ℹ️</span> You have full administrative access to correct applicant details, change streams/marks, and replace uploaded marksheets or photos on behalf of the applicant.
+              </div>
+
+              {/* Form Content */}
+              <div style={{flex:1,overflowY:"auto",padding:mob?"16px":"24px",background:"#F8FAFC"}}>
+                <div style={{background:"white",padding:"20px",borderRadius:10,border:"1px solid #E2E8F0",marginBottom:20}}>
+                  <h4 style={{margin:"0 0 16px 0",fontSize:".95rem",color:"#0F172A",fontWeight:800,borderBottom:"1px solid #F1F5F9",paddingBottom:8}}>
+                    📝 Personal & Academic Details
+                  </h4>
+                  <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:16}}>
+                    {fieldsToRender.map(f => {
+                      const val = (editedReg || viewing)[f.key];
+                      if (typeof val === 'string' && val.startsWith('http')) return null; // Rendered in docs section
+
+                      if (f.type === 'fullname') {
+                        const parts = (editedReg[f.key] || "||").split("|");
+                        return (
+                          <div key={f.key} style={{gridColumn:mob?"auto":"1/-1"}}>
+                            <label style={{display:"block",fontSize:".76rem",fontWeight:700,color:"#334155",marginBottom:4}}>{f.label}</label>
+                            <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr 1fr",gap:8}}>
+                              <input placeholder="First Name" value={parts[0] || ""} onChange={e => { const np = [...parts]; np[0] = e.target.value; setEditedReg(p => ({ ...p, [f.key]: np.join("|") })); }} style={{padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".88rem"}} />
+                              <input placeholder="Middle Name" value={parts[1] || ""} onChange={e => { const np = [...parts]; np[1] = e.target.value; setEditedReg(p => ({ ...p, [f.key]: np.join("|") })); }} style={{padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".88rem"}} />
+                              <input placeholder="Last Name" value={parts[2] || ""} onChange={e => { const np = [...parts]; np[2] = e.target.value; setEditedReg(p => ({ ...p, [f.key]: np.join("|") })); }} style={{padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".88rem"}} />
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      if (f.type === 'dropdown') {
+                        return (
+                          <div key={f.key}>
+                            <label style={{display:"block",fontSize:".76rem",fontWeight:700,color:"#334155",marginBottom:4}}>{f.label}</label>
+                            <select value={editedReg[f.key] || ""} onChange={e => setEditedReg(p => ({ ...p, [f.key]: e.target.value }))} style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".88rem",background:"white"}}>
+                              <option value="">-- Select --</option>
+                              {(f.options || "").split(",").map((opt, oi) => opt.trim() && <option key={oi} value={opt.trim()}>{opt.trim()}</option>)}
+                            </select>
+                          </div>
+                        );
+                      }
+
+                      if (f.type === 'gender') {
+                        return (
+                          <div key={f.key}>
+                            <label style={{display:"block",fontSize:".76rem",fontWeight:700,color:"#334155",marginBottom:4}}>{f.label}</label>
+                            <select value={editedReg[f.key] || ""} onChange={e => setEditedReg(p => ({ ...p, [f.key]: e.target.value }))} style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".88rem",background:"white"}}>
+                              <option value="">-- Select Gender --</option>
+                              <option value="Male">Male</option>
+                              <option value="Female">Female</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
+                        );
+                      }
+
+                      const isLong = f.type === 'address' || f.key.toLowerCase().includes("address") || f.key.toLowerCase().includes("remark");
+                      return (
+                        <div key={f.key} style={{gridColumn: isLong && !mob ? "1/-1" : "auto"}}>
+                          <label style={{display:"block",fontSize:".76rem",fontWeight:700,color:"#334155",marginBottom:4}}>{f.label}</label>
+                          {isLong ? (
+                            <textarea rows={2} value={editedReg[f.key] || ""} onChange={e => setEditedReg(p => ({ ...p, [f.key]: e.target.value }))} style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".88rem",boxSizing:"border-box"}} />
+                          ) : (
+                            <input type="text" value={editedReg[f.key] || ""} onChange={e => setEditedReg(p => ({ ...p, [f.key]: e.target.value }))} style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".88rem",boxSizing:"border-box"}} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Attached Documents Section */}
+                <div style={{background:"white",padding:"20px",borderRadius:10,border:"1px solid #E2E8F0"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                    <h4 style={{margin:0,fontSize:".95rem",color:"#0F172A",fontWeight:800}}>
+                      📄 Uploaded Marksheets & Documents
+                    </h4>
+                    <button
+                      onClick={() => setShowDocUploadModal(true)}
+                      style={{padding:"5px 12px",borderRadius:6,background:"#0D4B5E",color:"white",border:"none",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
+                    >
+                      ➕ Upload Another Document
+                    </button>
+                  </div>
+
+                  {docItems.length === 0 ? (
+                    <div style={{textAlign:"center",padding:20,color:"#94A3B8",fontSize:".85rem"}}>
+                      No documents currently uploaded. Click "+ Upload Another Document" above to attach a marksheet.
+                    </div>
+                  ) : (
+                    <div style={{display:"grid",gridTemplateColumns:mob?"1fr":"1fr 1fr",gap:12}}>
+                      {docItems.map((d, di) => (
+                        <div key={di} style={{border:"1px solid #CBD5E1",borderRadius:8,padding:12,display:"flex",justifyContent:"space-between",alignItems:"center",background:"#F8FAFC"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+                            <span style={{fontSize:"1.4rem"}}>📄</span>
+                            <div style={{minWidth:0}}>
+                              <div style={{fontSize:".82rem",fontWeight:700,color:"#0F172A",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.label}</div>
+                              <a href={d.url} target="_blank" rel="noopener noreferrer" style={{fontSize:".72rem",color:"#2563EB",textDecoration:"underline"}}>Open in New Tab ↗</a>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setUploadDocTarget(d.key);
+                              setShowDocUploadModal(true);
+                            }}
+                            style={{padding:"4px 10px",borderRadius:6,border:"1px solid #CBD5E1",background:"white",fontSize:".72rem",fontWeight:700,color:"#334155",cursor:"pointer"}}
+                          >
+                            Replace
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Bottom Footer Action Bar */}
+              <div style={{padding:"12px 20px",background:"white",borderTop:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+                <button
+                  onClick={() => setShowAdminUserPortal(false)}
+                  style={{padding:"8px 16px",borderRadius:6,border:"1px solid #CBD5E1",background:"white",color:"#475569",fontSize:".85rem",fontWeight:600,cursor:"pointer"}}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    setSaving(true);
+                    await saveVerification(editedReg, status, remarks);
+                    setSaving(false);
+                    setShowAdminUserPortal(false);
+                    alert("✅ Application details updated successfully!");
+                  }}
+                  disabled={saving}
+                  style={{
+                    padding:"9px 22px",
+                    borderRadius:6,
+                    border:"none",
+                    background:"#15803D",
+                    color:"white",
+                    fontSize:".88rem",
+                    fontWeight:800,
+                    cursor: saving ? "wait" : "pointer",
+                    boxShadow:"0 2px 6px rgba(21,128,61,0.25)"
+                  }}
+                >
+                  {saving ? "Saving..." : "💾 Save All Changes (As Admin)"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
     </div>
   );
 }
@@ -19625,6 +20336,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [statusPillFilter, setStatusPillFilter] = useState(null);
   const [openPillFilter, setOpenPillFilter] = useState(null);
+  const [duplicatePillFilter, setDuplicatePillFilter] = useState(null); // null | 'duplicate' | 'unique'
   const [selectedOnlyFilter, setSelectedOnlyFilter] = useState(false);
 
   const saveToFb = async (newC) => {
@@ -19879,9 +20591,11 @@ function AdminRegistrations({ mob, C, setC, auth }) {
     };
     const newLogs = [...existingLogs, adminLog];
 
-    setRegs(prev => prev.map(x => x.id === r.id ? { ...x, Status: newStatus, status: newStatus, Remarks: newRemarks, "Updated By": updatedBy, logHistory: newLogs } : x));
+    const updatedRecord = { ...r, Status: newStatus, status: newStatus, Remarks: newRemarks, "Updated By": updatedBy, logHistory: newLogs };
+    setRegs(prev => prev.map(x => x.id === r.id ? updatedRecord : x));
+    setViewing(prev => prev && prev.id === r.id ? updatedRecord : prev);
     try {
-      const cleanData = { ...r, Status: newStatus, status: newStatus, Remarks: newRemarks, "Updated By": updatedBy, logHistory: newLogs };
+      const cleanData = { ...updatedRecord };
       delete cleanData.id; delete cleanData._submittedAt;
       await fbUpdateRegistration(r.id, cleanData, auth?.idToken);
       // Removed setViewing(null) here so modal can handle auto-advance
@@ -20005,16 +20719,81 @@ function AdminRegistrations({ mob, C, setC, auth }) {
     }
   };
 
-  const activeRegsList = regs.filter(r => !r.deleted);
-  const deletedRegsList = regs.filter(r => r.deleted === true);
+  const isPublicEventRegistration = (r) => {
+    if (!r) return false;
+    // Exclude all deleted / trash items
+    if (r.deleted === true || r.deleted === "true" || r.isDeleted === true || r.isTrash === true || r.inTrash === true || r.status === "Deleted" || r.Status === "Deleted") return false;
+    // Exclude special guest directory and workspace imports of directory contacts
+    if (r.isGlobalGuest === true || r.isSpecialGuest === true || r.isInternal === true || Boolean(r.globalGuestId) || r.formId === "global_guest_directory" || r.formId === "global_guest_directory_import") return false;
+    
+    // Check if event is internal-only or hidden from public website
+    const ev = C.events?.find(e => e.id === r.eventId || e.title === r.eventTitle || e.title === r.eventName || e.titleGu === r.eventName);
+    if (ev && (ev.isInternalOnly || ev.hideFromPublicWebsite || ev.isInternal || ev.isWorkspaceOnly || ev.section === "Internal Admin" || ev.tag === "Internal Admin")) {
+      return false;
+    }
+    return true;
+  };
+
+  const activeRegsList = regs.filter(isPublicEventRegistration);
+  const deletedRegsList = regs.filter(r => (r.deleted === true || r.deleted === "true" || r.isDeleted === true || r.status === "Deleted" || r.Status === "Deleted") && !r.isGlobalGuest && !r.isSpecialGuest);
+
+  // ── Duplicate Detection Engine (Matches Full Name & Mobile Number) ──
+  const dupMap = {};
+  activeRegsList.forEach(r => {
+    const rawName = String(r['Full Name'] || r['Name'] || r['Student Name'] || r['Participant Name'] || r.name || '').trim();
+    const cleanName = rawName.replace(/\|/g, ' ').replace(/[^a-zA-Z0-9 ]/g, ' ').toLowerCase().replace(/\s+/g, ' ').trim();
+    const m1 = String(r.submitterMob || '').replace(/\D/g, '').slice(-10);
+    const m2 = String(r['Mobile Number'] || '').replace(/\D/g, '').slice(-10);
+    const m3 = String(r['Alternate Mobile Number'] || '').replace(/\D/g, '').slice(-10);
+    const mob = m1 || m2 || m3;
+
+    if (cleanName.length >= 2 && mob.length >= 10) {
+      const key = `${cleanName}___${mob}`;
+      if (!dupMap[key]) dupMap[key] = [];
+      dupMap[key].push(r);
+    }
+  });
+
+  const getDuplicateInfo = (r) => {
+    if (!r) return { isDuplicate: false, count: 1, otherTxnIds: [], tagText: "Unique" };
+    const rawName = String(r['Full Name'] || r['Name'] || r['Student Name'] || r['Participant Name'] || r.name || '').trim();
+    const cleanName = rawName.replace(/\|/g, ' ').replace(/[^a-zA-Z0-9 ]/g, ' ').toLowerCase().replace(/\s+/g, ' ').trim();
+    const m1 = String(r.submitterMob || '').replace(/\D/g, '').slice(-10);
+    const m2 = String(r['Mobile Number'] || '').replace(/\D/g, '').slice(-10);
+    const m3 = String(r['Alternate Mobile Number'] || '').replace(/\D/g, '').slice(-10);
+    const mob = m1 || m2 || m3;
+
+    if (cleanName.length >= 2 && mob.length >= 10) {
+      const key = `${cleanName}___${mob}`;
+      const matches = dupMap[key] || [];
+      if (matches.length > 1) {
+        const otherTxnIds = matches
+          .filter(m => (m.id && m.id !== r.id) || (m['Transaction ID'] && m['Transaction ID'] !== r['Transaction ID']))
+          .map(m => m['Transaction ID'] || m.transactionId || m.id)
+          .filter(Boolean);
+        
+        return {
+          isDuplicate: true,
+          count: matches.length,
+          otherTxnIds,
+          tagText: `Duplicate entry vide number ${otherTxnIds.join(", ")}`
+        };
+      }
+    }
+    return {
+      isDuplicate: false,
+      count: 1,
+      otherTxnIds: [],
+      tagText: "Unique"
+    };
+  };
 
   // 2. Filter registrations based on search query
   const filteredRegs = activeRegsList.filter(r => {
     if(!r) return false;
-    if (r.isGlobalGuest || r.isSpecialGuest || r.globalGuestId || r.formId === "global_guest_directory" || r.formId === "global_guest_directory_import") return false;
     
     // Group section filter
-    const ev = C.events?.find(e => e.title === r.eventTitle || e.title === r.eventName || e.title === r.eventId || e.id === r.eventId);
+    const ev = C.events?.find(e => e.id === r.eventId || e.title === r.eventTitle || e.title === r.eventName || e.titleGu === r.eventName);
     const evSection = ev?.section || "Default";
     if (selectedSection !== "All") {
       if (selectedSection === "Default") {
@@ -20052,11 +20831,26 @@ function AdminRegistrations({ mob, C, setC, auth }) {
       const rowId = r.id || r['Transaction ID'];
       if (!selectedIds.includes(rowId)) return false;
     }
+
+    // 5. Duplicate Entry Pill Filter
+    if (duplicatePillFilter) {
+      const dup = getDuplicateInfo(r);
+      if (duplicatePillFilter === "duplicate" && !dup.isDuplicate) return false;
+      if (duplicatePillFilter === "unique" && dup.isDuplicate) return false;
+    }
     
-    // 5. Column filters
+    // 6. Column filters
     for (const [colKey, filterVal] of Object.entries(columnFilters)) {
       if(!filterVal) continue;
       
+      if (colKey === "Unique") {
+        const dup = getDuplicateInfo(r);
+        if (filterVal === "Duplicate" && !dup.isDuplicate) return false;
+        if (filterVal === "Unique" && dup.isDuplicate) return false;
+        if (filterVal !== "Duplicate" && filterVal !== "Unique" && !dup.tagText.toLowerCase().includes(filterVal.toLowerCase())) return false;
+        continue;
+      }
+
       let rVal = "";
       if(colKey === "Date") { try { if(r._submittedAt) rVal = new Date(r._submittedAt).toLocaleString(); } catch(e){} }
       else if(colKey === "Event") rVal = r.eventName || r.eventTitle || r.eventId || "Unknown Event";
@@ -20099,13 +20893,14 @@ function AdminRegistrations({ mob, C, setC, auth }) {
 
   const getUniqueValues = (colKey) => {
     const vals = new Set();
-    regs.forEach(r => {
+    activeRegsList.forEach(r => {
       if(!r) return;
       let val = "";
       if(colKey === "Date") { try { if(r._submittedAt) val = new Date(r._submittedAt).toLocaleString().split(',')[0].trim(); } catch(e){} }
       else if(colKey === "Event") val = r.eventName || r.eventTitle || r.eventId || "Unknown Event";
-      else if(colKey === "Status") val = r['Status'] || "Pending";
       else if(colKey === "Transaction ID") val = r['Transaction ID'] || "-";
+      else if(colKey === "Unique") val = getDuplicateInfo(r).isDuplicate ? "Duplicate" : "Unique";
+      else if(colKey === "Status") val = r['Status'] || "Pending";
       else if(colKey === "Updated By") val = r['Updated By'] || "-";
       else val = r[colKey] || "-";
       
@@ -20121,16 +20916,18 @@ function AdminRegistrations({ mob, C, setC, auth }) {
 
   const handleExportCSV = () => {
     if(filteredRegs.length === 0) return;
-    const headers = ["Date", "Event", "Transaction ID", "Status", "Remarks", "Updated By", ...allKeys];
+    const headers = ["Date", "Event", "Transaction ID", "Unique", "Status", "Remarks", "Updated By", ...allKeys];
     const rows = filteredRegs.map(r => {
       let date = "-";
       try { if(r._submittedAt) date = new Date(r._submittedAt).toLocaleString(); } catch(e){}
       const evName = r.eventName || r.eventTitle || r.eventId || "Unknown Event";
+      const dupTag = getDuplicateInfo(r).tagText;
       
       const rowData = [
         `"${date}"`,
         `"${evName}"`,
         `"${r['Transaction ID'] || '-'}"`,
+        `"${dupTag}"`,
         `"${r['Status'] || 'Pending'}"`,
         `"${r['Remarks'] || ''}"`,
         `"${r['Updated By'] || '-'}"`,
@@ -20233,8 +21030,10 @@ function AdminRegistrations({ mob, C, setC, auth }) {
               const cNeedsInfo = basePool.filter(r => (r.Status || r.status) === "Needs Info").length;
               const cApproved = basePool.filter(r => (r.Status || r.status) === "Approved").length;
               const cPending = basePool.filter(r => (!r.Status && !r.status) || (r.Status || r.status) === "Pending").length;
+              const cDuplicates = basePool.filter(r => getDuplicateInfo(r).isDuplicate).length;
+              const cUnique = basePool.filter(r => !getDuplicateInfo(r).isDuplicate).length;
 
-              const isAnyFilterActive = statusPillFilter !== null || openPillFilter !== null || selectedOnlyFilter;
+              const isAnyFilterActive = statusPillFilter !== null || openPillFilter !== null || duplicatePillFilter !== null || selectedOnlyFilter;
 
               return (
                 <div style={{display:"flex",alignItems:"center",gap:4,background:"#F8FAFC",padding:"4px 8px",borderRadius:10,border:"1.5px solid #CBD5E1",flexWrap:"wrap"}}>
@@ -20286,6 +21085,31 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                     title={openPillFilter === "unopened" ? "Click to remove filter" : "Filter ONLY applicants who have NOT opened their pass"}
                   >
                     <span>⚪</span> Unopened ({cUnopened}) {openPillFilter === "unopened" && "✓"}
+                  </button>
+
+                  <span style={{color:"#CBD5E1",fontSize:".8rem",margin:"0 2px"}}>|</span>
+
+                  {/* Duplicates Pill */}
+                  <button
+                    type="button"
+                    onClick={() => setDuplicatePillFilter(prev => prev === "duplicate" ? null : "duplicate")}
+                    style={{
+                      padding: "4px 9px",
+                      borderRadius: 6,
+                      border: duplicatePillFilter === "duplicate" ? "2px solid #DC2626" : "1px solid #FECACA",
+                      background: duplicatePillFilter === "duplicate" ? "#DC2626" : "#FEF2F2",
+                      color: duplicatePillFilter === "duplicate" ? "white" : "#DC2626",
+                      fontSize: ".74rem",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      boxShadow: duplicatePillFilter === "duplicate" ? "0 2px 6px rgba(220,38,38,0.35)" : "none"
+                    }}
+                    title={duplicatePillFilter === "duplicate" ? "Click to remove filter" : "Filter ONLY duplicate applicant entries (matching Name & Mobile)"}
+                  >
+                    <span>⚠️</span> Duplicates ({cDuplicates}) {duplicatePillFilter === "duplicate" && "✓"}
                   </button>
 
                   <span style={{color:"#CBD5E1",fontSize:".8rem",margin:"0 2px"}}>|</span>
@@ -20366,6 +21190,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                       onClick={() => {
                         setStatusPillFilter(null);
                         setOpenPillFilter(null);
+                        setDuplicatePillFilter(null);
                         setSelectedOnlyFilter(false);
                       }}
                       style={{
@@ -20629,6 +21454,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                 <th style={{padding:"14px 12px",textAlign:"left",whiteSpace:"nowrap"}}>Date</th>
                 <th style={{padding:"14px 12px",textAlign:"left",whiteSpace:"nowrap"}}>Event</th>
                 <th style={{padding:"14px 12px",textAlign:"left",whiteSpace:"nowrap"}}>Txn ID</th>
+                <th style={{padding:"14px 12px",textAlign:"left",whiteSpace:"nowrap"}}>Unique</th>
                 <th style={{padding:"14px 12px",textAlign:"left",whiteSpace:"nowrap"}}>Status</th>
                 <th style={{padding:"14px 12px",textAlign:"left",whiteSpace:"nowrap"}}>Remarks</th>
                 <th style={{padding:"14px 12px",textAlign:"left",whiteSpace:"nowrap"}}>Updated By</th>
@@ -20688,7 +21514,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                   </select>
                 </th>
                 <th></th>
-                {["Date", "Event", "Transaction ID", "Status", "Remarks", "Updated By", ...allKeys].map(k => {
+                {["Date", "Event", "Transaction ID", "Unique", "Status", "Remarks", "Updated By", ...allKeys].map(k => {
                   const uniqueVals = getUniqueValues(k);
                   return (
                     <th key={`filter-${k}`} style={{padding:"6px 12px", fontWeight:"normal"}}>
@@ -20811,6 +21637,53 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                       </div>
                     </td>
                     <td style={{padding:"12px",whiteSpace:"nowrap"}}>
+                      {(() => {
+                        const dup = getDuplicateInfo(r);
+                        if (dup.isDuplicate) {
+                          return (
+                            <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                              <span style={{
+                                background:"#FEF2F2",
+                                color:"#DC2626",
+                                border:"1.5px solid #FCA5A5",
+                                padding:"3px 8px",
+                                borderRadius:6,
+                                fontSize:".74rem",
+                                fontWeight:800,
+                                display:"inline-flex",
+                                alignItems:"center",
+                                gap:4,
+                                whiteSpace:"nowrap",
+                                boxShadow:"0 1px 4px rgba(220,38,38,0.15)"
+                              }} title={`Duplicate entry matching ${dup.otherTxnIds.length} other submission(s)`}>
+                                <span>⚠️</span> Duplicate entry vide number {dup.otherTxnIds.join(", ")}
+                              </span>
+                              <span style={{fontSize:".68rem",color:"#991B1B",fontWeight:600}}>
+                                ({dup.count} matching submissions with same Name & Mobile)
+                              </span>
+                            </div>
+                          );
+                        }
+                        return (
+                          <span style={{
+                            background:"#F0FDF4",
+                            color:"#166534",
+                            border:"1px solid #BBF7D0",
+                            padding:"3px 8px",
+                            borderRadius:6,
+                            fontSize:".74rem",
+                            fontWeight:700,
+                            display:"inline-flex",
+                            alignItems:"center",
+                            gap:4,
+                            whiteSpace:"nowrap"
+                          }}>
+                            <span>✓</span> Unique
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td style={{padding:"12px",whiteSpace:"nowrap"}}>
                       <select 
                         value={r['Status'] || "Pending"} 
                         onChange={(e) => handleStatusChange(r, e.target.value)}
@@ -20894,7 +21767,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
       ))}
 
       {viewing && (
-        <VerificationModal viewing={viewing} setViewing={setViewing} allRegs={regs} saveVerification={saveVerification} C={C} />
+        <VerificationModal viewing={viewing} setViewing={setViewing} allRegs={regs} saveVerification={saveVerification} C={C} auth={auth} />
       )}
 
       {showBulkWhatsAppModal && (
@@ -23780,10 +24653,36 @@ This cannot be undone.`)) return;
         </div>
         <div style={{display:"flex",flexDirection:mob?"column":"row",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,gap:16}}>
           <div>
-            <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",margin:0}}>Letters & Certificates Console</h2>
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",margin:0}}>Letters & Certificates Console</h2>
+              <select
+                value={selectedEventId || ""}
+                onChange={(e) => {
+                  if (e.target.value === "__directory__") {
+                    setShowGlobalGuestsModal(true);
+                  } else {
+                    setSelectedEventId(e.target.value || null);
+                    setPreviewCertUrl(null);
+                  }
+                }}
+                style={{padding:"5px 10px",borderRadius:8,border:"1.5px solid #0D4B5E",fontSize:".8rem",fontWeight:700,background:"#F0FDF4",color:"#0D4B5E",cursor:"pointer"}}
+                title="Switch Workspace"
+              >
+                {inviteEvents.map(ev => (
+                  <option key={ev.id} value={ev.id}>📁 {ev.title || "Workspace"}</option>
+                ))}
+              </select>
+            </div>
             <p style={{fontSize:".85rem",color:"var(--mu)",marginTop:4}}>Manage, release, and broadcast official documents for: <strong>{activeEvent.title}</strong></p>
           </div>
-          <div style={{display:"flex",gap:12,width:mob?"100%":"auto",flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:10,width:mob?"100%":"auto",flexWrap:"wrap",alignItems:"center"}}>
+            <button 
+              onClick={() => setShowGlobalGuestsModal(true)} 
+              style={{padding:"8px 14px",borderRadius:8,fontSize:".85rem",fontWeight:700,display:"flex",alignItems:"center",gap:6,background:"white",border:"1.5px solid var(--dt)",color:"var(--dt)",cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.05)",whiteSpace:"nowrap"}}
+              title="Open master contact & guest directory"
+            >
+              <span>👥</span> Directory ({globalGuests.length})
+            </button>
             <button onClick={() => setShowWorkspaceTplModal(true)} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:700,display:"flex",alignItems:"center",gap:6,background:"#F0FDF4",border:"1px solid #86EFAC",color:"#15803D",cursor:"pointer",boxShadow:"0 2px 8px rgba(21,128,61,0.15)",whiteSpace:"nowrap"}}>
               📝 Workspace WhatsApp Templates ({((activeEvent?.whatsAppTemplates && activeEvent.whatsAppTemplates.length > 0) ? activeEvent.whatsAppTemplates.length : 3)})
             </button>
@@ -25965,6 +26864,268 @@ function VibhagSummaryCard({ summaryData }) {
   );
 }
 
+// ── Offline Donation Chatbot UI Components ──────────────────────────────────────
+function OfflineDonationEntryCard({ initialData, onSubmit }) {
+  const [name, setName] = useState("");
+  const [date, setDate] = useState(initialData?.initialDate || new Date().toISOString().split('T')[0]);
+  const [amount, setAmount] = useState("");
+  const [purpose, setPurpose] = useState(initialData?.defaultPurpose || "Education Felicitation 2026");
+  const [vibhag, setVibhag] = useState(initialData?.defaultVibhag || "10 MAHALAXMI");
+  const [eventCode, setEventCode] = useState(initialData?.defaultEventCode || "EDU26");
+  const [receiptNo, setReceiptNo] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const VIBHAG_OPTIONS_DON = [
+    "10 MAHALAXMI",
+    "15 RAMDEV NAGAR",
+    "2 WALPAKHADI",
+    "22 LOWER PAREL",
+    "30 PRATKISHA NAGAR",
+    "55 BHAYANDER",
+    "65 KALWA",
+    "Outside Mumbai / General"
+  ];
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return alert("Please enter Donor Name.");
+    if (!amount || parseFloat(amount) <= 0) return alert("Please enter a valid Donation Amount.");
+    if (!date) return alert("Please select Donation Date.");
+
+    setSubmitting(true);
+    await onSubmit({ name, date, amount, purpose, vibhag, eventCode, receiptNo });
+    setSubmitting(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:12,padding:14,marginTop:8,display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:".82rem",fontWeight:800,color:"#166534",display:"flex",alignItems:"center",gap:6}}>
+        <span>📝</span> Enter Offline Donation Details
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <div style={{gridColumn:"1/-1"}}>
+          <label style={{display:"block",fontSize:".7rem",fontWeight:700,color:"#374151",marginBottom:2}}>Name *</label>
+          <input type="text" placeholder="Donor Full Name" value={name} onChange={e=>setName(e.target.value)} required style={{width:"100%",padding:"7px 9px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",boxSizing:"border-box",background:"white"}} />
+        </div>
+
+        <div>
+          <label style={{display:"block",fontSize:".7rem",fontWeight:700,color:"#374151",marginBottom:2}}>Date *</label>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)} required style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".8rem",boxSizing:"border-box",background:"white"}} />
+        </div>
+
+        <div>
+          <label style={{display:"block",fontSize:".7rem",fontWeight:700,color:"#374151",marginBottom:2}}>Amount (₹) *</label>
+          <input type="number" placeholder="e.g. 5000" min="1" value={amount} onChange={e=>setAmount(e.target.value)} required style={{width:"100%",padding:"7px 9px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",fontWeight:700,color:"#15803D",boxSizing:"border-box",background:"white"}} />
+        </div>
+
+        <div style={{gridColumn:"1/-1"}}>
+          <label style={{display:"block",fontSize:".7rem",fontWeight:700,color:"#374151",marginBottom:2}}>Purpose</label>
+          <input type="text" placeholder="e.g. Education Felicitation 2026, General Fund" value={purpose} onChange={e=>setPurpose(e.target.value)} style={{width:"100%",padding:"7px 9px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",boxSizing:"border-box",background:"white"}} />
+        </div>
+
+        <div>
+          <label style={{display:"block",fontSize:".7rem",fontWeight:700,color:"#374151",marginBottom:2}}>Vibhag Number</label>
+          <select value={vibhag} onChange={e=>setVibhag(e.target.value)} style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".78rem",background:"white",boxSizing:"border-box"}}>
+            {VIBHAG_OPTIONS_DON.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label style={{display:"block",fontSize:".7rem",fontWeight:700,color:"#374151",marginBottom:2}}>Event Code</label>
+          <input type="text" placeholder="e.g. EDU26, GEN" value={eventCode} onChange={e=>setEventCode(e.target.value)} style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".8rem",boxSizing:"border-box",background:"white"}} />
+        </div>
+
+        <div style={{gridColumn:"1/-1"}}>
+          <label style={{display:"block",fontSize:".7rem",fontWeight:700,color:"#374151",marginBottom:2}}>Internal Receipt Number</label>
+          <input type="text" placeholder="e.g. R-1024 / MMP-05" value={receiptNo} onChange={e=>setReceiptNo(e.target.value)} style={{width:"100%",padding:"7px 9px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",boxSizing:"border-box",background:"white"}} />
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        disabled={submitting}
+        style={{
+          marginTop:4,
+          padding:"9px",
+          borderRadius:8,
+          border:"none",
+          background:"linear-gradient(135deg, #15803D, #166534)",
+          color:"white",
+          fontSize:".85rem",
+          fontWeight:800,
+          cursor:submitting?"wait":"pointer",
+          boxShadow:"0 2px 6px rgba(22,101,52,0.25)"
+        }}
+      >
+        {submitting ? "Saving to Database..." : "💾 Submit & Record Offline Donation"}
+      </button>
+    </form>
+  );
+}
+
+function OfflineDonationSuccessCard({ donation }) {
+  return (
+    <div style={{background:"white",border:"1.5px solid #22C55E",borderRadius:10,padding:12,marginTop:6,boxShadow:"0 2px 8px rgba(34,197,94,0.15)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,borderBottom:"1px solid #F1F5F9",paddingBottom:6}}>
+        <div style={{fontSize:".85rem",fontWeight:800,color:"#15803D"}}>🎉 Offline Donation Recorded</div>
+        <span style={{background:"#DCFCE7",color:"#166534",fontSize:".68rem",padding:"2px 6px",borderRadius:6,fontWeight:800}}>Offline</span>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:".78rem"}}>
+        <div><span style={{color:"#64748B"}}>Donor:</span> <strong>{donation.name}</strong></div>
+        <div><span style={{color:"#64748B"}}>Amount:</span> <strong style={{color:"#15803D"}}>₹{Number(donation.amount).toLocaleString('en-IN')}</strong></div>
+        <div><span style={{color:"#64748B"}}>Date:</span> <strong>{donation.date}</strong></div>
+        <div><span style={{color:"#64748B"}}>Vibhag:</span> <strong>{donation.vibhag}</strong></div>
+        <div><span style={{color:"#64748B"}}>Receipt #:</span> <strong>{donation.receiptNo || donation.internalReceiptNo || donation.id}</strong></div>
+        <div><span style={{color:"#64748B"}}>Event Code:</span> <strong>{donation.eventCode || 'EDU26'}</strong></div>
+      </div>
+      <div style={{marginTop:8,padding:"4px 8px",background:"#F8FAFC",borderRadius:6,fontSize:".72rem",color:"#475569"}}>
+        <strong>Purpose:</strong> {donation.purpose || donation.program}
+      </div>
+    </div>
+  );
+}
+
+function DonationSummaryCard({ summaryData, onAction }) {
+  const { totalAmount, totalCount, onlineAmount, onlineCount, offlineAmount, offlineCount, vibhagBreakdown } = summaryData;
+
+  return (
+    <div style={{background:"white",border:"1.5px solid #CBD5E1",borderRadius:12,padding:14,marginTop:6,boxShadow:"0 4px 12px rgba(0,0,0,0.05)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,borderBottom:"1px solid #F1F5F9",paddingBottom:8}}>
+        <div style={{fontSize:".9rem",fontWeight:800,color:"#0F172A"}}>📊 Total Collections: ₹{totalAmount.toLocaleString('en-IN')}</div>
+        <span style={{background:"#EFF6FF",color:"#1D4ED8",fontSize:".7rem",padding:"2px 8px",borderRadius:10,fontWeight:800}}>{totalCount} Donors</span>
+      </div>
+
+      {/* Online vs Offline split */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+        <div style={{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:8,padding:"8px 10px"}}>
+          <div style={{fontSize:".68rem",fontWeight:700,color:"#166534",textTransform:"uppercase"}}>🟢 Online Razorpay</div>
+          <div style={{fontSize:".95rem",fontWeight:800,color:"#15803D",marginTop:2}}>₹{onlineAmount.toLocaleString('en-IN')}</div>
+          <div style={{fontSize:".68rem",color:"#166534"}}>{onlineCount} transactions</div>
+        </div>
+        <div style={{background:"#FFF7ED",border:"1px solid #FED7AA",borderRadius:8,padding:"8px 10px"}}>
+          <div style={{fontSize:".68rem",fontWeight:700,color:"#9A3412",textTransform:"uppercase"}}>🟠 Offline / Manual</div>
+          <div style={{fontSize:".95rem",fontWeight:800,color:"#C2410C",marginTop:2}}>₹{offlineAmount.toLocaleString('en-IN')}</div>
+          <div style={{fontSize:".68rem",color:"#9A3412"}}>{offlineCount} entries</div>
+        </div>
+      </div>
+
+      {/* Vibhag Wise Breakdown Table */}
+      <div style={{fontSize:".75rem",fontWeight:800,color:"#334155",marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>
+        📍 Vibhag-Wise Breakdown:
+      </div>
+      <div style={{maxHeight:200,overflowY:"auto",border:"1px solid #E2E8F0",borderRadius:8}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:".76rem"}}>
+          <thead>
+            <tr style={{background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",color:"#475569",textAlign:"left"}}>
+              <th style={{padding:"6px 8px"}}>Vibhag</th>
+              <th style={{padding:"6px 8px",textAlign:"center"}}>Donors</th>
+              <th style={{padding:"6px 8px",textAlign:"right"}}>Amount (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {vibhagBreakdown.map(([vName, vData], vi) => (
+              <tr key={vi} style={{borderBottom:"1px solid #F1F5F9",background:vi%2===0?"white":"#FAFAFA"}}>
+                <td style={{padding:"6px 8px",fontWeight:600,color:"#0F172A"}}>{vName}</td>
+                <td style={{padding:"6px 8px",textAlign:"center",color:"#64748B"}}>{vData.count}</td>
+                <td style={{padding:"6px 8px",textAlign:"right",fontWeight:700,color:"#15803D"}}>₹{vData.total.toLocaleString('en-IN')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{display:"flex",gap:6,marginTop:10}}>
+        <button
+          onClick={() => onAction && onAction("/donerlist")}
+          style={{flex:1,padding:"6px 10px",borderRadius:6,border:"1px solid #CBD5E1",background:"#F8FAFC",color:"#1E293B",fontSize:".74rem",fontWeight:700,cursor:"pointer"}}
+        >
+          📋 View Person-wise Donors
+        </button>
+        <button
+          onClick={() => onAction && onAction("/donation update")}
+          style={{flex:1,padding:"6px 10px",borderRadius:6,border:"none",background:"#15803D",color:"white",fontSize:".74rem",fontWeight:700,cursor:"pointer"}}
+        >
+          ➕ Add Offline
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DonorListCard({ donorData, auth, onRefresh }) {
+  const [filterText, setFilterText] = useState("");
+  const donors = donorData.donors || [];
+
+  const filtered = donors.filter(d => {
+    if (!filterText) return true;
+    const q = filterText.toLowerCase();
+    return (
+      (d.name || "").toLowerCase().includes(q) ||
+      (d.vibhag || "").toLowerCase().includes(q) ||
+      (d.receiptNo || d.internalReceiptNo || "").toLowerCase().includes(q) ||
+      (d.purpose || d.program || "").toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <div style={{background:"white",border:"1.5px solid #CBD5E1",borderRadius:12,padding:12,marginTop:6}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <div style={{fontSize:".82rem",fontWeight:800,color:"#0F172A"}}>📋 Donor Registry ({filtered.length} of {donors.length})</div>
+        <span style={{fontSize:".78rem",fontWeight:800,color:"#15803D"}}>₹{donorData.totalAmount.toLocaleString('en-IN')} Total</span>
+      </div>
+
+      <input
+        type="text"
+        placeholder="Filter by name, vibhag, receipt #..."
+        value={filterText}
+        onChange={e=>setFilterText(e.target.value)}
+        style={{width:"100%",padding:"6px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".75rem",boxSizing:"border-box",marginBottom:8}}
+      />
+
+      <div style={{maxHeight:260,overflowY:"auto",display:"flex",flexDirection:"column",gap:6}}>
+        {filtered.map((d, di) => {
+          const isOff = d.isOffline || d.paymentMode === "Offline" || String(d.paymentMethod || "").toLowerCase().includes("offline");
+          return (
+            <div key={di} style={{background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:8,padding:"8px 10px",fontSize:".76rem"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+                <div style={{fontWeight:800,color:"#0F172A"}}>{di + 1}. {d.name}</div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontWeight:800,color:"#15803D",fontSize:".82rem"}}>₹{Number(d.amount).toLocaleString('en-IN')}</span>
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (!window.confirm(`Delete donation entry for "${d.name}" (₹${d.amount})?`)) return;
+                      try {
+                        const targetId = d._docId || d.id;
+                        await fbDeleteDonation(targetId, auth?.idToken);
+                        alert("✅ Donation deleted.");
+                        if (onRefresh) onRefresh();
+                      } catch(err) {
+                        alert("Failed to delete: " + err.message);
+                      }
+                    }}
+                    style={{background:"#FEF2F2",border:"1px solid #FECACA",color:"#DC2626",fontSize:".68rem",padding:"2px 5px",borderRadius:4,cursor:"pointer",fontWeight:700}}
+                    title="Delete donation"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8,color:"#64748B",fontSize:".7rem",flexWrap:"wrap"}}>
+                <span>📅 {d.date}</span>
+                <span>📍 {d.vibhag || d.program || "General"}</span>
+                <span style={{background:isOff?"#FFEDD5":"#DCFCE7",color:isOff?"#C2410C":"#15803D",padding:"0 4px",borderRadius:4,fontWeight:700}}>{isOff ? "Offline" : "Online"}</span>
+                <span>Receipt: <strong>{d.receiptNo || d.internalReceiptNo || d.id}</strong></span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Community AI & Registration Chatbot Widget ──────────────────────────────────────────
 function CommunityChatbot({ C, auth, onShowLogin }) {
   if (C.chatbotEnabled === false) {
@@ -26053,6 +27214,16 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
   }
 
   const isAnyAdmin = userSessionScope === "all" || userSessionScope === "vibhag";
+  const isDonationCollector = Boolean(
+    auth?.idToken ||
+    matchedCommitteeMember?.isDonationCollector === true ||
+    matchedCommitteeMember?.roleType === "donation_collector" ||
+    (userSessionScope === "all" && matchedCommitteeMember?.isDonationCollector !== false) ||
+    String(matchedCommitteeMember?.role || '').toLowerCase().includes("donation") ||
+    String(matchedCommitteeMember?.role || '').toLowerCase().includes("collector") ||
+    String(verifiedMember?.role || '').toLowerCase().includes("donation") ||
+    String(verifiedMember?.role || '').toLowerCase().includes("collector")
+  );
 
   const chatbotTitle = C.chatbotTitle || (C.trust?.name ? `${C.trust.name} Assistant` : "Mumbai Meghwal Panchayat Assistant");
   const pillLabel = C.chatbotPillLabel || "Trust Assistant";
@@ -26208,6 +27379,42 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       adminOnly: false
     },
     {
+      cmd: "/donation update",
+      icon: "✍️",
+      label: "Record Offline Donation",
+      desc: "Add offline donation (Restricted to Donation Collectors)",
+      action: "/donation update",
+      adminOnly: true,
+      donationCollectorOnly: true
+    },
+    {
+      cmd: "/donner",
+      icon: "✍️",
+      label: "Record Offline Donation (/donner)",
+      desc: "Offline donation entry form (Donation Collectors only)",
+      action: "/donation update",
+      adminOnly: true,
+      donationCollectorOnly: true
+    },
+    {
+      cmd: "/donation sumary",
+      icon: "💰",
+      label: "Donation Summary (Vibhag-wise)",
+      desc: "Total collections & Vibhag metrics (Donation Collectors only)",
+      action: "/donation sumary",
+      adminOnly: true,
+      donationCollectorOnly: true
+    },
+    {
+      cmd: "/donerlist",
+      icon: "📋",
+      label: "Donor List (Person-wise)",
+      desc: "Complete registry of donors (Donation Collectors only)",
+      action: "/donerlist",
+      adminOnly: true,
+      donationCollectorOnly: true
+    },
+    {
       cmd: "/all",
       icon: "📊",
       label: "Summary of ALL Entries",
@@ -26295,27 +27502,54 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
   }, [messages, isOpen]);
 
   const ensureRegistrations = async () => {
-    if (regsLoaded && regs.length > 0) return regs;
-    try {
-      setLoading(true);
-      let token = auth?.idToken || localStorage.getItem("trustPublicAuthToken") || localStorage.getItem("globalAuthToken") || "";
-      if (!token && fbAuth?.currentUser) {
-        try { token = await fbAuth.currentUser.getIdToken(); } catch (e) {}
+    let sourceList = regs;
+    if (!sourceList || sourceList.length === 0) {
+      try {
+        setLoading(true);
+        let token = auth?.idToken || localStorage.getItem("trustPublicAuthToken") || localStorage.getItem("globalAuthToken") || "";
+        if (!token && fbAuth?.currentUser) {
+          try { token = await fbAuth.currentUser.getIdToken(); } catch (e) {}
+        }
+        const data = await fbFetchRegistrations(token).catch(err => {
+          console.warn("fbFetchRegistrations fallback:", err);
+          return [];
+        });
+        sourceList = data || [];
+        setRegs(sourceList);
+        setRegsLoaded(true);
+      } catch (e) {
+        console.error("Chatbot regs load error:", e);
+        sourceList = [];
+      } finally {
+        setLoading(false);
       }
-      const data = await fbFetchRegistrations(token).catch(err => {
-        console.warn("fbFetchRegistrations fallback:", err);
-        return [];
-      });
-      const cleanList = (data || []).filter(r => !r.deleted && !r.isGlobalGuest && !r.isSpecialGuest);
-      setRegs(cleanList);
-      setRegsLoaded(true);
-      return cleanList;
-    } catch (e) {
-      console.error("Chatbot regs load error:", e);
-      return [];
-    } finally {
-      setLoading(false);
     }
+
+    // Comprehensive Trash, Directory, and Education 2026 Student Filter
+    const cleanList = (sourceList || []).filter(r => {
+      if (!r) return false;
+      // Exclude all deleted / trash items
+      if (r.deleted === true || r.deleted === "true" || r.isDeleted === true || r.isTrash === true || r.inTrash === true || r.status === "Deleted" || r.Status === "Deleted") {
+        return false;
+      }
+      // Exclude special guest directory and workspace imports of directory contacts
+      if (r.isGlobalGuest === true || r.isSpecialGuest === true || Boolean(r.globalGuestId) || r.formId === "global_guest_directory" || r.formId === "global_guest_directory_import") {
+        return false;
+      }
+      // Ensure we target Education Felicitation 2026 student applications
+      const evName = String(r.eventName || r.eventTitle || r.eventId || "").toLowerCase();
+      const isEduEvent = evName.includes("education") || evName.includes("felicitation") || evName.includes("2026") || evName.includes("vidya") || evName.includes("student") || evName === "" || evName === "unknown event";
+      const isEduTxn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase().startsWith("VG-") || String(r['Transaction ID'] || r.transactionId || "").toUpperCase().startsWith("EDU");
+      const hasStudentFields = Boolean(r['Stream / Class'] || r['Stream'] || r['Course'] || r['% Obtained'] || r.percentage || r['Marks / Percentage'] || r['Standard'] || r.marksheet);
+
+      if (!isEduEvent && !isEduTxn && !hasStudentFields) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return cleanList;
   };
 
   const handleSendMessage = async (userText) => {
@@ -26390,7 +27624,145 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       return false;
     });
 
-    if (qLower === "/check" || qLower === "check" || qLower === "my status" || qLower === "check status" || qLower === "check my application status" || qLower.includes("application status") || qLower.includes("check application")) {
+    // ── Command 1: /donation update (Offline Donation Entry Flow) ──
+    if (qLower === "/donation update" || qLower === "donation update" || qLower === "/donner" || qLower === "donner" || qLower === "/donor" || qLower === "donor" || qLower === "/offline donation" || qLower === "offline donation" || qLower.startsWith("/donation update") || qLower.startsWith("/donner")) {
+      if (!isDonationCollector) {
+        botReply = `🔒 **Access Restricted: Donation Collector Role Required**\n\nRecording offline donations is strictly restricted to authorized **Donation Collectors** and **Super Admins**.\n\n• ℹ️ **Your Access**: Regular registration/vibhag committee members are not authorized for payment collections.\n• 👉 Please connect with Super Admin (+91 9820785209) to assign you the **Donation Collector** role.`;
+      } else {
+        // Check if user provided parameters inline: e.g. Name: John, Amount: 5000...
+        const parseInline = (text) => {
+          const res = {};
+          const nameM = text.match(/name[:\s=]+([^,\n]+)/i);
+          const amtM = text.match(/amount[:\s=]+([^,\n]+)/i);
+          const dateM = text.match(/date[:\s=]+([^,\n]+)/i);
+          const purpM = text.match(/purpose[:\s=]+([^,\n]+)/i);
+          const vibM = text.match(/vibhag(?:\s*number)?[:\s=]+([^,\n]+)/i);
+          const evM = text.match(/event(?:\s*code)?[:\s=]+([^,\n]+)/i);
+          const rcpM = text.match(/(?:internal\s*)?receipt(?:\s*number)?[:\s=]+([^,\n]+)/i);
+          if (nameM) res.name = nameM[1].trim();
+          if (amtM) res.amount = amtM[1].trim().replace(/[^0-9.]/g, '');
+          if (dateM) res.date = dateM[1].trim();
+          if (purpM) res.purpose = purpM[1].trim();
+          if (vibM) res.vibhag = vibM[1].trim();
+          if (evM) res.eventCode = evM[1].trim();
+          if (rcpM) res.receiptNo = rcpM[1].trim();
+          return res;
+        };
+
+        const inlineData = parseInline(query);
+        if (inlineData.name && inlineData.amount) {
+          // Direct inline submission!
+          try {
+            const donDate = inlineData.date || new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+            const donRecord = {
+              name: inlineData.name,
+              amount: parseFloat(inlineData.amount) || 0,
+              date: donDate,
+              program: inlineData.purpose || "Education Felicitation 2026",
+              purpose: inlineData.purpose || "Education Felicitation 2026",
+              vibhag: inlineData.vibhag || (sessionVibhag !== "All Vibhags" ? sessionVibhag : "General"),
+              eventCode: inlineData.eventCode || "EDU26",
+              receiptNo: inlineData.receiptNo || `RCP-${Math.floor(1000 + Math.random() * 9000)}`,
+              internalReceiptNo: inlineData.receiptNo || `RCP-${Math.floor(1000 + Math.random() * 9000)}`,
+              paymentMode: "Offline",
+              paymentMethod: "Offline / Cash / Cheque",
+              status: "Verified",
+              isOffline: true,
+              id: `DON-OFF-${Math.floor(100000 + Math.random() * 900000)}`,
+              recordedBy: activeUser?.email || activeUser?.name || "Admin",
+              recordedAt: new Date().toISOString()
+            };
+
+            await fbSubmitDonation(donRecord, auth?.idToken);
+            botType = "offline_donation_success";
+            botReply = `✅ **Offline Donation Successfully Saved to Database!**`;
+            cardData = { donation: donRecord };
+          } catch (err) {
+            botReply = `❌ **Failed to save offline donation**: ${err.message}`;
+          }
+        } else {
+          // Render interactive form card
+          botType = "offline_donation_form";
+          botReply = `✍️ **Offline Donation Entry Form**\n\nPlease enter the offline donation details below. All fields will be stored directly into the official Donations database:`;
+          cardData = {
+            initialDate: new Date().toISOString().split('T')[0],
+            defaultVibhag: sessionVibhag && sessionVibhag !== "All Vibhags" ? sessionVibhag : "10 MAHALAXMI",
+            defaultPurpose: "Education Felicitation 2026",
+            defaultEventCode: "EDU26"
+          };
+        }
+      }
+    } else if (qLower === "/donation sumary" || qLower === "/donation summary" || qLower === "donation sumary" || qLower === "donation summary" || qLower === "/donationsummary" || qLower === "/donationsumary") {
+      if (!isDonationCollector) {
+        botReply = `🔒 **Access Restricted: Donation Collector Role Required**\n\nDonation summaries and financial metrics are restricted to authorized **Donation Collectors** and **Super Admins**.\n\n• 👉 If you are an assigned Donation Collector, please enter your **10-digit Authorized Mobile Number** to unlock.`;
+      } else {
+        try {
+          let token = auth?.idToken || localStorage.getItem("trustPublicAuthToken") || localStorage.getItem("globalAuthToken") || "";
+          const allDonations = await fbFetchDonations(token).catch(() => []);
+          
+          let totalAmt = 0;
+          let onlineAmt = 0, offlineAmt = 0;
+          let onlineCount = 0, offlineCount = 0;
+          const vibhagMap = {};
+
+          allDonations.forEach(d => {
+            const amt = parseFloat(d.amount) || 0;
+            totalAmt += amt;
+            const isOff = d.isOffline || d.paymentMode === "Offline" || d.razorpay_payment_id === undefined || String(d.paymentMethod || "").toLowerCase().includes("offline");
+            if (isOff) {
+              offlineAmt += amt;
+              offlineCount++;
+            } else {
+              onlineAmt += amt;
+              onlineCount++;
+            }
+
+            let v = String(d.vibhag || d.vibhagNumber || d.program || "General / Main").trim();
+            if (!vibhagMap[v]) vibhagMap[v] = { total: 0, count: 0, offlineAmt: 0, onlineAmt: 0 };
+            vibhagMap[v].total += amt;
+            vibhagMap[v].count += 1;
+            if (isOff) vibhagMap[v].offlineAmt += amt;
+            else vibhagMap[v].onlineAmt += amt;
+          });
+
+          botType = "donation_summary_card";
+          botReply = `💰 **Live Donation Summary (Vibhag-wise & Mode-wise)**:`;
+          cardData = {
+            totalAmount: totalAmt,
+            totalCount: allDonations.length,
+            onlineAmount: onlineAmt,
+            onlineCount: onlineCount,
+            offlineAmount: offlineAmt,
+            offlineCount: offlineCount,
+            vibhagBreakdown: Object.entries(vibhagMap).sort((a, b) => b[1].total - a[1].total)
+          };
+        } catch (err) {
+          botReply = `❌ **Failed to fetch donation summary**: ${err.message}`;
+        }
+      }
+    } else if (qLower === "/donerlist" || qLower === "/donorlist" || qLower === "/donnerlist" || qLower === "donerlist" || qLower === "donorlist" || qLower === "donnerlist" || qLower === "/donor list" || qLower === "donor list" || qLower === "/donner list") {
+      if (!isDonationCollector) {
+        botReply = `🔒 **Access Restricted: Donation Collector Role Required**\n\nDonor registries and person-wise collections are restricted to authorized **Donation Collectors** and **Super Admins**.\n\n• 👉 If you are an assigned Donation Collector, please enter your **10-digit Authorized Mobile Number** to unlock.`;
+      } else {
+        try {
+          let token = auth?.idToken || localStorage.getItem("trustPublicAuthToken") || localStorage.getItem("globalAuthToken") || "";
+          const allDonations = await fbFetchDonations(token).catch(() => []);
+
+          if (allDonations.length === 0) {
+            botReply = `📋 **No donation records found in the database.**`;
+          } else {
+            botType = "donor_list_card";
+            botReply = `📋 **Person-wise Donor Registry (${allDonations.length} Donors Recorded)**:`;
+            cardData = {
+              donors: allDonations,
+              totalAmount: allDonations.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0)
+            };
+          }
+        } catch (err) {
+          botReply = `❌ **Failed to fetch donor list**: ${err.message}`;
+        }
+      }
+    } else     if (qLower === "/check" || qLower === "check" || qLower === "my status" || qLower === "check status" || qLower === "check my application status" || qLower.includes("application status") || qLower.includes("check application")) {
       // Look up logged in mobile across all sources
       const currentActiveUser = getActiveUser();
       const userPhone = currentActiveUser.mobile;
@@ -26497,9 +27869,10 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
         });
 
         if (userSessionScope === "vibhag" && sessionVibhag) {
+          const allowedVibs = sessionVibhag.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
           pendingList = pendingList.filter(r => {
             const v = String(r["Vibhag"] || r["vibhag"] || "").toLowerCase();
-            return v.includes(sessionVibhag.toLowerCase()) || sessionVibhag.toLowerCase().includes(v);
+            return allowedVibs.some(av => v.includes(av) || av.includes(v));
           });
         }
 
@@ -26517,9 +27890,10 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       } else {
         let approvedList = currentRegs.filter(r => String(r.Status || r.status || "").trim() === "Approved");
         if (userSessionScope === "vibhag" && sessionVibhag) {
+          const allowedVibs = sessionVibhag.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
           approvedList = approvedList.filter(r => {
             const v = String(r["Vibhag"] || r["vibhag"] || "").toLowerCase();
-            return v.includes(sessionVibhag.toLowerCase()) || sessionVibhag.toLowerCase().includes(v);
+            return allowedVibs.some(av => v.includes(av) || av.includes(v));
           });
         }
 
@@ -26584,41 +27958,62 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
           return qLower.includes(vName) || (vWord && vWord.length >= 4 && qLower.includes(vWord));
         });
 
-        // If user is a Vibhag Admin
+        // If user is a Vibhag Admin (with single or multiple assigned Vibhags)
         if (userSessionScope === "vibhag" && sessionVibhag && sessionVibhag !== "All Vibhags") {
-          const cleanSession = sessionVibhag.toLowerCase().trim();
+          const rawVibhagString = String(sessionVibhag);
+          const allowedVibhags = rawVibhagString.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
           const cleanExplicit = explicitlyMentionedVibhag ? explicitlyMentionedVibhag.toLowerCase().trim() : null;
 
-          if (cleanExplicit && !cleanExplicit.includes(cleanSession) && !cleanSession.includes(cleanExplicit)) {
+          const isRequestedAllowed = !cleanExplicit || allowedVibhags.some(av => cleanExplicit.includes(av) || av.includes(cleanExplicit));
+
+          if (cleanExplicit && !isRequestedAllowed) {
             botType = "text";
-            const customTpl = C.chatbotRestrictedVibhagMsg || `🔒 **Access Restricted to {ASSIGNED_VIBHAG}**\n\nYou have administrative access assigned specifically for **{ASSIGNED_VIBHAG}**.\n\n• 🚫 You do not have permission to view registrations or analytics for **{REQUESTED_VIBHAG}**.\n• ℹ️ **Check your access level of Vibhag**: Please connect with Admin ({ADMIN_PHONE}) if you require access to this Vibhag.\n• 👉 Type **`/vibhag`** or **`/all`** to view live analytics for **{ASSIGNED_VIBHAG}**.`;
+            const customTpl = C.chatbotRestrictedVibhagMsg || `🔒 **Access Restricted to {ASSIGNED_VIBHAG}**\n\nYou have administrative access assigned for **{ASSIGNED_VIBHAG}**.\n\n• 🚫 You do not have permission to view registrations or analytics for **{REQUESTED_VIBHAG}**.\n• ℹ️ **Check your access level**: Please connect with Admin ({ADMIN_PHONE}) if you require access to this Vibhag.\n• 👉 Type **`/vibhag`** to view live analytics for **{ASSIGNED_VIBHAG}**.`;
             botReply = customTpl
-              .replace(/\{ASSIGNED_VIBHAG\}/g, sessionVibhag || "Your Assigned Vibhag")
+              .replace(/\{ASSIGNED_VIBHAG\}/g, sessionVibhag || "Your Assigned Vibhags")
               .replace(/\{REQUESTED_VIBHAG\}/g, explicitlyMentionedVibhag || "this Vibhag")
               .replace(/\{ADMIN_PHONE\}/g, "+91 9820785209");
           } else {
+            // Target specific mentioned vibhag or all assigned vibhags
+            const targetAllowedList = cleanExplicit 
+              ? allowedVibhags.filter(av => cleanExplicit.includes(av) || av.includes(cleanExplicit))
+              : allowedVibhags;
+
             const vibhagRegs = currentRegs.filter(r => {
               const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "").toLowerCase().trim();
-              return v.includes(cleanSession) || cleanSession.includes(v);
+              return targetAllowedList.some(av => v.includes(av) || av.includes(v));
             });
 
             let approved = 0, pending = 0, rejected = 0;
+            const vibhagBreakMap = {};
+
             vibhagRegs.forEach(r => {
               const s = String(r.Status || r.status || "Pending").trim();
               if (s === "Approved") approved++;
               else if (s === "Disapproved" || s === "Rejected") rejected++;
               else pending++;
+
+              const rV = String(r["Vibhag"] || r["vibhag"] || "Assigned").trim();
+              if (!vibhagBreakMap[rV]) vibhagBreakMap[rV] = { total: 0, approved: 0, pending: 0, rejected: 0 };
+              vibhagBreakMap[rV].total++;
+              if (s === "Approved") vibhagBreakMap[rV].approved++;
+              else if (s === "Disapproved" || s === "Rejected") vibhagBreakMap[rV].rejected++;
+              else vibhagBreakMap[rV].pending++;
             });
 
+            const breakList = Object.entries(vibhagBreakMap).sort((a, b) => a[0].localeCompare(b[0]));
+
             botType = "summary_card";
-            botReply = `📍 **Live Analytics for ${sessionVibhag} (Your Assigned Vibhag)**: `;
+            botReply = cleanExplicit
+              ? `📍 **Live Analytics for ${explicitlyMentionedVibhag}**: `
+              : `📍 **Live Analytics for Your Assigned Vibhags (${sessionVibhag})**: `;
             cardData = {
               total: vibhagRegs.length,
               approved,
               pending,
               rejected,
-              scopeTitle: `${sessionVibhag} Summary`,
-              vibhagList: [[`${sessionVibhag}`, { total: vibhagRegs.length, approved, pending, rejected }]],
+              scopeTitle: cleanExplicit ? `${explicitlyMentionedVibhag} Summary` : `Assigned Vibhags Summary (${allowedVibhags.length} Vibhags)`,
+              vibhagList: breakList.length > 0 ? breakList : [[sessionVibhag, { total: 0, approved: 0, pending: 0, rejected: 0 }]],
               apps: vibhagRegs
             };
           }
@@ -26972,6 +28367,67 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
                         {m.type === "summary_card" && m.cardData && (
                           <VibhagSummaryCard summaryData={m.cardData} />
                         )}
+
+                        {/* If Message has Offline Donation Entry Form */}
+                        {m.type === "offline_donation_form" && m.cardData && (
+                          <OfflineDonationEntryCard
+                            initialData={m.cardData}
+                            onSubmit={async (formData) => {
+                              setLoading(true);
+                              try {
+                                const donRecord = {
+                                  name: formData.name.trim(),
+                                  amount: parseFloat(formData.amount) || 0,
+                                  date: formData.date || new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+                                  program: formData.purpose || "Education Felicitation 2026",
+                                  purpose: formData.purpose || "Education Felicitation 2026",
+                                  vibhag: formData.vibhag || "General",
+                                  eventCode: formData.eventCode || "EDU26",
+                                  receiptNo: formData.receiptNo || `RCP-${Math.floor(1000 + Math.random() * 9000)}`,
+                                  internalReceiptNo: formData.receiptNo || `RCP-${Math.floor(1000 + Math.random() * 9000)}`,
+                                  paymentMode: "Offline",
+                                  paymentMethod: "Offline / Cash / Cheque",
+                                  status: "Verified",
+                                  isOffline: true,
+                                  id: `DON-OFF-${Math.floor(100000 + Math.random() * 900000)}`,
+                                  recordedBy: activeUser?.email || activeUser?.name || "Admin",
+                                  recordedAt: new Date().toISOString()
+                                };
+
+                                await fbSubmitDonation(donRecord, auth?.idToken);
+                                setMessages(prev => [
+                                  ...prev,
+                                  {
+                                    id: "m_don_saved_" + Date.now(),
+                                    sender: "bot",
+                                    type: "offline_donation_success",
+                                    text: "✅ **Offline Donation Successfully Saved to Database!**",
+                                    cardData: { donation: donRecord }
+                                  }
+                                ]);
+                              } catch (err) {
+                                alert("Failed to save offline donation: " + err.message);
+                              } finally {
+                                setLoading(false);
+                              }
+                            }}
+                          />
+                        )}
+
+                        {/* If Message has Offline Donation Success Confirmation */}
+                        {m.type === "offline_donation_success" && m.cardData?.donation && (
+                          <OfflineDonationSuccessCard donation={m.cardData.donation} />
+                        )}
+
+                        {/* If Message has Donation Summary Card */}
+                        {m.type === "donation_summary_card" && m.cardData && (
+                          <DonationSummaryCard summaryData={m.cardData} onAction={handleSendMessage} />
+                        )}
+
+                        {/* If Message has Donor List Card */}
+                        {m.type === "donor_list_card" && m.cardData && (
+                          <DonorListCard donorData={m.cardData} auth={auth} onRefresh={()=>handleSendMessage("/donerlist")} />
+                        )}
                       </div>
                     </div>
                   );
@@ -27054,7 +28510,8 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
                         }
 
                         return displayedCommands.map(sc => {
-                          const isLockedForUser = sc.adminOnly && !isAnyAdmin;
+                          const isLockedForUser = (sc.donationCollectorOnly && !isDonationCollector) || (sc.adminOnly && !isAnyAdmin);
+  const lockLabel = sc.donationCollectorOnly ? "🔒 Donation Collector Only" : "🔒 Admin Only";
 
                           return (
                             <div
