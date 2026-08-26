@@ -22537,6 +22537,81 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   const fileInputRef = useRef(null);
   const [uploadingExcel, setUploadingExcel] = useState(false);
 
+
+  const handleDownloadSampleExcel = () => {
+    try {
+      const sampleData = [
+        {
+          "Full Name": "Harish Makwana",
+          "Designation": "Trustee",
+          "Mobile Number": "9819728011",
+          "Group": "Trustee, CWC Member",
+          "Email": "harish@example.com",
+          "Address": "Mahim, Mumbai"
+        },
+        {
+          "Full Name": "Pradeep Parmar",
+          "Designation": "CWC Member & Lead",
+          "Mobile Number": "9819984437",
+          "Group": "CWC Member, Education Committee",
+          "Email": "pradeep@example.com",
+          "Address": "Mahalaxmi, Mumbai"
+        },
+        {
+          "Full Name": "Ramesh Solanki",
+          "Designation": "Education Committee Convener",
+          "Mobile Number": "9820123456",
+          "Group": "Education Committee",
+          "Email": "ramesh@example.com",
+          "Address": "Dadar, Mumbai"
+        },
+        {
+          "Full Name": "Pooja Vaghela",
+          "Designation": "Volunteer Head",
+          "Mobile Number": "9833456789",
+          "Group": "Volunteer, Kalyan Team",
+          "Email": "pooja@example.com",
+          "Address": "Kalyan, Mumbai"
+        }
+      ];
+
+      const ws = XLSX.utils.json_to_sheet(sampleData);
+      ws['!cols'] = [
+        { wch: 22 },
+        { wch: 28 },
+        { wch: 16 },
+        { wch: 34 },
+        { wch: 24 },
+        { wch: 24 }
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Contacts_Directory_Template");
+      XLSX.writeFile(wb, "Sample_Directory_Contacts_Template.xlsx");
+    } catch(err) {
+      alert("Error downloading template: " + err.message);
+    }
+  };
+
+  const handleDownloadSampleCsv = () => {
+    try {
+      const csvContent = "Full Name,Designation,Mobile Number,Group,Email,Address\n" +
+        '"Harish Makwana","Trustee","9819728011","Trustee, CWC Member","harish@example.com","Mahim, Mumbai"\n' +
+        '"Pradeep Parmar","CWC Member & Lead","9819984437","CWC Member, Education Committee","pradeep@example.com","Mahalaxmi, Mumbai"\n' +
+        '"Ramesh Solanki","Education Committee Convener","9820123456","Education Committee","ramesh@example.com","Dadar, Mumbai"\n' +
+        '"Pooja Vaghela","Volunteer Head","9833456789","Volunteer, Kalyan Team","pooja@example.com","Kalyan, Mumbai"\n';
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute("download", "Sample_Directory_Contacts_Template.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch(err) {
+      alert("Error downloading CSV: " + err.message);
+    }
+  };
+
   const handleExcelUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -22551,27 +22626,33 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       let successCount = 0;
       for (const row of rows) {
         const fullName = row["Full Name"] || row["Name"] || row["Participant Name"] || "";
-        if (!fullName) continue;
+        if (!fullName || !String(fullName).trim()) continue;
 
         const mobile = row["Mobile"] || row["Mobile Number"] || row["Phone"] || "";
         const email = row["Email"] || row["Email Address"] || "";
         const designation = row["Designation"] || row["Organization"] || row["Company"] || "";
         const address = row["Address"] || row["Location"] || "";
 
-        const groupName = row.Group || row.group || row.Category || row.category || row.Team || row.team || row.Vibhag || "CWC Member";
+        const rawGroup = row.Group || row.group || row.Groups || row.groups || row["Contact Group"] || row.Category || row.category || row.Team || row.team || row.Vibhag || "General Committee";
+        const assignedGroups = getContactGroups({ group: String(rawGroup) });
+        const groupStr = assignedGroups.join(", ");
+
         const newGlobalGuest = {
-          "Full Name": fullName,
-          "Participant Name": fullName,
-          "Name": fullName,
-          "Mobile": mobile,
-          "Mobile Number": mobile,
-          "Email": email,
-          "Address": address,
-          "Designation": designation,
-          "Organization": designation,
-          "Group": groupName,
-          "Category": groupName,
-          "Vibhag": groupName,
+          "Transaction ID": "GST-" + Date.now().toString().slice(-6) + "-" + (successCount + 1),
+          "Full Name": String(fullName).trim(),
+          "Participant Name": String(fullName).trim(),
+          "Name": String(fullName).trim(),
+          "Mobile": mobile ? String(mobile).trim() : "",
+          "Mobile Number": mobile ? String(mobile).trim() : "",
+          "Email": email ? String(email).trim() : "",
+          "Address": address ? String(address).trim() : "",
+          "Designation": designation ? String(designation).trim() : "",
+          "Organization": designation ? String(designation).trim() : "",
+          "Group": groupStr,
+          "Category": groupStr,
+          "Vibhag": assignedGroups[0] || "General Committee",
+          groups: assignedGroups,
+          Groups: assignedGroups,
           isGlobalGuest: true,
           _submittedAt: Date.now(),
           formId: "global_guest_directory_import"
@@ -22579,10 +22660,10 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
         await fbSubmitRegistration(newGlobalGuest, auth?.idToken);
         successCount++;
       }
-      alert(`Successfully imported ${successCount} global guests from Excel!`);
+      alert(`✅ Successfully imported ${successCount} contacts into directory!`);
       fetchRegs();
     } catch (err) {
-      alert("Error reading Excel file: " + err.message);
+      alert("Error reading file: " + err.message);
     }
     setUploadingExcel(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -23100,11 +23181,36 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
                 </button>
               </form>
 
-              <div style={{marginTop:20,borderTop:"1px solid #E2E8F0",paddingTop:14}}>
-                <label style={{display:"block",fontSize:".82rem",fontWeight:700,marginBottom:6}}>Import Contacts from Excel (.xlsx/.xls)</label>
-                <input type="file" ref={fileInputRef} accept=".xlsx,.xls" onChange={handleExcelUpload} style={{display:"none"}} />
-                <button onClick={() => fileInputRef.current?.click()} disabled={uploadingExcel} style={{width:"100%",padding:"9px",borderRadius:8,background:"#F8FAFC",color:"var(--dt)",border:"1.5px solid #CBD5E1",fontWeight:700,cursor:uploadingExcel?"wait":"pointer",fontSize:".82rem"}}>
-                  {uploadingExcel ? "Uploading..." : "📂 Upload Excel File"}
+              <div style={{marginTop:18,borderTop:"1.5px solid #E2E8F0",paddingTop:14,background:"#F8FAFC",padding:"12px 14px",borderRadius:10,border:"1px solid #E2E8F0"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <label style={{fontSize:".82rem",fontWeight:800,color:"#0F172A"}}>📥 Bulk Import via Excel / CSV:</label>
+                </div>
+
+                <div style={{display:"flex",gap:8,marginBottom:10}}>
+                  <button 
+                    type="button" 
+                    onClick={handleDownloadSampleExcel}
+                    style={{flex:1,padding:"7px 10px",borderRadius:6,background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #93C5FD",fontWeight:700,fontSize:".74rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}
+                  >
+                    <span>📊</span> Sample Excel (.xlsx)
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={handleDownloadSampleCsv}
+                    style={{flex:1,padding:"7px 10px",borderRadius:6,background:"#F0FDF4",color:"#15803D",border:"1px solid #86EFAC",fontWeight:700,fontSize:".74rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}
+                  >
+                    <span>📄</span> Sample CSV (.csv)
+                  </button>
+                </div>
+
+                <input type="file" ref={fileInputRef} accept=".xlsx,.xls,.csv" onChange={handleExcelUpload} style={{display:"none"}} />
+                <button 
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()} 
+                  disabled={uploadingExcel} 
+                  style={{width:"100%",padding:"10px",borderRadius:8,background:"linear-gradient(135deg, #0D4B5E, #135D74)",color:"white",border:"none",fontWeight:800,cursor:uploadingExcel?"wait":"pointer",fontSize:".84rem",display:"flex",alignItems:"center",justifyContent:"center",gap:6,boxShadow:"0 2px 6px rgba(13,75,94,0.2)"}}
+                >
+                  <span>📂</span> {uploadingExcel ? "Importing Contacts..." : "Upload Completed Excel / CSV File"}
                 </button>
               </div>
             </div>
