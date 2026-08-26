@@ -23229,7 +23229,7 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
     );
   };
 
-  let availableFields = [];  let availableFields = [];
+  let availableFields = [];
   if (selectedEventId) {
     const ev = inviteEvents.find(e => e.id === selectedEventId);
     const keys = new Set(Object.keys(ev?.inviteMap || {}));
