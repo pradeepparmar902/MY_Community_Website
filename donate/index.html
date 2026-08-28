@@ -50,7 +50,7 @@
       }
       .qr-img {
         width: 100%;
-        max-height: 380px;
+        max-height: 420px;
         object-fit: contain;
         border-radius: 12px;
         border: 1px solid #e2e8f0;
@@ -85,28 +85,21 @@
         cursor: pointer;
         white-space: nowrap;
       }
-      .action-grid {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        margin-top: 14px;
-      }
-      .btn-action {
+      .download-btn {
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
+        margin-top: 14px;
         padding: 12px;
+        background: #166534;
+        color: white;
         border-radius: 8px;
         font-weight: 800;
-        font-size: .88rem;
+        font-size: .9rem;
         text-decoration: none;
-        cursor: pointer;
-        border: none;
+        box-shadow: 0 2px 6px rgba(22,101,52,0.25);
       }
-      .btn-download { background: #166534; color: white; }
-      .btn-online { background: #0284c7; color: white; }
-      
       .guide-box {
         margin-top: 14px;
         background: #f0fdf4;
@@ -143,7 +136,7 @@
   <body>
     <div class="card">
       <h2 style="margin: 0 0 4px 0; color: #166534; font-size: 1.25rem;">મુંબઈ મેઘવાળ પંચાયત</h2>
-      <p style="margin: 0 0 10px 0; font-size: .8rem; color: #64748b;">Bank of Baroda BHIM Baroda Pay QR Scanner</p>
+      <p style="margin: 0 0 12px 0; font-size: .82rem; color: #64748b;">Bank of Baroda BHIM Baroda Pay QR Scanner</p>
       
       <img src="https://firebasestorage.googleapis.com/v0/b/mmp-cwc-new.firebasestorage.app/o/logos%2Flogo_1787903943025.png?alt=media&token=ce8dd0be-7d1e-4cbb-9607-04bcbcff9498" alt="Bank of Baroda BHIM QR Scanner" class="qr-img" />
       
@@ -156,28 +149,26 @@
         <button class="copy-btn" id="copyBtn" onclick="copyVpa()">📋 Copy ID</button>
       </div>
 
-      <!-- Action Buttons -->
-      <div class="action-grid">
-        <a href="https://firebasestorage.googleapis.com/v0/b/mmp-cwc-new.firebasestorage.app/o/logos%2Flogo_1787903943025.png?alt=media&token=ce8dd0be-7d1e-4cbb-9607-04bcbcff9498" download="mmp_donation_qr.png" target="_blank" class="btn-action btn-download">
-          📥 Download QR Code (Save to Phone)
-        </a>
-      </div>
+      <!-- Save QR Code Button -->
+      <a href="https://firebasestorage.googleapis.com/v0/b/mmp-cwc-new.firebasestorage.app/o/logos%2Flogo_1787903943025.png?alt=media&token=ce8dd0be-7d1e-4cbb-9607-04bcbcff9498" download="mmp_donation_qr.png" target="_blank" class="download-btn">
+        📥 Save QR Code to Gallery
+      </a>
 
       <!-- Step by Step Guide for Donors -->
       <div class="guide-box">
         <div style="font-weight: 800; margin-bottom: 8px; font-size: .82rem; display: flex; align-items: center; gap: 6px;">
-          <span>📱</span> દાન આપવાની સરળ રીત (2 Easy Ways to Pay):
+          <span>📱</span> દાન આપવા માટેની રીતો (How to Pay):
         </div>
         <div class="guide-step">
           <span class="guide-num">1</span>
           <div>
-            <strong>રીત ૧ (QR સ્કેન):</strong> ઉપર આપેલ <strong>"Download QR"</strong> બટન દબાવી QR સેવ કરો ➔ GPay / PhonePe / Paytm ખોલી <strong>Scan QR ➔ 🖼️ Gallery</strong> માંથી સ્કેન કરો.
+            <strong>QR સ્કેન:</strong> <strong>"Save QR Code"</strong> દબાવી QR સેવ કરો ➔ GPay / PhonePe / Paytm ખોલી <strong>Scan QR ➔ 🖼️ Gallery</strong> માંથી સ્કેન કરી દાન જમા કરો.
           </div>
         </div>
         <div class="guide-step" style="margin-bottom: 0;">
           <span class="guide-num">2</span>
           <div>
-            <strong>રીત ૨ (UPI ID):</strong> <strong>"Copy ID"</strong> બટન દબાવો ➔ કોઈપણ UPI App માં <strong>Pay via UPI ID</strong> માં પેસ્ટ કરી દાન જમા કરો.
+            <strong>UPI ID ટ્રાન્સફર:</strong> <strong>"Copy ID"</strong> દબાવી કોઈપણ UPI App માં <strong>Pay to UPI ID (mumba98697331@barodampay)</strong> સર્ચ કરી દાન મોકલો.
           </div>
         </div>
       </div>
