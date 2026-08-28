@@ -8,7 +8,7 @@
     
     <!-- Open Graph for WhatsApp Thumbnail Scanner Preview -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://www.mmp-cwc.com/donate/" />
+    <meta property="og:url" content="https://mmp-cwc.com/donate/" />
     <meta property="og:title" content="મુંબઈ મેઘવાળ પંચાયત - દાન સ્કેનર (Scan to Pay)" />
     <meta property="og:description" content="Bank of Baroda BHIM Pay | UPI VPA: mumba98697331@barodampay | Merchant: MUMBAI MEGHWAL PANCHAYAT" />
     <meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/mmp-cwc-new.firebasestorage.app/o/logos%2Flogo_1787903943025.png?alt=media&token=ce8dd0be-7d1e-4cbb-9607-04bcbcff9498" />
@@ -25,9 +25,10 @@
     <meta property="twitter:image" content="https://firebasestorage.googleapis.com/v0/b/mmp-cwc-new.firebasestorage.app/o/logos%2Flogo_1787903943025.png?alt=media&token=ce8dd0be-7d1e-4cbb-9607-04bcbcff9498" />
     
     <style>
+      * { box-sizing: border-box; }
       body {
         margin: 0;
-        padding: 16px;
+        padding: 16px 12px;
         background: #0f172a;
         color: white;
         font-family: system-ui, -apple-system, sans-serif;
@@ -37,54 +38,137 @@
         justify-content: center;
         min-height: 100vh;
         text-align: center;
-        box-sizing: border-box;
       }
       .card {
         background: white;
         color: #1e293b;
         border-radius: 16px;
-        padding: 20px;
+        padding: 20px 16px;
         max-width: 440px;
         width: 100%;
         box-shadow: 0 12px 30px rgba(0,0,0,0.5);
       }
-      img {
+      .qr-img {
         width: 100%;
-        max-height: 480px;
+        max-height: 440px;
         object-fit: contain;
         border-radius: 12px;
         border: 1px solid #e2e8f0;
+        background: #fff;
       }
-      .btn {
-        display: inline-block;
+      .vpa-box {
         margin-top: 14px;
-        padding: 12px 20px;
-        background: #166534;
+        background: #f8fafc;
+        border: 1.5px dashed #cbd5e1;
+        border-radius: 10px;
+        padding: 10px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .vpa-text {
+        font-size: .88rem;
+        font-weight: 800;
+        color: #1e293b;
+        word-break: break-all;
+        text-align: left;
+      }
+      .copy-btn {
+        background: #2563eb;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: .75rem;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .pay-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 10px 8px;
         color: white;
         text-decoration: none;
         border-radius: 8px;
         font-weight: 800;
-        font-size: .95rem;
+        font-size: .82rem;
+      }
+      .btn-bhim { background: #166534; grid-column: 1 / -1; font-size: .95rem; padding: 12px; }
+      .btn-gpay { background: #1a73e8; }
+      .btn-phonepe { background: #5f259f; }
+      .btn-paytm { background: #00b9f5; color: #0f172a; }
+      .note-box {
+        margin-top: 14px;
+        background: #fef3c7;
+        border: 1px solid #fcd34d;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: .72rem;
+        color: #92400e;
+        line-height: 1.4;
+        text-align: left;
       }
     </style>
   </head>
   <body>
     <div class="card">
-      <h2 style="margin: 0 0 8px 0; color: #166534; font-size: 1.25rem;">મુંબઈ મેઘવાળ પંચાયત</h2>
-      <p style="margin: 0 0 14px 0; font-size: .85rem; color: #64748b;">Scan to Pay with Any UPI App (GPay / PhonePe / Paytm / BHIM)</p>
-      <img src="https://firebasestorage.googleapis.com/v0/b/mmp-cwc-new.firebasestorage.app/o/logos%2Flogo_1787903943025.png?alt=media&token=ce8dd0be-7d1e-4cbb-9607-04bcbcff9498" alt="Bank of Baroda BHIM QR Scanner" />
-      <div style="margin-top: 14px; font-size: .9rem; font-weight: 700; color: #1e293b;">
-        UPI VPA: <span style="color: #2563eb;">mumba98697331@barodampay</span>
+      <h2 style="margin: 0 0 4px 0; color: #166534; font-size: 1.25rem;">મુંબઈ મેઘવાળ પંચાયત</h2>
+      <p style="margin: 0 0 12px 0; font-size: .82rem; color: #64748b;">Bank of Baroda BHIM Baroda Pay QR Scanner</p>
+      
+      <img src="https://firebasestorage.googleapis.com/v0/b/mmp-cwc-new.firebasestorage.app/o/logos%2Flogo_1787903943025.png?alt=media&token=ce8dd0be-7d1e-4cbb-9607-04bcbcff9498" alt="Bank of Baroda BHIM QR Scanner" class="qr-img" />
+      
+      <div class="vpa-box">
+        <div class="vpa-text">
+          <div style="font-size: .68rem; color: #64748b; font-weight: 600;">UPI VPA (Bank of Baroda):</div>
+          <span id="vpaVal">mumba98697331@barodampay</span>
+        </div>
+        <button class="copy-btn" id="copyBtn" onclick="copyVpa()">📋 Copy</button>
       </div>
-      <div style="font-size: .78rem; color: #64748b; margin-top: 2px;">
-        Merchant: MUMBAI MEGHWAL PANCHAYAT
+
+      <div class="btn-grid">
+        <a href="upi://pay?pa=mumba98697331@barodampay&pn=MUMBAI%20MEGHWAL%20PANCHAYAT&tn=Donation&cu=INR" class="pay-btn btn-bhim">
+          ⚡ Pay via Any UPI App
+        </a>
+        <a href="upi://pay?pa=mumba98697331@barodampay&pn=MUMBAI%20MEGHWAL%20PANCHAYAT&tn=Donation&cu=INR" class="pay-btn btn-gpay">
+          🔵 Google Pay
+        </a>
+        <a href="upi://pay?pa=mumba98697331@barodampay&pn=MUMBAI%20MEGHWAL%20PANCHAYAT&tn=Donation&cu=INR" class="pay-btn btn-phonepe">
+          🟣 PhonePe
+        </a>
       </div>
-      <a href="upi://pay?pa=mumba98697331@barodampay&pn=MUMBAI%20MEGHWAL%20PANCHAYAT&cu=INR" class="btn">
-        ⚡ Pay via UPI App
-      </a>
-      <div style="margin-top: 12px;">
+
+      <div class="note-box">
+        💡 <strong>Tip:</strong> If your bank displays <em>"Receiver bank cannot accept transaction"</em>, it means Bank of Baroda's UPI server is temporarily experiencing inward limits or downtime. You can also scan this QR code directly from your gallery or send to UPI ID <strong>mumba98697331@barodampay</strong>.
+      </div>
+
+      <div style="margin-top: 14px;">
         <a href="/" style="font-size: .8rem; color: #64748b; text-decoration: none;">← Return to Main Portal</a>
       </div>
     </div>
+
+    <script>
+      function copyVpa() {
+        const vpa = document.getElementById("vpaVal").innerText;
+        navigator.clipboard.writeText(vpa).then(() => {
+          const btn = document.getElementById("copyBtn");
+          btn.innerText = "✅ Copied!";
+          btn.style.background = "#166534";
+          setTimeout(() => {
+            btn.innerText = "📋 Copy";
+            btn.style.background = "#2563eb";
+          }, 2500);
+        });
+      }
+    </script>
   </body>
 </html>
