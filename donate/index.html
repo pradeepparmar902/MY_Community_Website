@@ -86,35 +86,33 @@
         white-space: nowrap;
       }
       .btn-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
         margin-top: 14px;
       }
       .pay-btn {
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
-        padding: 10px 8px;
+        gap: 8px;
+        padding: 12px 14px;
         color: white;
         text-decoration: none;
         border-radius: 8px;
         font-weight: 800;
-        font-size: .82rem;
+        font-size: .95rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
       }
-      .btn-bhim { background: #166534; grid-column: 1 / -1; font-size: .95rem; padding: 12px; }
-      .btn-gpay { background: #1a73e8; }
-      .btn-phonepe { background: #5f259f; }
-      .btn-paytm { background: #00b9f5; color: #0f172a; }
+      .btn-bhim { background: linear-gradient(135deg, #15803D, #166534); }
       .note-box {
         margin-top: 14px;
-        background: #fef3c7;
-        border: 1px solid #fcd34d;
+        background: #f0fdf4;
+        border: 1px solid #86efac;
         border-radius: 8px;
         padding: 8px 10px;
-        font-size: .72rem;
-        color: #92400e;
+        font-size: .75rem;
+        color: #166534;
         line-height: 1.4;
         text-align: left;
       }
@@ -123,32 +121,27 @@
   <body>
     <div class="card">
       <h2 style="margin: 0 0 4px 0; color: #166534; font-size: 1.25rem;">મુંબઈ મેઘવાળ પંચાયત</h2>
-      <p style="margin: 0 0 12px 0; font-size: .82rem; color: #64748b;">Bank of Baroda BHIM Baroda Pay QR Scanner</p>
+      <p style="margin: 0 0 12px 0; font-size: .82rem; color: #64748b;">Bank of Baroda BHIM Baroda Pay Verified QR</p>
       
       <img src="https://firebasestorage.googleapis.com/v0/b/mmp-cwc-new.firebasestorage.app/o/logos%2Flogo_1787903943025.png?alt=media&token=ce8dd0be-7d1e-4cbb-9607-04bcbcff9498" alt="Bank of Baroda BHIM QR Scanner" class="qr-img" />
       
       <div class="vpa-box">
         <div class="vpa-text">
-          <div style="font-size: .68rem; color: #64748b; font-weight: 600;">UPI VPA (Bank of Baroda):</div>
+          <div style="font-size: .68rem; color: #64748b; font-weight: 600;">Bank of Baroda Verified Merchant UPI:</div>
           <span id="vpaVal">mumba98697331@barodampay</span>
         </div>
         <button class="copy-btn" id="copyBtn" onclick="copyVpa()">📋 Copy</button>
       </div>
 
       <div class="btn-grid">
-        <a href="upi://pay?pa=mumba98697331@barodampay&pn=MUMBAI%20MEGHWAL%20PANCHAYAT&tn=Donation&cu=INR" class="pay-btn btn-bhim">
-          ⚡ Pay via Any UPI App
-        </a>
-        <a href="upi://pay?pa=mumba98697331@barodampay&pn=MUMBAI%20MEGHWAL%20PANCHAYAT&tn=Donation&cu=INR" class="pay-btn btn-gpay">
-          🔵 Google Pay
-        </a>
-        <a href="upi://pay?pa=mumba98697331@barodampay&pn=MUMBAI%20MEGHWAL%20PANCHAYAT&tn=Donation&cu=INR" class="pay-btn btn-phonepe">
-          🟣 PhonePe
+        <a href="upi://pay?pa=mumba98697331@barodampay&pn=MUMBAI%20MEGHWAL%20PANCHAYAT&mc=&tn=Verified%20Merchant&am=&cu=INR&url=&mode=02&orgid=159012&mid=&msid=&mtid=&sign=MEQCIHuvP8mW9orphqamZ+8Ov3lKCADzNWrrTEevZwEXTybmAiAbOG7Jguxt8RZiIiIo2FKA8mSLGdd8Mz2K0FCTKjuN7Q==" class="pay-btn btn-bhim">
+          ⚡ Pay via UPI App (GPay / PhonePe / BHIM / Paytm)
         </a>
       </div>
 
       <div class="note-box">
-        💡 <strong>Tip:</strong> If your bank displays <em>"Receiver bank cannot accept transaction"</em>, it means Bank of Baroda's UPI server is temporarily experiencing inward limits or downtime. You can also scan this QR code directly from your gallery or send to UPI ID <strong>mumba98697331@barodampay</strong>.
+        🔒 <strong>Official Verified Merchant:</strong> MUMBAI MEGHWAL PANCHAYAT<br/>
+        Bank of Baroda Org ID: <strong>159012</strong> | NPCI Cryptographically Signed
       </div>
 
       <div style="margin-top: 14px;">
