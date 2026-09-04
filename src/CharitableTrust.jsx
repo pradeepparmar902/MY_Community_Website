@@ -22535,7 +22535,7 @@ export const generateEventScopedStats = (reg, eventKeyOrObj, allRegs = [], vibha
   const scopedRegs = (Array.isArray(allRegs) && allRegs.length > 0) ? allRegs.filter(r => {
     if (!r || typeof r !== 'object') return false;
     if (r.deleted === true || r.deleted === "true" || r.isDeleted === true || r.isTrash === true || r.inTrash === true || r.status === "Deleted" || r.Status === "Deleted") return false;
-    if (r.isGlobalGuest === true || r.isSpecialGuest === true || Boolean(r.globalGuestId) || r.formId === "global_guest_directory" || r.formId === "global_guest_directory_import") return false;
+    if ((!r.eventId && !r.eventName && !r.eventTitle) && (r.isGlobalGuest === true || r.isSpecialGuest === true || r.isInternal === true || Boolean(r.globalGuestId) || r.formId === "global_guest_directory" || r.formId === "global_guest_directory_import")) return false;
 
     // Exclude guest passes, committee invites, and VIP passes
     const txn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase();
