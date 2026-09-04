@@ -27198,14 +27198,18 @@ function AdminRegistrations({ mob, C, setC, auth }) {
     if (!r) return false;
     // Exclude all deleted / trash items
     if (r.deleted === true || r.deleted === "true" || r.isDeleted === true || r.isTrash === true || r.inTrash === true || r.status === "Deleted" || r.Status === "Deleted") return false;
-    // Exclude special guest directory and workspace imports of directory contacts
-    if (r.isGlobalGuest === true || r.isSpecialGuest === true || r.isInternal === true || Boolean(r.globalGuestId) || r.formId === "global_guest_directory" || r.formId === "global_guest_directory_import") return false;
     
     // Check if event is internal-only or hidden from public website
     const ev = C.events?.find(e => e.id === r.eventId || e.title === r.eventTitle || e.title === r.eventName || e.titleGu === r.eventName);
     if (ev && (ev.isInternalOnly || ev.hideFromPublicWebsite || ev.isInternal || ev.isWorkspaceOnly || ev.section === "Internal Admin" || ev.tag === "Internal Admin")) {
       return false;
     }
+
+    // Exclude special guest directory and workspace imports of directory contacts ONLY IF they are not tied to a specific event
+    if ((!r.eventId && !r.eventName && !r.eventTitle) && (r.isGlobalGuest === true || r.isSpecialGuest === true || r.isInternal === true || Boolean(r.globalGuestId) || r.formId === "global_guest_directory" || r.formId === "global_guest_directory_import")) {
+      return false;
+    }
+    
     return true;
   };
 
