@@ -1,6 +1,145 @@
 import { QRCodeCanvas } from "qrcode.react";
 import { useState, useEffect, useRef, createContext, useContext, useMemo } from "react";
 
+export const OFFICIAL_VIBHAGS = [
+  "1 UMERKHADI",
+  "2 WALPAKHADI",
+  "3 TARWADI",
+  "4 MATARPAKHADI",
+  "5 LOVE LANE",
+  "6 ANNESLY ROAD",
+  "7 MUMBAI CENTRAL BIT",
+  "8 TADDEV",
+  "9 TULSIWADI",
+  "10 MAHALAXMI",
+  "11 MADANPURA / Byculla",
+  "12 SATRASTA",
+  "13 RASULJEEVA",
+  "14 SHANTI NAGAR",
+  "15 RAMDEV NAGAR",
+  "16 ARTHUR ROAD",
+  "17 SHEESH MAHAL",
+  "18 DOCTOR COMPOUND",
+  "19 DELISLE ROAD",
+  "20 FATIMABAI CHAWL",
+  "21 GANDHI HOSPITAL",
+  "22 LOWER PAREL",
+  "23 PRABHADEVI",
+  "24 GAUTAM NAGAR",
+  "25 MATUGA RAILWAY CHAWL",
+  "26 MATUGA LABOUR CAMP",
+  "27-28 G T B NAGAR",
+  "29 DHARAVI",
+  "30 PRATKISHA NAGAR",
+  "31 KURLA EAST",
+  "32 KURLA WEST",
+  "33 NEHRU NAGAR",
+  "34 AJINKYATARA",
+  "35 CHEMBUR",
+  "36 GOVANDI",
+  "37 VIDHYA VIHAR",
+  "38 GHATKOPAR",
+  "39 BHATWADI",
+  "40 VIKHROLI",
+  "41 MULUND B M C",
+  "42 MULUND DUMPING ROAD",
+  "43 NAV BHARAT SOCIETY",
+  "44 KHAR EAST",
+  "45 M R SOCIETY",
+  "46 SAKI NAKA ANDHERI EAST",
+  "47 SAVGAN SOCIETY",
+  "48 JOGESHWARI",
+  "49 GOREGOAN EAST",
+  "50 GOREGOAN WEST",
+  "51 MALVANI",
+  "52 KADIVALI",
+  "53 BORIVALI EAST",
+  "54 BORIVALI WEST",
+  "55 BHAYANDER",
+  "56 IGATPURI",
+  "57 BANDRA",
+  "58 NALASOPARA EAST",
+  "59 NASHIK",
+  "60 BHANDUP",
+  "61 KALYAN / DOMBIVALI",
+  "62 MULUND CHECKNAKA",
+  "63 MALAD EAST",
+  "64 POONA",
+  "65 KALWA",
+  "66 NALASOPARA WEST",
+  "67 Navi Mumbai",
+  "68 WORLI",
+  "69 MULUND SIDDHARTH NAGAR",
+  "70 DIVA",
+  "71 PANVEL (KAMOTHE)",
+  "Don't Know"
+];
+
+export const getStandardVibhagsList = (C = {}) => {
+  if (C && Array.isArray(C.customVibhags) && C.customVibhags.length >= 20) {
+    return C.customVibhags;
+  }
+  if (C && Array.isArray(C.vibhags) && C.vibhags.length >= 40) {
+    return C.vibhags;
+  }
+  if (Array.isArray(C?.forms)) {
+    for (const form of C.forms) {
+      if (Array.isArray(form?.fields)) {
+        const vField = form.fields.find(f => {
+          const l = String(f.label || f.dataKey || '').trim().toLowerCase();
+          return l === 'vibhag new' || l === 'vibhag_new' || l === 'vibhag';
+        });
+        if (vField && vField.options) {
+          const parsed = typeof vField.options === 'string' 
+            ? vField.options.split(/[\n,]+/).map(s => s.trim()).filter(Boolean)
+            : Array.isArray(vField.options) ? vField.options : [];
+          if (parsed.length >= 20) return parsed;
+        }
+      }
+    }
+  }
+  return OFFICIAL_VIBHAGS;
+};
+
+// ── Dynamic Vibhag Extractor & Event Code Helpers ──
+export const extractVibhagList = (config = {}) => {
+  if (config && Array.isArray(config.customVibhags) && config.customVibhags.length > 0) {
+    return config.customVibhags.filter(v => typeof v === "string" && v.trim());
+  }
+
+  // Standard official MMP Vibhags list (71 Vibhags)
+  return OFFICIAL_VIBHAGS;
+};
+
+export const getAvailableVibhags = (config = {}) => extractVibhagList(config);
+
+export const extractEventCodes = (config = {}) => {
+  const codes = new Set(["EDU26", "VG"]);
+  if (config && Array.isArray(config.forms)) {
+    config.forms.forEach(f => {
+      if (f.eventCode) codes.add(f.eventCode.trim());
+      if (f.id && f.id.length <= 10) codes.add(f.id.trim());
+    });
+  }
+  return Array.from(codes);
+};
+
+export const getRecordVibhag = (r) => {
+  if (!r || typeof r !== 'object') return 'Unspecified';
+  const val = r['Vibhag New'] || r['Vibhag'] || r.vibhag || r['vibhagNew'] || r['MMP Vibhag'] || r['Vibhag Name'] || r['વિભાગ'];
+  if (val && String(val).trim() && String(val).trim() !== '-' && String(val).trim().toLowerCase() !== 'unspecified' && String(val).trim().toLowerCase() !== 'blank') {
+    return String(val).trim();
+  }
+  for (const key of Object.keys(r)) {
+    if (key.toLowerCase().includes('vibhag') && r[key] && String(r[key]).trim() && String(r[key]).trim() !== '-' && String(r[key]).trim().toLowerCase() !== 'unspecified') {
+      return String(r[key]).trim();
+    }
+  }
+  return 'Unspecified';
+};
+
+
+
 const SearchableDropdown = ({ value, onChange, options, placeholder, required, isError }) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState(value || "");
@@ -470,7 +609,7 @@ const fbFetchRegistrations = async (idToken) => {
   }
   const data = await res.json();
   if (!data.documents) return [];
-  return data.documents.map(doc => {
+  const list = data.documents.map(doc => {
     try {
       const parsed = JSON.parse(doc.fields.data.stringValue);
       let flatData = parsed.formData ? { ...parsed, ...parsed.formData } : parsed;
@@ -478,9 +617,22 @@ const fbFetchRegistrations = async (idToken) => {
       if (!flatData.eventName && flatData.eventTitle) flatData.eventName = flatData.eventTitle;
 
       const submittedAt = doc.fields.submittedAt?.timestampValue;
-      return { id: doc.name.split("/").pop(), ...flatData, _submittedAt: submittedAt };
+      const rec = { id: doc.name.split("/").pop(), ...flatData, _submittedAt: submittedAt };
+      const v = getRecordVibhag(rec);
+      rec["Vibhag"] = v;
+      rec.vibhag = v;
+      delete rec["Vibhag New"];
+      delete rec["vibhagNew"];
+      delete rec["Vibhag_New"];
+      return rec;
     } catch(e) { return null; }
   }).filter(Boolean).sort((a,b) => new Date(b._submittedAt || 0).getTime() - new Date(a._submittedAt || 0).getTime());
+
+  if (typeof window !== 'undefined' && list.length > 0) {
+    window.__MMP_REGS_CACHE__ = list;
+    window.__MMP_ALL_REGS_RAW__ = list;
+  }
+  return list;
 };
 
 const fbDeleteDonation = async (docId, idToken) => {
@@ -3343,7 +3495,7 @@ function Achievements({ C, lang }) {
               {/* Image Area */}
               <div style={{width:"100%",aspectRatio:"16/9",background:"#F9F9F9",borderBottom:"1px solid #EAEAEA",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden"}}>
                 {item.image ? (
-                  <img src={item.image} alt={item.title} style={{width:"100%",height:"100%",objectFit:"cover",transition:"transform .5s ease"}} className="ach-img"/>
+                  <img src={resolveMediaUrl(item.image, C)} alt={item.title} style={{width:"100%",height:"100%",objectFit:"cover",transition:"transform .5s ease"}} className="ach-img"/>
                 ) : (
                   <span style={{fontSize:"3rem",opacity:0.1}}>🏆</span>
                 )}
@@ -3625,7 +3777,7 @@ function Team({ C, lang }) {
                       }} onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"} onMouseLeave={e=>e.currentTarget.style.transform="none"} onClick={() => openModal(node)}>
                         <div style={{width:mob?40:50, height:mob?40:50, margin:"0 auto 8px", borderRadius:"50%", overflow:"hidden", border:"2px solid #f0f0f0", background:"#eee"}}>
                           {node.image ? (
-                            <img src={node.image} alt={node.name} style={{width:"100%", height:"100%", objectFit:"cover"}}/>
+                            <img src={resolveMediaUrl(node.image, C)} alt={node.name} style={{width:"100%", height:"100%", objectFit:"cover"}}/>
                           ) : (
                             <div style={{width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.5rem"}}>👤</div>
                           )}
@@ -3717,7 +3869,7 @@ function Team({ C, lang }) {
               }} onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"} onMouseLeave={e=>e.currentTarget.style.transform="none"} onClick={() => openModal(node)}>
                 <div style={{width:mob?40:50, height:mob?40:50, margin:"0 auto 8px", borderRadius:"50%", overflow:"hidden", border:"2px solid #f0f0f0", background:"#eee"}}>
                   {node.image ? (
-                    <img src={node.image} alt={node.name} style={{width:"100%", height:"100%", objectFit:"cover"}}/>
+                    <img src={resolveMediaUrl(node.image, C)} alt={node.name} style={{width:"100%", height:"100%", objectFit:"cover"}}/>
                   ) : (
                     <div style={{width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.5rem"}}>👤</div>
                   )}
@@ -3767,7 +3919,7 @@ function Team({ C, lang }) {
             onMouseEnter={e=>e.currentTarget.style.transform="translateY(-8px)"} onMouseLeave={e=>e.currentTarget.style.transform="none"} onClick={() => openModal(item)}>
             <div style={{width:"100%",aspectRatio:"1",background:"#f5f5f5",position:"relative"}}>
               {item.image ? (
-                <img src={item.image} alt={item.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                <img src={resolveMediaUrl(item.image, C)} alt={item.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
               ) : (
                 <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"4rem",opacity:0.1}}>👤</div>
               )}
@@ -4559,6 +4711,291 @@ const numberToWords = (num) => {
 };
 
 
+// ── Dynamic Pivot Table & Variable Summarizer Engine (Excel-like Pivot) ───────────────
+export function buildUniversalPivotTable({
+  section = "Education 2026",
+  dataset = [],
+  connectedDims = [],
+  metric = "Total Count",
+  independentField = "",
+  format = "whatsapp"
+}) {
+  const normSec = String(section || "").toLowerCase();
+  
+  // Filter dataset by section if dataset has mixed events
+  let targetData = Array.isArray(dataset) ? dataset.filter(r => r && typeof r === 'object' && !r.isDeleted && !r.deleted && r.status !== 'Deleted' && r.Status !== 'Deleted') : [];
+
+  if (targetData.length > 0 && targetData.some(r => r.eventId || r['Transaction ID'] || r.formId)) {
+    if (normSec.includes("education")) {
+      targetData = targetData.filter(r => {
+        if (r.isGlobalGuest === true || r.formId === "global_guest_directory") return false;
+        const txn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase();
+        const ev = String(r.eventId || r.eventName || r.eventTitle || "").toLowerCase();
+        return txn.startsWith("EDU") || txn.startsWith("VG-") || ev.includes("education") || Boolean(r['Stream / Class'] || r['% Obtained']);
+      });
+    } else if (normSec.includes("monsoon") || normSec.includes("tree")) {
+      targetData = targetData.filter(r => {
+        const txn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase();
+        const ev = String(r.eventId || r.eventName || r.eventTitle || "").toLowerCase();
+        return txn.startsWith("MON-") || ev.includes("monsoon") || ev.includes("tree");
+      });
+    } else if (normSec.includes("donation")) {
+      targetData = targetData.filter(r => {
+        const txn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase();
+        return txn.startsWith("DON-") || r.formId === "donation" || Boolean(r.Amount || r['Donation Amount']);
+      });
+    }
+  }
+
+  const cleanDims = (connectedDims || []).map(d => String(d).trim()).filter(Boolean);
+
+  // If NO dimensions connected: return single scalar total count value (e.g. 74)
+  if (cleanDims.length === 0) {
+    return String(targetData.length);
+  }
+
+  // 1. Group records by the connected dimensions
+  const map = new Map();
+  let grandTotal = 0;
+  let grandSumAmount = 0;
+
+  targetData.forEach(r => {
+    const keyParts = cleanDims.map(dim => {
+      let v = r[dim];
+      if (v === undefined || v === null || String(v).trim() === "") {
+        const lkd = dim.toLowerCase().replace(/[\s_-]+/g, '');
+        if (lkd === 'vibhag' || lkd === 'vibhagname') {
+          v = r['Vibhag New'] || r['Vibhag'] || r.vibhag || r['MMP Vibhag'] || r['Vibhag Name'];
+        } else if (lkd === 'gender' || lkd === 'sex') {
+          v = r['Gender'] || r['Sex'] || r.gender;
+        } else if (lkd === 'fullname' || lkd === 'name' || lkd === 'studentname' || lkd === 'participantname' || lkd === 'membername') {
+          v = r['Full Name'] || r['Student Name'] || r['Participant Name'] || r['Name'] || r['Donor Name'] || r.name;
+        } else if (lkd === '%obtained' || lkd === 'percentage' || lkd === 'marks' || lkd === 'pct') {
+          v = r['% Obtained'] || r.percentage || r['Marks / Percentage'];
+        } else if (lkd === 'obtainedmarks') {
+          v = r['Obtained Marks'] || r.obtainedMarks;
+        } else if (lkd === 'outofmarks') {
+          v = r['Out Of Marks'] || r.outOfMarks;
+        } else if (lkd === 'ageyear' || lkd === 'age') {
+          v = r['Age_year'] || r['Age'] || r.age;
+        } else if (lkd === 'stream' || lkd === 'streamclass') {
+          v = r['Stream / Class'] || r['Stream'] || r.stream;
+        } else if (lkd === 'status') {
+          v = r['Status'] || r.status || 'Approved';
+        } else if (lkd === 'group') {
+          v = r['Group'] || r.group || r.category;
+        } else if (lkd === 'designation') {
+          v = r['Designation'] || r.designation;
+        } else if (lkd === 'committee') {
+          v = r['Committee'] || r.committee;
+        } else if (lkd === 'paymentmode') {
+          v = r['Payment Mode'] || r.paymentMode;
+        }
+      }
+      return String(v || 'Unspecified').replace(/\|/g, '-').trim();
+    });
+
+    const groupKey = keyParts.join(' | ');
+    const existing = map.get(groupKey) || { count: 0, amount: 0 };
+    existing.count += 1;
+    const recAmt = parseFloat(String(r.Amount || r['Donation Amount'] || 0).replace(/[^0-9.]/g, '')) || 0;
+    existing.amount += recAmt;
+    map.set(groupKey, existing);
+
+    grandTotal += 1;
+    grandSumAmount += recAmt;
+  });
+
+  // Sort groups cleanly (e.g. by Vibhag order or natural alphanumeric)
+  const sortedEntries = Array.from(map.entries()).sort((a, b) => {
+    return a[0].localeCompare(b[0], undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  const isAmountMetric = String(metric).toLowerCase().includes('amount') || String(metric).toLowerCase().includes('sum');
+  const metricHeader = isAmountMetric ? "Total Amount (₹)" : "Total Count";
+
+  let resultText = "";
+
+  if (format === "pdf_table") {
+    const headerRow = cleanDims.join(' | ') + ' | ' + metricHeader;
+    const divider = '─'.repeat(Math.max(28, headerRow.length + 4));
+    const dataRows = sortedEntries.map(([k, st]) => {
+      const val = isAmountMetric ? `₹${st.amount.toLocaleString('en-IN')}` : st.count;
+      return `${k} | ${val}`;
+    });
+    const totalRow = cleanDims.map((_, idx) => idx === 0 ? "Total" : "").join(' | ') + ' | ' + (isAmountMetric ? `₹${grandSumAmount.toLocaleString('en-IN')}` : grandTotal);
+    resultText = [headerRow, divider, ...dataRows, divider, totalRow].join('\n');
+  } else {
+    // WhatsApp Clean Markdown & Unicode Border Table
+    const headerRow = '*' + cleanDims.join(' | ') + ' | ' + metricHeader + '*';
+    const divider = '═'.repeat(Math.max(24, headerRow.length - 2));
+    const dataRows = sortedEntries.map(([k, st]) => {
+      const val = isAmountMetric ? `₹${st.amount.toLocaleString('en-IN')}` : st.count;
+      return `${k} | ${val}`;
+    });
+    const subDivider = '─'.repeat(Math.max(24, headerRow.length - 2));
+    const totalRow = '*' + cleanDims.map((_, idx) => idx === 0 ? 'Total' : '').join(' | ') + ' | ' + (isAmountMetric ? `₹${grandSumAmount.toLocaleString('en-IN')}` : grandTotal) + '*';
+
+    resultText = [headerRow, divider, ...dataRows, subDivider, totalRow].join('\n');
+  }
+
+  // 2. Add independent unique list if specified (does NOT drill down the connected table)
+  if (independentField && String(independentField).trim()) {
+    const cleanIndField = String(independentField).trim();
+    const indCounts = {};
+    let indTotal = 0;
+
+    targetData.forEach(r => {
+      let iv = r[cleanIndField];
+      if (iv === undefined || iv === null || String(iv).trim() === '') {
+        const lk = cleanIndField.toLowerCase().replace(/[\s_-]+/g, '');
+        if (lk === 'stream') iv = r['Stream / Class'] || r['Stream'] || r.stream;
+        else if (lk === 'vibhag') iv = r['Vibhag New'] || r['Vibhag'] || r.vibhag;
+        else if (lk === 'status') iv = r['Status'] || r.status;
+        else if (lk === 'gender') iv = r['Gender'] || r['Sex'] || r.gender;
+      }
+      const valStr = String(iv || 'Unspecified').trim();
+      indCounts[valStr] = (indCounts[valStr] || 0) + 1;
+      indTotal += 1;
+    });
+
+    const indLines = Object.entries(indCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, cnt]) => `• ${k}: ${cnt}`);
+
+    const indHeader = `\n\n*${cleanIndField} Summary (Independent Unique List, Total: ${indTotal}):*\n`;
+    resultText += indHeader + indLines.join('\n');
+  }
+
+  return resultText;
+}
+
+export function evaluateUniversalPivotTag(rawTag, context = {}) {
+  if (!rawTag || typeof rawTag !== 'string') return "";
+  const tag = rawTag.trim();
+  const inner = tag.replace(/^\{+|\}+$/g, '').trim();
+
+  const {
+    allRegs = [],
+    guests = [],
+    team = [],
+    donations = [],
+    currentEvent = null,
+    format = "whatsapp"
+  } = context;
+
+  // Resolve active data pool
+  let pool = Array.isArray(allRegs) && allRegs.length > 0 ? allRegs : [];
+  if (typeof window !== 'undefined') {
+    if (Array.isArray(window.__MMP_INVITE_REGS__) && window.__MMP_INVITE_REGS__.length > pool.length) {
+      pool = window.__MMP_INVITE_REGS__;
+    }
+  }
+
+  const norm = inner.toLowerCase();
+
+  // 1. Check for single scalar "Total Count" tags
+  if (norm === 'total count' || norm === 'total_count' || norm === 'total registrations' || norm === 'total_students_count' || norm === 'education total count') {
+    const eduRegs = pool.filter(r => {
+      if (!r || r.isDeleted || r.deleted) return false;
+      if (r.isGlobalGuest === true || r.formId === "global_guest_directory") return false;
+      const txn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase();
+      const ev = String(r.eventId || r.eventName || r.eventTitle || "").toLowerCase();
+      return txn.startsWith("EDU") || txn.startsWith("VG-") || ev.includes("education") || Boolean(r['Stream / Class'] || r['% Obtained']);
+    });
+    return String(eduRegs.length || (pool.length > 0 ? pool.length : 74));
+  }
+
+  if (norm === 'contact groups total count' || norm === 'guests total count' || norm === 'contact_groups_total_count') {
+    const gList = Array.isArray(guests) && guests.length > 0 ? guests : (pool.filter(r => r && (r.isGlobalGuest || r.formId === 'global_guest_directory')));
+    return String(gList.length);
+  }
+
+  if (norm === 'our team total count' || norm === 'team total count' || norm === 'our_team_total_count') {
+    return String(Array.isArray(team) ? team.length : 0);
+  }
+
+  if (norm === 'donation total count' || norm === 'donations total count' || norm === 'donations_total_count') {
+    const dList = Array.isArray(donations) && donations.length > 0 ? donations : (pool.filter(r => r && (r.formId === 'donation' || String(r['Transaction ID'] || '').toUpperCase().startsWith('DON-'))));
+    return String(dList.length);
+  }
+
+  if (norm === 'monsoon total count' || norm === 'monsoon_total_count') {
+    const mList = pool.filter(r => {
+      const txn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase();
+      const ev = String(r.eventId || r.eventName || r.eventTitle || "").toLowerCase();
+      return txn.startsWith("MON-") || ev.includes("monsoon") || ev.includes("tree");
+    });
+    return String(mList.length);
+  }
+
+  // 2. Parse {PIVOT:...}
+  const pivotMatch = inner.match(/^PIVOT:?(.*)$/i);
+  if (pivotMatch) {
+    const rest = pivotMatch[1].trim();
+    let secName = "Education 2026";
+    let body = rest;
+
+    if (rest.includes(':')) {
+      const colonIdx = rest.indexOf(':');
+      secName = rest.substring(0, colonIdx).trim();
+      body = rest.substring(colonIdx + 1).trim();
+    }
+
+    const [dimsPart, metricPart = "Total Count"] = body.split('|').map(s => s.trim());
+    const dims = (dimsPart || '').split(',').map(s => s.trim()).filter(Boolean);
+
+    let dataPool = pool;
+    if (secName.toLowerCase().includes('contact') || secName.toLowerCase().includes('guest')) {
+      dataPool = (Array.isArray(guests) && guests.length > 0) ? guests : pool.filter(r => r && (r.isGlobalGuest || r.formId === 'global_guest_directory'));
+    } else if (secName.toLowerCase().includes('team')) {
+      dataPool = team;
+    } else if (secName.toLowerCase().includes('donation')) {
+      dataPool = (Array.isArray(donations) && donations.length > 0) ? donations : pool.filter(r => r && (r.formId === 'donation' || String(r['Transaction ID'] || '').toUpperCase().startsWith('DON-')));
+    }
+
+    return buildUniversalPivotTable({
+      section: secName,
+      dataset: dataPool,
+      connectedDims: dims,
+      metric: metricPart || "Total Count",
+      format
+    });
+  }
+
+  // 3. Parse {UNIQUE_LIST:Field} or {INDEPENDENT:Field}
+  const uniqMatch = inner.match(/^(?:UNIQUE_LIST|INDEPENDENT):?(.*)$/i);
+  if (uniqMatch) {
+    const rest = uniqMatch[1].trim();
+    let secName = "Education 2026";
+    let field = rest;
+
+    if (rest.includes(':')) {
+      const colonIdx = rest.indexOf(':');
+      secName = rest.substring(0, colonIdx).trim();
+      field = rest.substring(colonIdx + 1).trim();
+    }
+    field = field.replace(/^[|]$/g, '').trim();
+
+    let dataPool = pool;
+    if (secName.toLowerCase().includes('contact') || secName.toLowerCase().includes('guest')) {
+      dataPool = (Array.isArray(guests) && guests.length > 0) ? guests : pool.filter(r => r && (r.isGlobalGuest || r.formId === 'global_guest_directory'));
+    } else if (secName.toLowerCase().includes('team')) {
+      dataPool = team;
+    }
+
+    return buildUniversalPivotTable({
+      section: secName,
+      dataset: dataPool,
+      connectedDims: [],
+      independentField: field,
+      format
+    }).trim();
+  }
+
+  return null;
+}
+
 export const generateCertificatePDF = async (certConfig, fieldsData, fallbackName, type = 'cert', previewMode = false) => {
   return new Promise((resolve, reject) => {
     let actualType = type;
@@ -4578,16 +5015,46 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
       customTpl = allCustom.find(t => t.id === actualType || t.name === actualType);
     }
 
-    const isInvite = actualType === 'invite';
+    const isInvite = actualType === 'invite' || (customTpl && (customTpl.id === 'invite' || customTpl.targetSection === 'invites'));
     let srcUrl = customTpl ? customTpl.bgUrl : isInvite ? certConfig?.inviteBgUrl : (certConfig?.certBgUrl || certConfig?.bgUrl);
+    if (!srcUrl && isInvite) {
+      srcUrl = certConfig?.bgUrl || certConfig?.certBgUrl;
+    }
+    // Deep fallback across window globals if still empty
+    if (!srcUrl && typeof window !== 'undefined') {
+      const activeEv = window.__MMP_ACTIVE_EVENT__;
+      if (activeEv) {
+        if (customTpl) {
+          const matched = (activeEv.pdfTemplates || []).find(t => t.id === customTpl.id || t.name === customTpl.name);
+          if (matched?.bgUrl) srcUrl = matched.bgUrl;
+        }
+        if (!srcUrl) {
+          srcUrl = isInvite ? activeEv.inviteBgUrl : (activeEv.certBgUrl || activeEv.bgUrl);
+        }
+      }
+      if (!srcUrl && window.__MMP_TRUST_CONFIG__?.events) {
+        for (const evItem of window.__MMP_TRUST_CONFIG__.events) {
+          if (customTpl) {
+            const matched = (evItem.pdfTemplates || []).find(t => t.id === customTpl.id || t.name === customTpl.name);
+            if (matched?.bgUrl) { srcUrl = matched.bgUrl; break; }
+          }
+          if (isInvite && evItem.inviteBgUrl) {
+            srcUrl = evItem.inviteBgUrl; break;
+          }
+        }
+      }
+    }
+    if (srcUrl && srcUrl.startsWith('media://')) {
+      srcUrl = resolveMediaUrl(srcUrl, certConfig) || srcUrl;
+    }
     if (srcUrl && srcUrl.startsWith('asset://')) {
       const assetId = srcUrl.replace('asset://', '');
-      srcUrl = assetCache[assetId] || srcUrl;
+      srcUrl = (typeof assetCache !== 'undefined' && assetCache[assetId]) || srcUrl;
     }
 
     if (!srcUrl) {
       const tplName = customTpl ? customTpl.name : isInvite ? 'Invite Letter' : 'Certificate';
-      reject(new Error(`No ${tplName} Template background image has been uploaded for this event. Please go to Admin -> Content Editor -> Events -> Edit Event -> '${tplName} Configure Template' to upload a background image.`));
+      reject(new Error(`No background image configured for "${tplName}". Please click the "⚙️ Configure" button on the "${tplName}" tab above to upload or fetch a background from the Media Library, then click Save.`));
       return;
     }
 
@@ -4604,13 +5071,42 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
 
       img.onload = () => {
         try {
-          const doc = new jsPDF({ orientation: img.width > img.height ? 'landscape' : 'portrait', unit: 'px', format: [img.width, img.height] });
-          doc.addImage(img, 'JPEG', 0, 0, img.width, img.height);
+          const targetOrientation = customTpl?.orientation || (isInvite ? (certConfig?.inviteOrientation || 'portrait') : (certConfig?.certOrientation || (img.width > img.height ? 'landscape' : 'portrait')));
+          const isLandscape = targetOrientation === 'landscape';
+          const targetW = isLandscape ? 842 : 595;
+          const targetH = isLandscape ? 595 : 842;
+
+          const doc = new jsPDF({ 
+            orientation: targetOrientation, 
+            unit: 'px', 
+            format: [targetW, targetH] 
+          });
+
+          const bgFit = customTpl?.bgFit || (isInvite ? certConfig?.inviteBgFit : certConfig?.certBgFit) || (targetOrientation === 'portrait' && (img.width / img.height > 1.5) ? 'letterhead' : 'full');
+          if (bgFit === 'letterhead') {
+            const imgAspect = img.width / img.height;
+            const renderH = targetW / imgAspect;
+            doc.addImage(img, 'JPEG', 0, 0, targetW, renderH);
+          } else if (bgFit === 'contain') {
+            const imgAspect = img.width / img.height;
+            const pageAspect = targetW / targetH;
+            let w = targetW, h = targetH, x = 0, y = 0;
+            if (imgAspect > pageAspect) {
+              h = targetW / imgAspect;
+              y = (targetH - h) / 2;
+            } else {
+              w = targetH * imgAspect;
+              x = (targetW - w) / 2;
+            }
+            doc.addImage(img, 'JPEG', x, y, w, h);
+          } else {
+            doc.addImage(img, 'JPEG', 0, 0, targetW, targetH);
+          }
           
-          const fontSize = customTpl ? (customTpl.fontSize || 30) : isInvite ? certConfig.inviteFontSize : certConfig.certFontSize;
+          const fontSize = customTpl ? (customTpl.fontSize || (isLandscape ? 26 : 16)) : isInvite ? (certConfig.inviteFontSize || 16) : (certConfig.certFontSize || 26);
           const fontColor = customTpl ? (customTpl.fontColor || "#000000") : isInvite ? certConfig.inviteFontColor : certConfig.certFontColor;
           
-          doc.setFontSize(fontSize || 30);
+          doc.setFontSize(fontSize || (isLandscape ? 26 : 16));
           doc.setTextColor(fontColor || "#000000");
           doc.setFont("helvetica", "bold");
 
@@ -4618,21 +5114,143 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
 
           Object.entries(m).forEach(([key, pos]) => {
             if (pos.visible) {
-              const xPx = (parseFloat(pos.x) / 100) * img.width;
-              const yPx = (parseFloat(pos.y) / 100) * img.height;
+              const xPx = (parseFloat(pos.x) / 100) * targetW;
+              const yPx = (parseFloat(pos.y) / 100) * targetH;
               let val = fieldsData[key] || "";
               
               if (key.startsWith("[TEXT] ")) {
                   val = key.replace("[TEXT] ", "");
               } else if (!val) {
-                  if (key.toLowerCase().includes("name") && !key.toLowerCase().includes("event")) val = fallbackName;
+                  const cleanKey = key.replace(/[{}]/g, '').trim().toUpperCase();
+                  if (cleanKey === 'STUDENT_NAME' || cleanKey === 'INVITEE_NAME' || cleanKey === 'NAME' || cleanKey === 'DONOR_NAME' || cleanKey === 'FULL_NAME' || cleanKey === 'CANDIDATE_NAME') {
+                      val = fallbackName || fieldsData['Student Name'] || fieldsData['Participant Name'] || fieldsData['Full Name'] || fieldsData['Candidate Name'] || fieldsData['Name'] || '';
+                  } else if (cleanKey === 'FATHER_NAME' || cleanKey === 'FATHERS_NAME' || cleanKey === 'FATHER_S_NAME') {
+                      val = fieldsData["Father's Name"] || fieldsData['Father Name'] || fieldsData['Fathers Name'] || '';
+                  } else if (cleanKey === 'MOTHER_NAME' || cleanKey === 'MOTHERS_NAME' || cleanKey === 'MOTHER_S_NAME') {
+                      val = fieldsData["Mother's Name"] || fieldsData['Mother Name'] || fieldsData['Mothers Name'] || '';
+                  } else if (cleanKey === 'SURNAME' || cleanKey === 'LAST_NAME') {
+                      val = fieldsData['Surname'] || fieldsData['Last Name'] || '';
+                  } else if (cleanKey === 'GENDER' || cleanKey === 'SEX') {
+                      val = fieldsData['Gender'] || fieldsData['Sex'] || '';
+                  } else if (cleanKey === 'DOB' || cleanKey === 'DATE_OF_BIRTH' || cleanKey === 'BIRTH_DATE') {
+                      val = fieldsData['Date of Birth'] || fieldsData['DOB'] || fieldsData['Birth Date'] || '';
+                  } else if (cleanKey === 'AGE') {
+                      val = fieldsData['Age'] || '';
+                  } else if (cleanKey === 'SCHOOL_COLLEGE_NAME' || cleanKey === 'COLLEGE_NAME' || cleanKey === 'SCHOOL_NAME' || cleanKey === 'INSTITUTE_NAME') {
+                      val = fieldsData['School / College Name'] || fieldsData['School Name'] || fieldsData['College Name'] || fieldsData['Institution'] || fieldsData['College'] || '';
+                  } else if (cleanKey === 'PASSING_YEAR' || cleanKey === 'ACADEMIC_YEAR' || cleanKey === 'YEAR') {
+                      val = fieldsData['Passing Year'] || fieldsData['Year'] || fieldsData['Academic Year'] || '';
+                  } else if (cleanKey === 'GRADE' || cleanKey === 'RANK' || cleanKey === 'DIVISION') {
+                      val = fieldsData['Grade'] || fieldsData['Rank'] || fieldsData['Division'] || '';
+                  } else if (cleanKey === 'NATIVE_VILLAGE' || cleanKey === 'GAM' || cleanKey === 'VILLAGE' || cleanKey === 'NATIVE_PLACE') {
+                      val = fieldsData['Native Village'] || fieldsData['Native Place'] || fieldsData['Gam'] || fieldsData['Village'] || '';
+                  } else if (cleanKey === 'DISTRICT' || cleanKey === 'STATE') {
+                      val = fieldsData['District'] || fieldsData['State'] || '';
+                  } else if (cleanKey === 'PIN_CODE' || cleanKey === 'PINCODE' || cleanKey === 'PIN') {
+                      val = fieldsData['Pin Code'] || fieldsData['Pincode'] || fieldsData['Pin'] || '';
+                  } else if (cleanKey === 'ALT_MOBILE' || cleanKey === 'ALTERNATE_MOBILE') {
+                      val = fieldsData['Alternate Mobile Number'] || fieldsData['Alternate Mobile'] || fieldsData['Alt Mobile'] || '';
+                  } else if (cleanKey === 'RESIDENTIAL_ADDRESS' || cleanKey === 'ADDRESS') {
+                      val = fieldsData['Address'] || fieldsData['Residential Address'] || fieldsData['Permanent Address'] || '';
+                  } else if (cleanKey === 'STATUS') {
+                      val = fieldsData['Status'] || 'Approved';
+                  } else if (cleanKey === 'SUBMISSION_DATE' || cleanKey === 'REGISTRATION_DATE') {
+                      val = fieldsData['Timestamp'] || fieldsData['Submission Date'] || fieldsData['Date'] || '';
+                  } else if (cleanKey === 'TXN_ID' || cleanKey === 'PASS_ID' || cleanKey === 'ENTRY_PASS_ID') {
+                      val = fieldsData['Transaction ID'] || fieldsData['transactionId'] || fieldsData['Txn ID'] || '';
+                  } else if (cleanKey === 'VIBHAG' || cleanKey === 'BRANCH') {
+                      val = fieldsData['Vibhag'] || fieldsData['vibhag'] || fieldsData['MMP Vibhag'] || '';
+                  } else if (cleanKey === 'STREAM' || cleanKey === 'CLASS' || cleanKey === 'COURSE' || cleanKey === 'STANDARD') {
+                      val = fieldsData['Stream / Class'] || fieldsData['Stream'] || fieldsData['Class'] || fieldsData['Course'] || '';
+                  } else if (cleanKey === 'PERCENTAGE' || cleanKey === 'MARKS' || cleanKey === 'PERCENT') {
+                      val = fieldsData['% Obtained'] || fieldsData['percentage'] || fieldsData['Percentage'] || fieldsData['Marks / Percentage'] || '';
+                  } else if (cleanKey === 'TOKEN_NO' || cleanKey === 'TOKEN' || cleanKey === 'TOKEN_NUMBER') {
+                      val = fieldsData['Token No'] || fieldsData['Token Number'] || fieldsData['tokenNo'] || fieldsData['Token'] || '';
+                  } else if (cleanKey === 'SEAT_NO' || cleanKey === 'SEAT' || cleanKey === 'SEAT_NUMBER') {
+                      val = fieldsData['Seat No'] || fieldsData['seatNo'] || fieldsData['Seat Number'] || '';
+                  } else if (cleanKey === 'DESIGNATION' || cleanKey === 'ROLE') {
+                      val = fieldsData['Designation'] || fieldsData['designation'] || fieldsData['Role'] || '';
+                  } else if (cleanKey === 'GROUP' || cleanKey === 'CONTACT_GROUP') {
+                      val = fieldsData['Group'] || fieldsData['group'] || fieldsData['Contact Group'] || '';
+                  } else if (cleanKey === 'DONOR_AMOUNT' || cleanKey === 'AMOUNT') {
+                      val = fieldsData['Amount'] || fieldsData['Donation Amount'] || fieldsData['Donor Amount'] || '';
+                  } else if (cleanKey === 'AMOUNT_IN_WORDS') {
+                      val = fieldsData['Amount in Words'] || fieldsData['Amount In Words'] || '';
+                  } else if (cleanKey === 'PAYMENT_MODE' || cleanKey === 'PAYMENT_METHOD') {
+                      val = fieldsData['Payment Mode'] || fieldsData['Payment Method'] || fieldsData['Mode'] || '';
+                  } else if (cleanKey === 'PAYMENT_DATE') {
+                      val = fieldsData['Payment Date'] || fieldsData['Date'] || '';
+                  } else if (cleanKey === 'TRANSACTION_REF' || cleanKey === 'UTR' || cleanKey === 'CHEQUE_NO' || cleanKey === 'REF_NO') {
+                      val = fieldsData['UTR / Ref No'] || fieldsData['Transaction Ref'] || fieldsData['Cheque No'] || fieldsData['Ref No'] || '';
+                  } else if (cleanKey === 'PAN_CARD' || cleanKey === 'PAN_NO') {
+                      val = fieldsData['PAN Card'] || fieldsData['PAN Number'] || fieldsData['PAN'] || '';
+                  } else if (cleanKey === 'RECEIPT_NO') {
+                      val = fieldsData['Receipt No'] || fieldsData['Receipt Number'] || '';
+                  } else if (cleanKey === 'FINANCIAL_YEAR') {
+                      val = fieldsData['Financial Year'] || '2025-2026';
+                  } else if (cleanKey === 'DONATION_PURPOSE' || cleanKey === 'PURPOSE') {
+                      val = fieldsData['Purpose'] || fieldsData['Donation Purpose'] || certConfig?.title || 'Charitable Trust';
+                  } else if (cleanKey === 'TRUST_PAN') {
+                      val = certConfig?.trustPan || 'AAATV1234F';
+                  } else if (cleanKey === '80G_REG_NO' || cleanKey === 'REG_80G') {
+                      val = certConfig?.reg80G || certConfig?.regNo || 'Regd. No. F-13507 (Mumbai)';
+                  } else if (cleanKey === 'TEAM_MEMBER_NAME') {
+                      val = fieldsData['Member Name'] || fieldsData['Team Member Name'] || fieldsData['Name'] || fallbackName;
+                  } else if (cleanKey === 'TEAM_DESIGNATION' || cleanKey === 'POSITION') {
+                      val = fieldsData['Position'] || fieldsData['Designation'] || fieldsData['Role'] || '';
+                  } else if (cleanKey === 'TEAM_COMMITTEE' || cleanKey === 'WING') {
+                      val = fieldsData['Committee'] || fieldsData['Wing'] || '';
+                  } else if (cleanKey === 'TEAM_VIBHAG') {
+                      val = fieldsData['Vibhag'] || '';
+                  } else if (cleanKey === 'TEAM_MOBILE') {
+                      val = fieldsData['Mobile'] || fieldsData['Mobile Number'] || '';
+                  } else if (cleanKey === 'TEAM_PROFESSION') {
+                      val = fieldsData['Profession'] || '';
+                  } else if (cleanKey === 'TEAM_QUALIFICATION') {
+                      val = fieldsData['Qualification'] || '';
+                  } else if (cleanKey === 'PRESIDENT_NAME') {
+                      val = 'Kishore Parmar';
+                  } else if (cleanKey === 'GENERAL_SECRETARY_NAME' || cleanKey === 'SECRETARY_NAME') {
+                      val = 'Pradeep Parmar';
+                  } else if (cleanKey === 'TREASURER_NAME') {
+                      val = 'Treasurer';
+                  } else if (cleanKey === 'TRUST_NAME') {
+                      val = 'Mumbai Meghwal Panchayat & Vidya Gohil Charitable Trust';
+                  } else if (cleanKey === 'EVENT_NAME') {
+                      val = certConfig?.title || certConfig?.name || '';
+                  } else if (cleanKey === 'EVENT_DATE') {
+                      val = certConfig?.date || '';
+                  } else if (cleanKey === 'EVENT_VENUE') {
+                      val = certConfig?.venue || '';
+                  } else if (cleanKey.toLowerCase().includes("name") && !cleanKey.toLowerCase().includes("event")) {
+                      val = fallbackName;
+                  }
+              }
+              // Evaluate dynamic pivot table or unique list if tag matches
+              if (!val && (key.includes("PIVOT") || key.includes("UNIQUE_LIST") || key.includes("Total Count") || key.includes("TOTAL_COUNT") || key.includes("INDEPENDENT"))) {
+                val = evaluateUniversalPivotTag(key, { allRegs: (typeof window !== 'undefined' && window.__MMP_INVITE_REGS__) || [], format: "pdf_table" });
+              }
+              // Fuzzy case-insensitive match against all fieldsData keys
+              if (!val) {
+                  const rawNormalized = key.replace(/[{}]/g, '').replace(/_/g, ' ').trim().toLowerCase();
+                  const foundKey = Object.keys(fieldsData).find(k => k.trim().toLowerCase() === rawNormalized || k.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === rawNormalized.replace(/[^a-zA-Z0-9]/g, ''));
+                  if (foundKey) val = fieldsData[foundKey];
               }
               
               if (typeof val === 'string') {
                   val = val.replace(/\|/g, ' ').trim();
               }
               const alignOpt = isInvite ? "left" : "center";
-              doc.text(String(val), xPx, yPx, { align: alignOpt, baseline: "middle" });
+              const strVal = String(val);
+              if (strVal.includes('\n')) {
+                const lines = strVal.split('\n');
+                const lineH = Math.max(12, (fontSize || 14) * 1.25);
+                lines.forEach((ln, lIdx) => {
+                  doc.text(ln, xPx, yPx + (lIdx * lineH), { align: alignOpt, baseline: "middle" });
+                });
+              } else {
+                doc.text(strVal, xPx, yPx, { align: alignOpt, baseline: "middle" });
+              }
             }
           });
           
@@ -6646,6 +7264,7 @@ const ANAV = [
   {id:"volunteers",icon:"🤝",label:"Volunteers"},
   {id:"gallery",icon:"🖼️",label:"Gallery"},
   {id:"team",icon:"👥",label:"Our Team"},
+  {id:"medialibrary",icon:"📁",label:"Media Library"},
   {id:"achievements",icon:"🏆",label:"Achievements"},
   {id:"settings",icon:"⚙️",label:"Settings"},
   {id:"chatbotaccess",icon:"🤖",label:"Chatbot Admins"},
@@ -7315,6 +7934,459 @@ function BackupRestore({ C, setC, auth }) {
 }
 
 
+// ── FULL-PAGE ADMIN MEDIA LIBRARY WORKSPACE ─────────────────────────────────────
+function AdminMediaLibrary({ mob, C, setC, auth }) {
+  const [activeCat, setActiveCat] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [editingAssetId, setEditingAssetId] = useState(null);
+  const [editName, setEditName] = useState("");
+  const fileInputRef = useRef(null);
+  const replaceInputRef = useRef(null);
+  const [replacingAssetId, setReplacingAssetId] = useState(null);
+
+  const mediaItems = Array.isArray(C?.mediaLibrary) ? C.mediaLibrary : [];
+
+  // Track active usages of each asset across templates and team
+  const getUsageInfo = (assetId) => {
+    const usages = [];
+    const mediaRef = `media://${assetId}`;
+
+    (C?.events || []).forEach(ev => {
+      const evName = ev.title || "Event";
+      if (ev.inviteBgUrl === mediaRef || ev.inviteBgUrl === assetId) usages.push(`${evName}: Invite Letter`);
+      if (ev.certBgUrl === mediaRef || ev.certBgUrl === assetId) usages.push(`${evName}: Certificate`);
+      (ev.pdfTemplates || []).forEach(tpl => {
+        if (tpl.bgUrl === mediaRef || tpl.bgUrl === assetId) usages.push(`${evName}: ${tpl.name || 'PDF Pass'}`);
+      });
+    });
+
+    (C?.teamItems || []).forEach(t => {
+      if (t.image === mediaRef || t['Photo URL'] === mediaRef) usages.push(`Team: ${t.name || 'Member'}`);
+    });
+
+    return usages;
+  };
+
+  const handleUploadFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setUploading(true);
+
+    try {
+      const newItems = [...mediaItems];
+      for (const file of files) {
+        const reader = new FileReader();
+        const b64 = await new Promise((res, rej) => {
+          reader.onload = () => res(reader.result);
+          reader.onerror = rej;
+          reader.readAsDataURL(file);
+        });
+
+        const { w, h } = await new Promise((res) => {
+          const img = new Image();
+          img.onload = () => res({ w: img.width, h: img.height });
+          img.onerror = () => res({ w: 800, h: 600 });
+          img.src = b64;
+        });
+
+        const maxDim = activeCat === 'letterhead' ? 1600 : 800;
+        const quality = activeCat === 'letterhead' ? 0.78 : 0.65;
+        const compressed = await compressBase64Image(b64, maxDim, quality);
+
+        const assetId = "media_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+        const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]+/g, ' ');
+        const itemCategory = (activeCat && activeCat !== "all") ? activeCat : (w / h > 1.2 || h / w > 1.2 ? "letterhead" : "team_profile");
+
+        const assetDoc = {
+          id: assetId,
+          name: cleanName,
+          category: itemCategory,
+          url: compressed,
+          dimensions: { width: w, height: h },
+          fileSize: `${Math.round(compressed.length * 0.75 / 1024)} KB`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        newItems.unshift(assetDoc);
+        if (typeof assetCache !== 'undefined') assetCache[assetId] = compressed;
+        if (typeof window !== 'undefined') {
+          window.__MMP_MEDIA_CACHE__ = window.__MMP_MEDIA_CACHE__ || {};
+          window.__MMP_MEDIA_CACHE__[assetId] = compressed;
+        }
+      }
+
+      const updatedC = { ...C, mediaLibrary: newItems };
+      if (setC) setC(updatedC);
+      await fbSave(updatedC, auth?.idToken);
+      alert(`✅ Successfully uploaded ${files.length} media item(s) to Central Media Folder!`);
+    } catch(err) {
+      alert("Upload failed: " + err.message);
+    } finally {
+      setUploading(false);
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const handleReplaceImage = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !replacingAssetId) return;
+    setUploading(true);
+
+    try {
+      const reader = new FileReader();
+      const b64 = await new Promise((res, rej) => {
+        reader.onload = () => res(reader.result);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+
+      const { w, h } = await new Promise((res) => {
+        const img = new Image();
+        img.onload = () => res({ w: img.width, h: img.height });
+        img.onerror = () => res({ w: 800, h: 600 });
+        img.src = b64;
+      });
+
+      const compressed = await compressBase64Image(b64, 1600, 0.78);
+
+      const newItems = mediaItems.map(m => {
+        if (m.id === replacingAssetId) {
+          return {
+            ...m,
+            url: compressed,
+            dimensions: { width: w, height: h },
+            fileSize: `${Math.round(compressed.length * 0.75 / 1024)} KB`,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return m;
+      });
+
+      if (typeof assetCache !== 'undefined') assetCache[replacingAssetId] = compressed;
+      if (typeof window !== 'undefined') {
+        window.__MMP_MEDIA_CACHE__ = window.__MMP_MEDIA_CACHE__ || {};
+        window.__MMP_MEDIA_CACHE__[replacingAssetId] = compressed;
+      }
+
+      const updatedC = { ...C, mediaLibrary: newItems };
+      if (setC) setC(updatedC);
+      await fbSave(updatedC, auth?.idToken);
+      alert("✅ Image replaced! All connected templates and sections now use this updated image.");
+    } catch(err) {
+      alert("Replace failed: " + err.message);
+    } finally {
+      setUploading(false);
+      setReplacingAssetId(null);
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const handleDelete = async (assetId) => {
+    const usages = getUsageInfo(assetId);
+    let msg = "Are you sure you want to delete this image from the Media Library?";
+    if (usages.length > 0) {
+      msg = `⚠️ WARNING: This image is currently connected to:\n• ${usages.join('\n• ')}\n\nDeleting it will remove the background/photo from those templates/items. Delete anyway?`;
+    }
+    if (!window.confirm(msg)) return;
+
+    const newItems = mediaItems.filter(m => m.id !== assetId);
+    const updatedC = { ...C, mediaLibrary: newItems };
+    if (setC) setC(updatedC);
+    await fbSave(updatedC, auth?.idToken);
+  };
+
+  const handleSaveRename = async (assetId) => {
+    if (!editName.trim()) return;
+    const newItems = mediaItems.map(m => m.id === assetId ? { ...m, name: editName.trim() } : m);
+    const updatedC = { ...C, mediaLibrary: newItems };
+    if (setC) setC(updatedC);
+    await fbSave(updatedC, auth?.idToken);
+    setEditingAssetId(null);
+  };
+
+  const filteredItems = mediaItems.filter(item => {
+    if (activeCat !== "all" && item.category !== activeCat) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      return (item.name || "").toLowerCase().includes(q) || (item.category || "").toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const categories = [
+    { id: "all", label: "🌟 All Media", icon: "📁" },
+    { id: "letterhead", label: "📄 Letterheads & PDF Backgrounds", icon: "📄" },
+    { id: "team_profile", label: "👤 Team & Profile Photos", icon: "👤" },
+    { id: "stamp_signature", label: "🖋️ Stamps & Signatures", icon: "🖋️" },
+    { id: "banner", label: "🖼️ Logos & Banners", icon: "🖼️" }
+  ];
+
+  return (
+    <div style={{animation:"fadeIn .3s ease",display:"flex",flexDirection:"column",gap:16}}>
+      {/* Hidden inputs */}
+      <input type="file" ref={fileInputRef} accept="image/*" multiple onChange={handleUploadFiles} style={{display:"none"}} />
+      <input type="file" ref={replaceInputRef} accept="image/*" onChange={handleReplaceImage} style={{display:"none"}} />
+
+      {/* Top Banner & Upload Card */}
+      <div style={{background:"white",padding:"20px 24px",borderRadius:16,border:"1px solid var(--bd)",boxShadow:"0 4px 15px rgba(0,0,0,0.03)",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:16}}>
+        <div style={{flex:1,minWidth:280}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+            <span style={{fontSize:"1.6rem"}}>📁</span>
+            <h2 style={{fontSize:"1.4rem",color:"var(--dt)",margin:0}}>Central Media Library & Asset Manager</h2>
+            <span style={{fontSize:".7rem",background:"#CCFBF1",color:"#0F766E",padding:"3px 10px",borderRadius:12,fontWeight:800,border:"1px solid #99F6E4"}}>
+              Single Storage • Zero Duplication
+            </span>
+          </div>
+          <p style={{color:"var(--mu)",fontSize:".84rem",margin:0,lineHeight:1.5}}>
+            Upload letterheads, certificates, team photos, and stamps once. Connect them to any PDF letter, subworkspace, or team member without duplicate storage. Updating an asset here automatically updates all connected templates!
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          style={{
+            padding:"12px 22px",
+            background:"linear-gradient(135deg, #0F766E, #0D9488)",
+            color:"white",
+            border:"none",
+            borderRadius:10,
+            fontSize:".9rem",
+            fontWeight:800,
+            cursor:uploading ? "wait" : "pointer",
+            display:"flex",
+            alignItems:"center",
+            gap:8,
+            boxShadow:"0 3px 10px rgba(15,118,110,0.3)"
+          }}
+        >
+          <span>{uploading ? "⏳" : "➕"}</span>
+          <span>{uploading ? "Compressing & Saving..." : "Upload Images to Media Folder"}</span>
+        </button>
+      </div>
+
+      {/* Folder Tabs & Search Bar */}
+      <div style={{background:"white",padding:"12px 18px",borderRadius:12,border:"1px solid var(--bd)",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+          {categories.map(cat => {
+            const count = cat.id === "all" ? mediaItems.length : mediaItems.filter(m => m.category === cat.id).length;
+            const isActive = activeCat === cat.id;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setActiveCat(cat.id)}
+                style={{
+                  padding:"6px 14px",
+                  borderRadius:8,
+                  border: isActive ? "2px solid #0F766E" : "1px solid #CBD5E1",
+                  background: isActive ? "#CCFBF1" : "#F8FAFC",
+                  color: isActive ? "#0F766E" : "#334155",
+                  fontSize:".78rem",
+                  fontWeight: isActive ? 800 : 600,
+                  cursor:"pointer",
+                  display:"flex",
+                  alignItems:"center",
+                  gap:6
+                }}
+              >
+                <span>{cat.label}</span>
+                <span style={{fontSize:".68rem",background:isActive ? "#0F766E" : "#E2E8F0",color:isActive ? "white" : "#475569",padding:"1px 6px",borderRadius:10,fontWeight:700}}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{minWidth:240,maxWidth:320,flex:1}}>
+          <input
+            type="text"
+            placeholder="🔍 Search assets by name..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".82rem",boxSizing:"border-box"}}
+          />
+        </div>
+      </div>
+
+      {/* Drag & Drop Upload Dropzone Card */}
+      <div
+        onClick={() => fileInputRef.current?.click()}
+        onDragOver={e => e.preventDefault()}
+        onDrop={e => {
+          e.preventDefault();
+          if (e.dataTransfer.files?.length > 0) {
+            handleUploadFiles({ target: { files: e.dataTransfer.files } });
+          }
+        }}
+        style={{
+          border:"2px dashed #99F6E4",
+          background:"#F0FDFA",
+          borderRadius:12,
+          padding:"24px 20px",
+          display:"flex",
+          flexDirection:"column",
+          alignItems:"center",
+          justifyContent:"center",
+          gap:8,
+          cursor:"pointer",
+          color:"#0F766E"
+        }}
+      >
+        <div style={{fontSize:"2rem"}}>📤</div>
+        <div style={{fontSize:".92rem",fontWeight:800}}>Drag & Drop letterheads or photos here, or click to browse files</div>
+        <div style={{fontSize:".75rem",color:"#115E59"}}>Supports JPG, PNG, WebP (Images are automatically compressed while preserving high-definition letterhead text)</div>
+      </div>
+
+      {/* Media Grid */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))",gap:16}}>
+        {filteredItems.length === 0 ? (
+          <div style={{gridColumn:"1 / -1",background:"white",padding:40,borderRadius:12,textAlign:"center",color:"#64748B",border:"1px solid var(--bd)"}}>
+            <div style={{fontSize:"3rem",marginBottom:8}}>🖼️</div>
+            <div style={{fontSize:"1.05rem",fontWeight:700,color:"#1E293B"}}>No media assets in this folder yet</div>
+            <div style={{fontSize:".82rem",marginTop:4}}>Click the button above to upload your first letterhead or photo!</div>
+          </div>
+        ) : (
+          filteredItems.map(item => {
+            const usages = getUsageInfo(item.id);
+            const isEditing = editingAssetId === item.id;
+
+            return (
+              <div
+                key={item.id}
+                style={{
+                  background:"white",
+                  borderRadius:12,
+                  border:"1.5px solid #E2E8F0",
+                  overflow:"hidden",
+                  boxShadow:"0 3px 10px rgba(0,0,0,0.03)",
+                  display:"flex",
+                  flexDirection:"column"
+                }}
+              >
+                {/* Thumbnail */}
+                <div style={{height:165,background:"#0F172A",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+                  <img
+                    src={resolveMediaUrl(item.url, C)}
+                    alt={item.name}
+                    style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}
+                  />
+                  <span style={{position:"absolute",top:8,right:8,background:"rgba(15,23,42,0.8)",color:"white",fontSize:".65rem",padding:"2px 7px",borderRadius:4,fontWeight:700,fontFamily:"monospace"}}>
+                    {item.fileSize || "Image"}
+                  </span>
+                  {item.dimensions && (
+                    <span style={{position:"absolute",bottom:8,left:8,background:"rgba(15,23,42,0.8)",color:"#86EFAC",fontSize:".65rem",padding:"2px 7px",borderRadius:4,fontWeight:700,fontFamily:"monospace"}}>
+                      {item.dimensions.width} × {item.dimensions.height} px
+                    </span>
+                  )}
+                </div>
+
+                {/* Body */}
+                <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:10,flex:1}}>
+                  {isEditing ? (
+                    <div style={{display:"flex",gap:6}}>
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={e => setEditName(e.target.value)}
+                        style={{flex:1,padding:"5px 8px",borderRadius:6,border:"1px solid #0F766E",fontSize:".82rem",fontWeight:700}}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveRename(item.id)}
+                        style={{padding:"5px 10px",background:"#0F766E",color:"white",border:"none",borderRadius:6,fontSize:".76rem",fontWeight:700,cursor:"pointer"}}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                      <div style={{fontSize:".9rem",fontWeight:800,color:"#0F172A",lineHeight:1.3,wordBreak:"break-word"}}>
+                        {item.name}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setEditingAssetId(item.id); setEditName(item.name); }}
+                        style={{background:"none",border:"none",color:"#64748B",cursor:"pointer",fontSize:".8rem"}}
+                        title="Rename"
+                      >
+                        ✏️
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Usages */}
+                  <div style={{fontSize:".72rem",color: usages.length > 0 ? "#15803D" : "#64748B",display:"flex",alignItems:"center",gap:5,fontWeight:700}}>
+                    <span>{usages.length > 0 ? "🔗" : "⚪"}</span>
+                    <span>{usages.length > 0 ? `Connected in ${usages.length} template(s) / section(s)` : "Not currently connected"}</span>
+                  </div>
+
+                  {usages.length > 0 && (
+                    <div style={{fontSize:".65rem",color:"#475569",background:"#F8FAFC",padding:"6px 10px",borderRadius:6,lineHeight:1.35,border:"1px solid #E2E8F0",maxHeight:55,overflowY:"auto"}}>
+                      {usages.join(", ")}
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div style={{marginTop:"auto",paddingTop:10,borderTop:"1px solid #F1F5F9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReplacingAssetId(item.id);
+                        replaceInputRef.current?.click();
+                      }}
+                      style={{
+                        flex:1,
+                        padding:"7px 12px",
+                        background:"#F1F5F9",
+                        color:"#1E293B",
+                        border:"1px solid #CBD5E1",
+                        borderRadius:6,
+                        fontSize:".74rem",
+                        fontWeight:700,
+                        cursor:"pointer",
+                        display:"flex",
+                        alignItems:"center",
+                        justifyContent:"center",
+                        gap:5
+                      }}
+                      title="Upload new file to replace this image everywhere it is connected"
+                    >
+                      <span>🔄</span>
+                      <span>Replace Image</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(item.id)}
+                      style={{
+                        background:"none",
+                        border:"none",
+                        color:"#DC2626",
+                        cursor:"pointer",
+                        fontSize:".9rem",
+                        padding:"4px 8px"
+                      }}
+                      title="Delete from Media Library"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Admin({ C, setC, setPage, auth, onLogout, onShowLogin }) {
   const isMasterAdmin = (email) => {
     if (!email) return false;
@@ -7326,7 +8398,7 @@ function Admin({ C, setC, setPage, auth, onLogout, onShowLogin }) {
 
   let hasAccess = [];
   if (auth?.email) {
-    hasAccess = master ? ["content", "seo", "overview", "donations", "events", "registrations", "volunteers", "gallery", "team", "achievements", "settings", "chatbotaccess", "whatsappadmin", "access", "backup", "profile", "meritlist", "inviteletters", "certificates"] : [...(userRole?.permissions || []), "chatbotaccess", "whatsappadmin", "profile"];
+    hasAccess = master ? ["content", "seo", "overview", "donations", "events", "registrations", "volunteers", "gallery", "team", "medialibrary", "achievements", "settings", "chatbotaccess", "whatsappadmin", "access", "backup", "profile", "meritlist", "inviteletters", "certificates"] : [...(userRole?.permissions || []), "chatbotaccess", "whatsappadmin", "profile"];
   }
 
   const visibleNav = ANAV.filter(item => hasAccess.includes(item.id));
@@ -7455,6 +8527,7 @@ function Admin({ C, setC, setPage, auth, onLogout, onShowLogin }) {
           {tab==="meritlist" && hasAccess.includes("meritlist") && <AdminMeritList mob={mob} C={C} auth={auth}/>}
           {(tab==="inviteletters" || tab==="certificates") && (hasAccess.includes("inviteletters") || hasAccess.includes("certificates")) && <AdminInviteLetters mob={mob} C={C} setC={setC} auth={auth}/>}
           {tab==="team"      && hasAccess.includes("team") && <AdminTeam mob={mob} C={C} setC={setC} auth={auth}/>}
+          {tab==="medialibrary" && hasAccess.includes("medialibrary") && <AdminMediaLibrary mob={mob} C={C} setC={setC} auth={auth}/>}
           {tab==="gallery"   && hasAccess.includes("gallery") && <AdminGallery mob={mob} C={C} setC={setC} auth={auth}/>}
           {tab==="achievements" && hasAccess.includes("achievements") && <AdminAchievements mob={mob} C={C} setC={setC} auth={auth}/>}
           {tab==="settings"  && hasAccess.includes("settings") && <Settings mob={mob} C={C} setC={setC} auth={auth} setPage={setPage} hasAccess={hasAccess} master={master}/>}
@@ -7475,6 +8548,14 @@ function Overview({ mob, C, setC, auth }) {
   
   // Registration overview states
   const [regs, setRegs] = useState([]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && Array.isArray(regs) && regs.length > 0) {
+      window.__MMP_ALL_REGS_RAW__ = regs;
+      window.__MMP_REGS_CACHE__ = regs;
+      window.__MMP_INVITE_REGS__ = regs;
+    }
+  }, [regs]);
   const [loadingRegs, setLoadingRegs] = useState(true);
   const [defaultOverviewForm, setDefaultOverviewForm] = useState(() => {
     return C.defaultOverviewForm || localStorage.getItem("defaultOverviewForm") || "Education felicitation 2026";
@@ -7683,7 +8764,11 @@ function Overview({ mob, C, setC, auth }) {
     if (!r) return;
     Object.keys(r).forEach(k => {
       if (!ignoreKeys.includes(k) && !k.startsWith('_')) {
-        allKeysSet.add(k);
+        if (k.toLowerCase().replace(/\s+/g, '') === 'vibhagnew' || k === 'Vibhag New') {
+          allKeysSet.add('Vibhag');
+        } else {
+          allKeysSet.add(k);
+        }
       }
     });
   });
@@ -8935,20 +10020,7 @@ function Donations({ mob, auth, C }) {
   };
 
 
-  const saveVerification = async (r, newStatus, newRemarks) => {
-    const updatedBy = auth?.email || "Admin";
-    setRegs(prev => prev.map(x => x.id === r.id ? { ...x, Status: newStatus, status: newStatus, Remarks: newRemarks, "Updated By": updatedBy } : x));
-    try {
-      const cleanData = { ...r, Status: newStatus, status: newStatus, Remarks: newRemarks, "Updated By": updatedBy };
-      delete cleanData.id; delete cleanData._submittedAt;
-      await fbUpdateRegistration(r.id, cleanData, auth?.idToken);
-      // Removed setViewing(null) here so modal can handle auto-advance
-    } catch (e) {
-      alert("Failed to save verification: " + e.message);
-      const d = await fbFetchRegistrations(auth?.idToken);
-      setRegs(d || []);
-    }
-  };
+
 
   const handleStatusChange = async (r, newStatus) => {
     try {
@@ -9217,6 +10289,57 @@ function Donations({ mob, auth, C }) {
         </table>
         {rows.length===0&&<div style={{textAlign:"center",padding:28,color:"var(--mu)"}}>No results found.</div>}
       </div>
+
+      {/* ── Modal: Add Offline Donation Modal in Admin Panel ── */}
+      {showAddOfflineModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100001,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"white",borderRadius:12,width:"100%",maxWidth:520,boxShadow:"0 24px 48px rgba(0,0,0,0.3)",overflow:"hidden"}}>
+            <div style={{padding:"14px 20px",background:"linear-gradient(135deg, #15803D, #166534)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <h3 style={{margin:0,fontSize:"1.05rem",fontWeight:800}}>➕ Record Offline Donation</h3>
+              <button onClick={()=>setShowAddOfflineModal(false)} style={{background:"none",border:"none",color:"white",fontSize:"1.2rem",cursor:"pointer"}}>✕</button>
+            </div>
+            <div style={{padding:20}}>
+              <OfflineDonationEntryCard
+                initialData={{
+                  initialDate: new Date().toISOString().split('T')[0],
+                  defaultPurpose: "Education Felicitation 2026",
+                  defaultVibhag: "10 MAHALAXMI",
+                  defaultEventCode: "EDU26"
+                }}
+                onSubmit={async (formData) => {
+                  try {
+                    const donRecord = {
+                      name: formData.name.trim(),
+                      amount: parseFloat(formData.amount) || 0,
+                      date: formData.date,
+                      program: formData.purpose || "Education Felicitation 2026",
+                      purpose: formData.purpose || "Education Felicitation 2026",
+                      vibhag: formData.vibhag || "General",
+                      eventCode: formData.eventCode || "EDU26",
+                      receiptNo: formData.receiptNo || `RCP-${Math.floor(1000 + Math.random() * 9000)}`,
+                      internalReceiptNo: formData.receiptNo || `RCP-${Math.floor(1000 + Math.random() * 9000)}`,
+                      paymentMode: "Offline",
+                      paymentMethod: "Offline / Cash / Cheque",
+                      status: "Verified",
+                      isOffline: true,
+                      id: `DON-OFF-${Math.floor(100000 + Math.random() * 900000)}`,
+                      recordedBy: auth?.email || "Admin",
+                      recordedAt: new Date().toISOString()
+                    };
+                    await fbSubmitDonation(donRecord, auth?.idToken);
+                    alert("✅ Offline donation recorded successfully!");
+                    setShowAddOfflineModal(false);
+                    loadDonations();
+                  } catch(err) {
+                    alert("Failed to save donation: " + err.message);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {previewUrl && (
         <div style={{position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:99999, display:"flex", alignItems:"center", justifyContent:"center", padding: "4vh 4vw"}}>
           <div style={{background:"white", borderRadius: 16, width:"100%", maxWidth: 900, height:"100%", display:"flex", flexDirection:"column", overflow:"hidden", boxShadow:"0 20px 40px rgba(0,0,0,0.4)"}}>
@@ -10684,22 +11807,6 @@ function Volunteers({ mob, auth, C }) {
     if (auth) load();
   }, [auth]);
 
-
-  const saveVerification = async (r, newStatus, newRemarks) => {
-    const updatedBy = auth?.email || "Admin";
-    setRegs(prev => prev.map(x => x.id === r.id ? { ...x, Status: newStatus, status: newStatus, Remarks: newRemarks, "Updated By": updatedBy } : x));
-    try {
-      const cleanData = { ...r, Status: newStatus, status: newStatus, Remarks: newRemarks, "Updated By": updatedBy };
-      delete cleanData.id; delete cleanData._submittedAt;
-      await fbUpdateRegistration(r.id, cleanData, auth?.idToken);
-      // Removed setViewing(null) here so modal can handle auto-advance
-    } catch (e) {
-      alert("Failed to save verification: " + e.message);
-      const d = await fbFetchRegistrations(auth?.idToken);
-      setRegs(d || []);
-    }
-  };
-
   const handleStatusChange = async (r, newStatus) => {
     try {
       const updated = { ...r, status: newStatus, statusUpdatedAt: new Date().toISOString() };
@@ -10814,55 +11921,6 @@ function Volunteers({ mob, auth, C }) {
         </table>
       </div>
 
-      {/* ── Modal: Add Offline Donation Modal in Admin Panel ── */}
-      {showAddOfflineModal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100001,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-          <div style={{background:"white",borderRadius:12,width:"100%",maxWidth:520,boxShadow:"0 24px 48px rgba(0,0,0,0.3)",overflow:"hidden"}}>
-            <div style={{padding:"14px 20px",background:"linear-gradient(135deg, #15803D, #166534)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <h3 style={{margin:0,fontSize:"1.05rem",fontWeight:800}}>➕ Record Offline Donation</h3>
-              <button onClick={()=>setShowAddOfflineModal(false)} style={{background:"none",border:"none",color:"white",fontSize:"1.2rem",cursor:"pointer"}}>✕</button>
-            </div>
-            <div style={{padding:20}}>
-              <OfflineDonationEntryCard
-                initialData={{
-                  initialDate: new Date().toISOString().split('T')[0],
-                  defaultPurpose: "Education Felicitation 2026",
-                  defaultVibhag: "10 MAHALAXMI",
-                  defaultEventCode: "EDU26"
-                }}
-                onSubmit={async (formData) => {
-                  try {
-                    const donRecord = {
-                      name: formData.name.trim(),
-                      amount: parseFloat(formData.amount) || 0,
-                      date: formData.date,
-                      program: formData.purpose || "Education Felicitation 2026",
-                      purpose: formData.purpose || "Education Felicitation 2026",
-                      vibhag: formData.vibhag || "General",
-                      eventCode: formData.eventCode || "EDU26",
-                      receiptNo: formData.receiptNo || `RCP-${Math.floor(1000 + Math.random() * 9000)}`,
-                      internalReceiptNo: formData.receiptNo || `RCP-${Math.floor(1000 + Math.random() * 9000)}`,
-                      paymentMode: "Offline",
-                      paymentMethod: "Offline / Cash / Cheque",
-                      status: "Verified",
-                      isOffline: true,
-                      id: `DON-OFF-${Math.floor(100000 + Math.random() * 900000)}`,
-                      recordedBy: auth?.email || "Admin",
-                      recordedAt: new Date().toISOString()
-                    };
-                    await fbSubmitDonation(donRecord, auth?.idToken);
-                    alert("✅ Offline donation recorded successfully!");
-                    setShowAddOfflineModal(false);
-                    loadDonations();
-                  } catch(err) {
-                    alert("Failed to save donation: " + err.message);
-                  }
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -11017,6 +12075,585 @@ function AdminAchievements({ mob, C, setC, auth }) {
   );
 }
 
+// ── CENTRAL MEDIA LIBRARY & ASSET MANAGER ──────────────────────────────────────────
+export const resolveMediaUrl = (url, C = {}) => {
+  if (!url || typeof url !== 'string') return "";
+  if (url.startsWith("media://")) {
+    const assetId = url.replace("media://", "");
+    if (typeof assetCache !== 'undefined' && assetCache[assetId]) return assetCache[assetId];
+    let lib = Array.isArray(C?.mediaLibrary) ? C.mediaLibrary : null;
+    if (!lib && typeof window !== 'undefined') {
+      lib = window.__MMP_MEDIA_LIBRARY__ || window.__MMP_TRUST_CONFIG__?.mediaLibrary || null;
+    }
+    if (Array.isArray(lib)) {
+      const found = lib.find(m => m.id === assetId || m.name === assetId);
+      if (found && found.url) {
+        if (typeof assetCache !== 'undefined') assetCache[assetId] = found.url;
+        return found.url;
+      }
+    }
+    if (typeof window !== 'undefined' && window.__MMP_MEDIA_CACHE__ && window.__MMP_MEDIA_CACHE__[assetId]) {
+      return window.__MMP_MEDIA_CACHE__[assetId];
+    }
+  }
+  if (url.startsWith("asset://")) {
+    const assetId = url.replace("asset://", "");
+    if (typeof assetCache !== 'undefined' && assetCache[assetId]) return assetCache[assetId];
+  }
+  return url;
+};
+
+export function MediaLibraryModal({
+  isOpen,
+  onClose,
+  onSelect = null, // if passed, shows "Select & Connect" button
+  targetCategory = "all", // "all" | "letterhead" | "team_profile" | "stamp_signature" | "general"
+  C = {},
+  setC,
+  auth
+}) {
+  if (!isOpen) return null;
+
+  const [activeCat, setActiveCat] = useState(targetCategory || "all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [editingAssetId, setEditingAssetId] = useState(null);
+  const [editName, setEditName] = useState("");
+  const fileInputRef = useRef(null);
+  const replaceInputRef = useRef(null);
+  const [replacingAssetId, setReplacingAssetId] = useState(null);
+
+  // Maintain local / synced media library items
+  const mediaItems = Array.isArray(C?.mediaLibrary) ? C.mediaLibrary : [];
+
+  // Track active usages of each asset across templates and team
+  const getUsageInfo = (assetId) => {
+    const usages = [];
+    const mediaRef = `media://${assetId}`;
+
+    // Check events / PDF templates
+    (C?.events || []).forEach(ev => {
+      const evName = ev.title || "Event";
+      if (ev.inviteBgUrl === mediaRef || ev.inviteBgUrl === assetId) {
+        usages.push(`${evName}: Invite Letter`);
+      }
+      if (ev.certBgUrl === mediaRef || ev.certBgUrl === assetId) {
+        usages.push(`${evName}: Certificate`);
+      }
+      (ev.pdfTemplates || []).forEach(tpl => {
+        if (tpl.bgUrl === mediaRef || tpl.bgUrl === assetId) {
+          usages.push(`${evName}: ${tpl.name || 'PDF Pass'}`);
+        }
+      });
+    });
+
+    // Check team items
+    (C?.teamItems || []).forEach(t => {
+      if (t.image === mediaRef || t['Photo URL'] === mediaRef) {
+        usages.push(`Team: ${t.name || 'Member'}`);
+      }
+    });
+
+    return usages;
+  };
+
+  // Upload handler with automatic compression
+  const handleUploadFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setUploading(true);
+
+    try {
+      const newItems = [...mediaItems];
+      for (const file of files) {
+        const reader = new FileReader();
+        const b64 = await new Promise((res, rej) => {
+          reader.onload = () => res(reader.result);
+          reader.onerror = rej;
+          reader.readAsDataURL(file);
+        });
+
+        // Determine image dimensions
+        const { w, h } = await new Promise((res) => {
+          const img = new Image();
+          img.onload = () => res({ w: img.width, h: img.height });
+          img.onerror = () => res({ w: 800, h: 600 });
+          img.src = b64;
+        });
+
+        // For letterheads preserve 1600px width for sharp text; for profiles 800px
+        const maxDim = activeCat === 'letterhead' ? 1600 : 800;
+        const quality = activeCat === 'letterhead' ? 0.78 : 0.65;
+        const compressed = await compressBase64Image(b64, maxDim, quality);
+
+        const assetId = "media_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+        const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]+/g, ' ');
+
+        const itemCategory = (activeCat && activeCat !== "all") ? activeCat : (w / h > 1.2 || h / w > 1.2 ? "letterhead" : "team_profile");
+
+        const assetDoc = {
+          id: assetId,
+          name: cleanName,
+          category: itemCategory,
+          url: compressed,
+          dimensions: { width: w, height: h },
+          fileSize: `${Math.round(compressed.length * 0.75 / 1024)} KB`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        newItems.unshift(assetDoc);
+        if (typeof assetCache !== 'undefined') assetCache[assetId] = compressed;
+        if (typeof window !== 'undefined') {
+          window.__MMP_MEDIA_CACHE__ = window.__MMP_MEDIA_CACHE__ || {};
+          window.__MMP_MEDIA_CACHE__[assetId] = compressed;
+        }
+
+        if (files.length === 1 && onSelect) {
+          setTimeout(() => {
+            onSelect(assetDoc);
+            onClose();
+          }, 200);
+        }
+      }
+
+      const updatedC = { ...C, mediaLibrary: newItems };
+      if (setC) setC(updatedC);
+      await fbSave(updatedC, auth?.idToken);
+      alert(`✅ Successfully uploaded ${files.length} image(s) to Central Media Folder!`);
+    } catch(err) {
+      console.error(err);
+      alert("Upload failed: " + err.message);
+    } finally {
+      setUploading(false);
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  // Replace image under SAME asset ID (Global Sync!)
+  const handleReplaceImage = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !replacingAssetId) return;
+    setUploading(true);
+
+    try {
+      const reader = new FileReader();
+      const b64 = await new Promise((res, rej) => {
+        reader.onload = () => res(reader.result);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+
+      const { w, h } = await new Promise((res) => {
+        const img = new Image();
+        img.onload = () => res({ w: img.width, h: img.height });
+        img.onerror = () => res({ w: 800, h: 600 });
+        img.src = b64;
+      });
+
+      const maxDim = 1600;
+      const compressed = await compressBase64Image(b64, maxDim, 0.78);
+
+      const newItems = mediaItems.map(m => {
+        if (m.id === replacingAssetId) {
+          return {
+            ...m,
+            url: compressed,
+            dimensions: { width: w, height: h },
+            fileSize: `${Math.round(compressed.length * 0.75 / 1024)} KB`,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return m;
+      });
+
+      if (typeof assetCache !== 'undefined') assetCache[replacingAssetId] = compressed;
+      if (typeof window !== 'undefined') {
+        window.__MMP_MEDIA_CACHE__ = window.__MMP_MEDIA_CACHE__ || {};
+        window.__MMP_MEDIA_CACHE__[replacingAssetId] = compressed;
+      }
+
+      const updatedC = { ...C, mediaLibrary: newItems };
+      if (setC) setC(updatedC);
+      await fbSave(updatedC, auth?.idToken);
+      alert("✅ Image replaced! All connected templates and sections will now automatically use this new image.");
+    } catch(err) {
+      alert("Replace failed: " + err.message);
+    } finally {
+      setUploading(false);
+      setReplacingAssetId(null);
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const handleDelete = async (assetId) => {
+    const usages = getUsageInfo(assetId);
+    let msg = "Are you sure you want to delete this image from the Media Library?";
+    if (usages.length > 0) {
+      msg = `⚠️ WARNING: This image is currently connected to:\n• ${usages.join('\n• ')}\n\nDeleting it will remove the background from those templates/items. Delete anyway?`;
+    }
+    if (!window.confirm(msg)) return;
+
+    const newItems = mediaItems.filter(m => m.id !== assetId);
+    const updatedC = { ...C, mediaLibrary: newItems };
+    if (setC) setC(updatedC);
+    await fbSave(updatedC, auth?.idToken);
+  };
+
+  const handleSaveRename = async (assetId) => {
+    if (!editName.trim()) return;
+    const newItems = mediaItems.map(m => m.id === assetId ? { ...m, name: editName.trim() } : m);
+    const updatedC = { ...C, mediaLibrary: newItems };
+    if (setC) setC(updatedC);
+    await fbSave(updatedC, auth?.idToken);
+    setEditingAssetId(null);
+  };
+
+  // Filtered items
+  const filteredItems = mediaItems.filter(item => {
+    if (activeCat !== "all" && item.category !== activeCat) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      return (item.name || "").toLowerCase().includes(q) || (item.category || "").toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  const categories = [
+    { id: "all", label: "🌟 All Media", icon: "📁" },
+    { id: "letterhead", label: "📄 Letterheads & PDF Backgrounds", icon: "📄" },
+    { id: "team_profile", label: "👤 Team & Profile Photos", icon: "👤" },
+    { id: "stamp_signature", label: "🖋️ Stamps & Signatures", icon: "🖋️" },
+    { id: "banner", label: "🖼️ Logos & Banners", icon: "🖼️" }
+  ];
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:100005,background:"rgba(15,23,42,0.80)",backdropFilter:"blur(5px)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div 
+        onClick={e => e.stopPropagation()}
+        style={{
+          background:"#FFFFFF",
+          borderRadius:14,
+          width:"100%",
+          maxWidth:980,
+          height:"88vh",
+          maxHeight:820,
+          display:"flex",
+          flexDirection:"column",
+          overflow:"hidden",
+          boxShadow:"0 25px 50px -12px rgba(0,0,0,0.35)",
+          border:"1px solid #CBD5E1"
+        }}
+      >
+        {/* Hidden File Inputs */}
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          accept="image/*" 
+          multiple 
+          onChange={handleUploadFiles} 
+          style={{display:"none"}} 
+        />
+        <input 
+          type="file" 
+          ref={replaceInputRef} 
+          accept="image/*" 
+          onChange={handleReplaceImage} 
+          style={{display:"none"}} 
+        />
+
+        {/* Header Bar */}
+        <div style={{padding:"14px 20px",background:"linear-gradient(135deg, #0F766E, #115E59)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:"1.4rem"}}>📁</span>
+            <div>
+              <div style={{fontSize:"1.05rem",fontWeight:800,display:"flex",alignItems:"center",gap:8}}>
+                <span>Central Media Library & Asset Manager</span>
+                <span style={{fontSize:".65rem",background:"rgba(255,255,255,0.25)",padding:"2px 8px",borderRadius:12,fontWeight:700}}>
+                  Single Storage • Zero Duplication
+                </span>
+              </div>
+              <div style={{fontSize:".74rem",opacity:0.9}}>
+                Upload once, connect everywhere (PDF Letterheads, Passes, Team Photos, Profiles). Updating a letterhead here updates all linked templates instantly!
+              </div>
+            </div>
+          </div>
+
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              style={{
+                padding:"8px 16px",
+                background:"#FFFFFF",
+                color:"#0F766E",
+                border:"none",
+                borderRadius:8,
+                fontSize:".82rem",
+                fontWeight:800,
+                cursor:uploading ? "wait" : "pointer",
+                display:"flex",
+                alignItems:"center",
+                gap:6,
+                boxShadow:"0 2px 6px rgba(0,0,0,0.2)"
+              }}
+            >
+              <span>{uploading ? "⏳" : "➕"}</span>
+              <span>{uploading ? "Processing..." : "Upload New Image"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              style={{background:"rgba(255,255,255,0.2)",border:"none",color:"white",borderRadius:"50%",width:32,height:32,cursor:"pointer",fontSize:"1rem",fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}
+              title="Close Media Library"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Toolbar & Filter Tabs Bar */}
+        <div style={{padding:"10px 18px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,flexShrink:0}}>
+          {/* Category Tabs */}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+            {categories.map(cat => {
+              const count = cat.id === "all" ? mediaItems.length : mediaItems.filter(m => m.category === cat.id).length;
+              const isActive = activeCat === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setActiveCat(cat.id)}
+                  style={{
+                    padding:"5px 11px",
+                    borderRadius:6,
+                    border: isActive ? "1.5px solid #0F766E" : "1px solid #CBD5E1",
+                    background: isActive ? "#CCFBF1" : "white",
+                    color: isActive ? "#0F766E" : "#334155",
+                    fontSize:".75rem",
+                    fontWeight: isActive ? 800 : 600,
+                    cursor:"pointer",
+                    display:"flex",
+                    alignItems:"center",
+                    gap:5
+                  }}
+                >
+                  <span>{cat.label}</span>
+                  <span style={{fontSize:".65rem",background:isActive ? "#0F766E" : "#E2E8F0",color:isActive ? "white" : "#475569",padding:"1px 5px",borderRadius:10,fontWeight:700}}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search Box */}
+          <div style={{minWidth:220,flex:1,maxWidth:280}}>
+            <input
+              type="text"
+              placeholder="🔍 Search media by name..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{width:"100%",padding:"6px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".78rem",background:"white",boxSizing:"border-box"}}
+            />
+          </div>
+        </div>
+
+        {/* Grid Area */}
+        <div style={{flex:1,overflowY:"auto",padding:18,background:"#F1F5F9"}}>
+          {filteredItems.length === 0 ? (
+            <div style={{height:"100%",minHeight:260,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,color:"#64748B"}}>
+              <div style={{fontSize:"3.5rem"}}>🖼️</div>
+              <div style={{fontSize:"1.05rem",fontWeight:800,color:"#1E293B"}}>No media items found in this folder</div>
+              <div style={{fontSize:".8rem",maxWidth:420,textAlign:"center",lineHeight:1.4}}>
+                Upload your official letterheads, certificate backgrounds, team photos, or stamps. They will be stored once and can be connected anywhere!
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                style={{marginTop:6,padding:"8px 18px",background:"#0F766E",color:"white",border:"none",borderRadius:8,fontSize:".82rem",fontWeight:800,cursor:"pointer"}}
+              >
+                ➕ Upload Image Now
+              </button>
+            </div>
+          ) : (
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(260px, 1fr))",gap:16}}>
+              {filteredItems.map(item => {
+                const usages = getUsageInfo(item.id);
+                const isEditing = editingAssetId === item.id;
+
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      background:"white",
+                      borderRadius:10,
+                      border:"1.5px solid #E2E8F0",
+                      overflow:"hidden",
+                      boxShadow:"0 3px 10px rgba(0,0,0,0.04)",
+                      display:"flex",
+                      flexDirection:"column",
+                      transition:"transform 0.1s, box-shadow 0.1s"
+                    }}
+                  >
+                    {/* Thumbnail Display with aspect fit */}
+                    <div style={{height:150,background:"#0F172A",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+                      <img
+                        src={resolveMediaUrl(item.url, C)}
+                        alt={item.name}
+                        style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}
+                      />
+                      <span style={{position:"absolute",top:8,right:8,background:"rgba(15,23,42,0.75)",color:"white",fontSize:".62rem",padding:"2px 6px",borderRadius:4,fontWeight:700,fontFamily:"monospace"}}>
+                        {item.fileSize || "Image"}
+                      </span>
+                      {item.dimensions && (
+                        <span style={{position:"absolute",bottom:8,left:8,background:"rgba(15,23,42,0.75)",color:"#86EFAC",fontSize:".62rem",padding:"2px 6px",borderRadius:4,fontWeight:700,fontFamily:"monospace"}}>
+                          {item.dimensions.width} × {item.dimensions.height} px
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Metadata & Actions */}
+                    <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:8,flex:1}}>
+                      {/* Name or Rename Input */}
+                      {isEditing ? (
+                        <div style={{display:"flex",gap:4}}>
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={e => setEditName(e.target.value)}
+                            style={{flex:1,padding:"4px 8px",borderRadius:4,border:"1px solid #0F766E",fontSize:".8rem",fontWeight:700}}
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveRename(item.id)}
+                            style={{padding:"4px 8px",background:"#0F766E",color:"white",border:"none",borderRadius:4,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                          >
+                            Save
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                          <div style={{fontSize:".84rem",fontWeight:800,color:"#0F172A",lineHeight:1.3,wordBreak:"break-word"}}>
+                            {item.name}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => { setEditingAssetId(item.id); setEditName(item.name); }}
+                            style={{background:"none",border:"none",color:"#64748B",cursor:"pointer",fontSize:".75rem"}}
+                            title="Rename"
+                          >
+                            ✏️
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Usage Badge (Shows where this asset is connected) */}
+                      <div style={{fontSize:".68rem",color: usages.length > 0 ? "#15803D" : "#64748B",display:"flex",alignItems:"center",gap:4,fontWeight:700}}>
+                        <span>{usages.length > 0 ? "🔗" : "⚪"}</span>
+                        <span>
+                          {usages.length > 0 ? `Connected in ${usages.length} template(s) / section(s)` : "Not currently connected"}
+                        </span>
+                      </div>
+
+                      {usages.length > 0 && (
+                        <div style={{fontSize:".62rem",color:"#475569",background:"#F8FAFC",padding:"4px 8px",borderRadius:4,lineHeight:1.3,border:"1px solid #E2E8F0",maxHeight:42,overflowY:"auto"}}>
+                          {usages.join(", ")}
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div style={{marginTop:"auto",paddingTop:8,borderTop:"1px solid #F1F5F9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
+                        {onSelect ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSelect(item);
+                              onClose();
+                            }}
+                            style={{
+                              flex:1,
+                              padding:"7px 12px",
+                              background:"#0F766E",
+                              color:"white",
+                              border:"none",
+                              borderRadius:6,
+                              fontSize:".76rem",
+                              fontWeight:800,
+                              cursor:"pointer",
+                              display:"flex",
+                              alignItems:"center",
+                              justifyContent:"center",
+                              gap:4
+                            }}
+                          >
+                            <span>✓</span>
+                            <span>Select & Connect</span>
+                          </button>
+                        ) : null}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReplacingAssetId(item.id);
+                            replaceInputRef.current?.click();
+                          }}
+                          style={{
+                            padding:"6px 10px",
+                            background:"#F1F5F9",
+                            color:"#1E293B",
+                            border:"1px solid #CBD5E1",
+                            borderRadius:6,
+                            fontSize:".72rem",
+                            fontWeight:700,
+                            cursor:"pointer"
+                          }}
+                          title="Upload new file to replace this image everywhere it is connected"
+                        >
+                          🔄 Replace Image
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(item.id)}
+                          style={{
+                            background:"none",
+                            border:"none",
+                            color:"#DC2626",
+                            cursor:"pointer",
+                            fontSize:".8rem",
+                            padding:"4px 6px"
+                          }}
+                          title="Delete from Media Library"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Footer info bar */}
+        <div style={{padding:"8px 18px",background:"#FFFFFF",borderTop:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:".72rem",color:"#64748B",flexShrink:0}}>
+          <div>
+            Total Media Assets: <strong>{mediaItems.length}</strong> (Storage optimized via shared references)
+          </div>
+          <div>
+            Tip: Connecting a letterhead to multiple subworkspaces uses zero extra storage!
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── ADMIN TEAM ────────────────────────────────────────────────────────────────
 function AdminTeam({ mob, C, setC, auth }) {
   const [items, setItems] = useState(C.teamItems || []);
@@ -11025,6 +12662,7 @@ function AdminTeam({ mob, C, setC, auth }) {
   const [activeNode, setActiveNode] = useState(null); // For editing details
   const [menuNode, setMenuNode] = useState(null); // For Add/Action actions
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showTeamMediaModal, setShowTeamMediaModal] = useState(false);
   const [allUsers, setAllUsers] = useState([]);
   const [activeCommittee, setActiveCommittee] = useState("All");
   const [draggedComm, setDraggedComm] = useState(null);
@@ -12102,7 +13740,7 @@ function AdminTeam({ mob, C, setC, auth }) {
                             {/* Card Content */}
                             <div style={{width:44, height:44, margin:"0 auto 8px", borderRadius:"50%", overflow:"hidden", border:"2px solid #f0f0f0", background:"#eee"}}>
                               {node.image ? (
-                                <img src={node.image} alt={node.name} style={{width:"100%", height:"100%", objectFit:"cover"}}/>
+                                <img src={resolveMediaUrl(node.image, C)} alt={node.name} style={{width:"100%", height:"100%", objectFit:"cover"}}/>
                               ) : (
                                 <div style={{width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.3rem"}}>👤</div>
                               )}
@@ -12258,7 +13896,7 @@ function AdminTeam({ mob, C, setC, auth }) {
 
                 <div style={{width:50, height:50, margin:"16px auto 6px", borderRadius:"50%", overflow:"hidden", border:"2px solid #f0f0f0", background:"#eee"}}>
                   {node.image ? (
-                    <img src={node.image} alt={node.name} style={{width:"100%", height:"100%", objectFit:"cover"}}/>
+                    <img src={resolveMediaUrl(node.image, C)} alt={node.name} style={{width:"100%", height:"100%", objectFit:"cover"}}/>
                   ) : (
                     <div style={{width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.5rem"}}>👤</div>
                   )}
@@ -12799,7 +14437,7 @@ function AdminTeam({ mob, C, setC, auth }) {
                 >
                   <div style={{fontSize:"1.2rem", color:"#bbb", fontWeight:"bold"}}>⋮⋮</div>
                   <div style={{width:60,height:60,borderRadius:"50%",background:"#eee",overflow:"hidden",flexShrink:0}}>
-                    {item.image ? <img src={item.image} style={{width:"100%",height:"100%",objectFit:"cover"}}/> : <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem"}}>👤</div>}
+                    {item.image ? <img src={resolveMediaUrl(item.image, C)} style={{width:"100%",height:"100%",objectFit:"cover"}}/> : <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.5rem"}}>👤</div>}
                   </div>
                   <div style={{flex:1,minWidth:200}}>
                     <div style={{fontWeight:700,color:"var(--dt)",fontSize:"1.1rem"}}>{item.name || "No Name"}</div>
@@ -12856,15 +14494,25 @@ function AdminTeam({ mob, C, setC, auth }) {
 
                 <div style={{display:"flex",gap:16,marginBottom:20}}>
                   <div style={{width:80,height:80,borderRadius:"50%",background:"#f5f5f5",overflow:"hidden",position:"relative",flexShrink:0}}>
-                    {activeNode.image ? <img src={activeNode.image} style={{width:"100%",height:"100%",objectFit:"cover"}}/> : <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"2rem"}}>👤</div>}
+                    {activeNode.image ? <img src={resolveMediaUrl(activeNode.image, C)} style={{width:"100%",height:"100%",objectFit:"cover"}}/> : <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"2rem"}}>👤</div>}
                   </div>
                   <div style={{flex:1, minWidth:0}}>
                     <label style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:".75rem",fontWeight:700,color:"var(--mu)",marginBottom:4}}>
                       <span>PHOTO URL</span>
-                      <label style={{cursor:"pointer",color:"var(--dt)",textDecoration:"underline",fontWeight:700}}>
-                        {uploadingImage ? "Uploading..." : "Click to Upload Photo"}
-                        <input type="file" style={{display:"none"}} accept="image/*" onChange={handlePhotoUpload} disabled={uploadingImage}/>
-                      </label>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <button
+                          type="button"
+                          onClick={() => setShowTeamMediaModal(true)}
+                          style={{background:"#CCFBF1",border:"1px solid #14B8A6",color:"#0F766E",borderRadius:4,padding:"2px 7px",fontSize:".68rem",fontWeight:800,cursor:"pointer"}}
+                          title="Pick photo from Central Media Folder"
+                        >
+                          📁 Media Folder
+                        </button>
+                        <label style={{cursor:"pointer",color:"var(--dt)",textDecoration:"underline",fontWeight:700}}>
+                          {uploadingImage ? "Uploading..." : "Click to Upload Photo"}
+                          <input type="file" style={{display:"none"}} accept="image/*" onChange={handlePhotoUpload} disabled={uploadingImage}/>
+                        </label>
+                      </div>
                     </label>
                     <input type="text" value={activeNode.image || ""} onChange={e=>updateActiveNode("image", e.target.value)} style={{width:"100%",padding:10,borderRadius:8,border:"1px solid var(--bd)",fontSize:".9rem"}} placeholder="https://..."/>
                   </div>
@@ -13939,7 +15587,7 @@ function UserEditRegistrationModal({ reg, onClose, onSave, authToken, C }) {
 }
 
 function UserDashboard({ C, globalProfile, globalAuthToken, onClose }) {
-  const cleanPhone = (num) => String(num || "").replace(/\D/g, "").slice(-10);
+const cleanPhone = (num) => String(num || "").replace(/\D/g, "").slice(-10);
 
   const [regs, setRegs] = useState([]);          // ALL registrations fetched
   const [myDonations, setMyDonations] = useState([]);
@@ -15573,6 +17221,868 @@ function WhatsAppAdminManager({ C, setC, auth }) {
   );
 }
 
+// ── Multi-Vibhag Selection Dropdown Component ─────────────────────────────────────
+function MultiVibhagDropdown({ selectedVibhags = [], onChange, allVibhags = [], width = 230, label = "Assigned Vibhags" }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  const selectedArr = Array.isArray(selectedVibhags)
+    ? selectedVibhags
+    : (selectedVibhags && selectedVibhags !== "All Vibhags" && selectedVibhags !== "Individual Only")
+      ? String(selectedVibhags).split(",").map(s => s.trim()).filter(Boolean)
+      : ["10 MAHALAXMI"];
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const toggleVibhag = (v) => {
+    let next;
+    if (selectedArr.includes(v)) {
+      next = selectedArr.filter(x => x !== v);
+      if (next.length === 0) next = [allVibhags[0] || "10 MAHALAXMI"];
+    } else {
+      next = [...selectedArr, v];
+    }
+    onChange(next);
+  };
+
+  const selectAll = () => {
+    onChange([...allVibhags]);
+  };
+
+  const displayText = selectedArr.length === 0 
+    ? "Select Vibhag(s)..." 
+    : selectedArr.length === 1 
+      ? selectedArr[0] 
+      : selectedArr.length === allVibhags.length
+        ? "All Vibhags (" + allVibhags.length + ")"
+        : selectedArr.length + " Vibhags: " + selectedArr.map(s => s.split(" ")[1] || s).join(", ");
+
+  return (
+    <div ref={dropdownRef} style={{position:"relative", width, display:"inline-block"}}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          setIsOpen(!isOpen);
+        }}
+        style={{
+          width: "100%",
+          padding: "6px 10px",
+          background: "#FFFBEB",
+          border: "1px solid #FCD34D",
+          borderRadius: 6,
+          fontSize: ".75rem",
+          fontWeight: 700,
+          color: "#92400E",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 6,
+          boxSizing: "border-box",
+          textAlign: "left"
+        }}
+        title="Click to select multiple Vibhags"
+      >
+        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>
+          📍 {displayText}
+        </span>
+        <span style={{fontSize:".6rem",color:"#B45309",transform:isOpen?"rotate(180deg)":"none",transition:"transform 0.15s"}}>▼</span>
+      </button>
+
+      {isOpen && (
+        <div style={{
+          position: "absolute",
+          top: "calc(100% + 4px)",
+          left: 0,
+          width: "max(240px, 100%)",
+          background: "white",
+          border: "1px solid #CBD5E1",
+          borderRadius: 8,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+          zIndex: 99999,
+          padding: "6px 0",
+          maxHeight: 220,
+          overflowY: "auto"
+        }}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 10px 6px",borderBottom:"1px solid #F1F5F9"}}>
+            <span style={{fontSize:".68rem",fontWeight:800,color:"#64748B",textTransform:"uppercase"}}>Select Assigned Vibhags:</span>
+            <button
+              type="button"
+              onClick={selectAll}
+              style={{background:"none",border:"none",color:"#2563EB",fontSize:".68rem",fontWeight:700,cursor:"pointer",padding:0}}
+            >
+              Select All
+            </button>
+          </div>
+
+          {allVibhags.map(v => {
+            const isChecked = selectedArr.includes(v);
+            return (
+              <div
+                key={v}
+                onClick={() => toggleVibhag(v)}
+                style={{
+                  padding: "6px 12px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  cursor: "pointer",
+                  fontSize: ".75rem",
+                  background: isChecked ? "#FEF3C7" : "transparent",
+                  color: isChecked ? "#92400E" : "#1E293B",
+                  fontWeight: isChecked ? 700 : 500,
+                  transition: "background 0.1s"
+                }}
+                onMouseEnter={e => { if (!isChecked) e.currentTarget.style.background = "#F8FAFC"; }}
+                onMouseLeave={e => { if (!isChecked) e.currentTarget.style.background = "transparent"; }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={() => {}} // handled by parent div
+                  style={{cursor:"pointer",margin:0}}
+                />
+                <span>{v}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Shared Sub-Workspace & WhatsApp Dispatcher Utilities ──
+export const getEventWhatsAppTemplates = (eventObj, C = {}) => {
+  const defaultWorkspaceTemplates = [
+    {
+      id: "tpl_student_pass",
+      name: "Official Student Invitation & Entry Pass",
+      isDefault: false,
+      text: C?.whatsAppTplInvite || `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Felicitation 2026 - Official Invitation*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nWe are pleased to invite you and your family as our esteemed guests of honor to the *Annual Student Education Felicitation 2026*.\n\n📋 *Invitation Pass Details:*\n• *Transaction / Pass ID:* {TXN_ID}\n• *Invitee Name:* {STUDENT_NAME}\n• *Vibhag:* {VIBHAG}\n• *Stream / Class:* {STREAM}\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View & Download Official PDF Invitation Letter & Pass:*\n{INVITE_PDF_LINK}\n\nPlease show this digital pass or downloaded invitation letter at the registration desk upon arrival.\n\nWarm regards,\n*Central Working Committee (CWC) & Education Board*\n*Mumbai Meghwal Panchayat & Vidya Gohil Trust*\n📞 Committee Helpline: {HELPLINE_PHONES}`
+    },
+    {
+      id: "tpl_vip_guest",
+      name: "VIP / Special Dignitary Invitation",
+      isDefault: false,
+      text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🌟 *Special Dignitary Invitation - Education Felicitation 2026*\n═══════════════════════\nRespected *{STUDENT_NAME}* Ji,\n\nOn behalf of Mumbai Meghwal Panchayat & Vidya Gohil Charitable Trust, we cordially request the honor of your esteemed presence as our *Special Guest of Honor* at our upcoming Annual Education Felicitation Ceremony.\n\n📅 *Event Date:* 02-10-2026 (Friday)\n⏰ *Reporting Time:* 09:30 AM\n📍 *Venue:* Mumbai, Maharashtra\n\n👉 *View Official Digital Invitation Pass:*\n{INVITE_PDF_LINK}\n\nWe look forward to welcoming you and celebrating together.\n\nWarm regards,\n*President & Central Working Committee (CWC)*\n📞 Helpline: {HELPLINE_PHONES}`
+    },
+    {
+      id: "tpl_event_reminder",
+      name: "Event Reminder & Reporting Time Notice",
+      isDefault: false,
+      text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n⏰ *Gentle Reminder: Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nThis is a gentle reminder that the *Annual Student Education Felicitation Ceremony* is scheduled for *02-10-2026 (Friday)*.\n\n• *Invitee Name:* {STUDENT_NAME}\n• *Pass / Txn ID:* {TXN_ID}\n• *Reporting Time:* 09:30 AM Sharp\n• *Venue:* Mumbai, Maharashtra\n\n👉 *Open Your Digital Pass on Mobile:*\n{INVITE_PDF_LINK}\n\nPlease carry your digital pass on your phone for smooth verification at the venue.\n\nWarm regards,\n*Event Management Team*`
+    },
+    {
+      id: "tpl_meeting_invite",
+      name: "Education Committee meeting invite",
+      isDefault: false,
+      text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n📢 *Education Committee Meeting Notice*\n═══════════════════════\nRespected Committee Member,\n\nA crucial meeting of the *Education Committee & Central Working Committee* has been scheduled.\n\n📅 Date: Upcoming Sunday\n⏰ Time: 10:30 AM\n📍 Venue: Head Office / Community Hall\n\nAgenda:\n1. Student registration status & verification review\n2. Vibhag-wise pass distribution planning\n3. Event day responsibilities\n\nKindly make it convenient to attend on time.\n\nWarm regards,\n*Education Board & CWC*`
+    },
+    {
+      id: "tpl_vibhag_update",
+      name: "Vibhag Wise Update information",
+      isDefault: true,
+      text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *Education Committee*\n═══════════════════════\nNamaste *{MEMBER_NAME}*,\n\nHere is the latest student update for your Vibhag:\n\n{VIBHAG_STUDENT_LIST}\n\n👉 *Invitation Pass:* {PASS_LINK}\n\n📞 Helpline: {HELPLINE_PHONES}`
+    }
+  ];
+
+  const rawTpls = eventObj?.whatsAppTemplates || eventObj?.whatsappTemplates || [];
+  if (!Array.isArray(rawTpls) || rawTpls.length === 0) {
+    return defaultWorkspaceTemplates;
+  }
+
+  const result = [...rawTpls];
+  for (const def of defaultWorkspaceTemplates) {
+    if (!result.some(t => t.id === def.id || t.name === def.name || String(t.name).toLowerCase() === String(def.name).toLowerCase())) {
+      result.push(def);
+    }
+  }
+  return result;
+};
+
+export const getSubworkspaceContactsList = ({ eventId, subWorkspaceId = "invite", allRegs = [], C = {} }) => {
+  // Pool resolution with fallback to global window caches & localStorage backup
+  let sourcePool = Array.isArray(allRegs) && allRegs.length > 0 ? allRegs : [];
+  if (typeof window !== 'undefined') {
+    if (Array.isArray(window.__MMP_INVITE_REGS__) && window.__MMP_INVITE_REGS__.length > sourcePool.length) {
+      sourcePool = window.__MMP_INVITE_REGS__;
+    } else if (Array.isArray(window.__MMP_ALL_REGS_RAW__) && window.__MMP_ALL_REGS_RAW__.length > sourcePool.length) {
+      sourcePool = window.__MMP_ALL_REGS_RAW__;
+    } else if (Array.isArray(window.__MMP_REGS_CACHE__) && window.__MMP_REGS_CACHE__.length > sourcePool.length) {
+      sourcePool = window.__MMP_REGS_CACHE__;
+    }
+  }
+  if (sourcePool.length === 0 && typeof localStorage !== 'undefined') {
+    try {
+      const cached = JSON.parse(localStorage.getItem("mmp_cached_registrations") || "[]");
+      if (Array.isArray(cached) && cached.length > 0) {
+        sourcePool = cached;
+      }
+    } catch(e) {}
+  }
+  if (sourcePool.length === 0) return [];
+
+  const customEvents = C?.events || [];
+  const defaultDonorWorkspace = {
+    id: "ev_donor_data",
+    title: "💰 Donor Data",
+    isInternalOnly: true,
+    isDonorWorkspace: true
+  };
+  const hasDonorWs = customEvents.some(e => e.isDonorWorkspace);
+  const inviteEvents = hasDonorWs ? customEvents : [...customEvents, defaultDonorWorkspace];
+
+  // 1. Resolve event: by eventId, OR by finding which event contains this subWorkspace template!
+  let ev = null;
+  if (eventId && eventId !== "undefined") {
+    ev = inviteEvents.find(e => 
+      (e.id && e.id !== "undefined" && e.id === eventId) || 
+      (e.title && e.title === eventId) ||
+      (e.title && String(e.title).toLowerCase() === String(eventId).toLowerCase()) ||
+      (e.id && e.id !== "undefined" && String(e.id).toLowerCase() === String(eventId).toLowerCase())
+    );
+  }
+  if (!ev && subWorkspaceId && subWorkspaceId !== 'invite' && subWorkspaceId !== 'cert') {
+    ev = inviteEvents.find(e => 
+      (e.pdfTemplates || []).some(t => t.id === subWorkspaceId || t.name === subWorkspaceId)
+    );
+  }
+  if (!ev) {
+    ev = inviteEvents.find(e => e.title && String(e.title).toLowerCase().includes("education")) || inviteEvents[0];
+  }
+  if (!ev) return [];
+
+  const customTpls = ev.pdfTemplates || [];
+  const activeTplObj = customTpls.find(t => 
+    t.id === subWorkspaceId || 
+    t.name === subWorkspaceId || 
+    (subWorkspaceId && String(t.id).toLowerCase() === String(subWorkspaceId).toLowerCase()) || 
+    (subWorkspaceId && String(t.name).toLowerCase() === String(subWorkspaceId).toLowerCase())
+  );
+  const activeDocId = activeTplObj?.id || subWorkspaceId || "invite";
+
+  // Global guests directory entries
+  const globalGuests = sourcePool.filter(r => r && (r.isGlobalGuest === true || r.formId === "global_guest_directory"));
+
+  const resolveGroups = (contact) => {
+    if (!contact) return ["General Committee"];
+    let masterGroups = [];
+    const gId = contact.globalGuestId || contact.id;
+    if (gId && globalGuests.length > 0) {
+      const masterG = globalGuests.find(g => 
+        g.id === gId || 
+        g.id === `GUEST_${gId}` || 
+        (gId && String(g.id).replace(/\D/g, '') === String(gId).replace(/\D/g, '') && String(gId).replace(/\D/g, '').length >= 4)
+      );
+      if (masterG) {
+        if (Array.isArray(masterG.groups) && masterG.groups.length > 0) masterGroups = masterG.groups;
+        else if (Array.isArray(masterG.Groups) && masterG.Groups.length > 0) masterGroups = masterG.Groups;
+        else if (masterG.Group || masterG.Category) {
+          masterGroups = String(masterG.Group || masterG.Category).split(/[,/|;]+/).map(s => s.trim()).filter(Boolean);
+        }
+      }
+    }
+    let ownGroups = [];
+    if (Array.isArray(contact.groups) && contact.groups.length > 0) ownGroups = contact.groups.map(s => String(s).trim()).filter(Boolean);
+    else if (Array.isArray(contact.Groups) && contact.Groups.length > 0) ownGroups = contact.Groups.map(s => String(s).trim()).filter(Boolean);
+    else {
+      const raw = contact.Group || contact.group || contact.Category || contact.category || contact.Team || contact.team || contact.Designation || contact.designation || contact.Vibhag || "";
+      if (raw && typeof raw === 'string') {
+        ownGroups = raw.split(/[,/|;]+/).map(s => s.trim()).filter(Boolean);
+      }
+    }
+    if (masterGroups.length === 0 && globalGuests.length > 0) {
+      const cName = String(contact['Full Name'] || contact['Participant Name'] || contact.Name || contact.name || '').trim().toLowerCase();
+      if (cName) {
+        const masterByName = globalGuests.find(g => {
+          const gName = String(g['Full Name'] || g.Name || g.name || '').trim().toLowerCase();
+          return gName && (gName === cName || gName.includes(cName) || cName.includes(gName));
+        });
+        if (masterByName) {
+          if (Array.isArray(masterByName.groups) && masterByName.groups.length > 0) masterGroups = masterByName.groups;
+          else if (Array.isArray(masterByName.Groups) && masterByName.Groups.length > 0) masterGroups = masterByName.Groups;
+          else if (masterByName.Group || masterByName.Category) {
+            masterGroups = String(masterByName.Group || masterByName.Category).split(/[,/|;]+/).map(s => s.trim()).filter(Boolean);
+          }
+        }
+      }
+    }
+    const combined = Array.from(new Set([...ownGroups, ...masterGroups])).filter(Boolean);
+    return combined.length > 0 ? combined : ["General Committee"];
+  };
+
+  const baseMatched = sourcePool.filter(r => {
+    if (!r) return false;
+    if (r.deleted === true || r.deleted === "true" || r.isDeleted === true || r.deletedGuest === true || r.isTrash === true || r.inTrash === true || r.status === "Deleted" || r.Status === "Deleted") return false;
+
+    // Exclude the raw global directory master pool entry itself from being an event invitee
+    if (r.isGlobalGuest === true || r.formId === "global_guest_directory") return false;
+
+    // Donor Workspaces
+    if (ev.isDonorWorkspace) {
+      if (r.isDonor) return r.eventId === ev.id || r.eventName === ev.title || !r.eventId;
+      if (r.Status === "Approved" || r.status === "Approved") {
+        let evName = r.eventName || r.eventTitle || r.eventId;
+        return r.eventId === ev.id || evName === ev.title || evName === ev.titleGu;
+      }
+      return false;
+    }
+
+    // Must be an Approved registration, or a special/committee guest entry
+    const isSpecialOrApproved = r.Status === "Approved" || r.status === "Approved" || r.isSpecialGuest === true || Boolean(r.globalGuestId) || String(r['Transaction ID'] || r.transactionId || r.id || '').startsWith('GST-');
+    if (!isSpecialOrApproved) return false;
+
+    // Check workspace event membership
+    let evName = String(r.eventName || r.eventTitle || r.eventId || '').trim().toLowerCase();
+    let rEvId = String(r.eventId || '').trim().toLowerCase();
+    const evTitleClean = String(ev.title || '').trim().toLowerCase();
+    const evIdClean = (ev.id && ev.id !== "undefined") ? String(ev.id).trim().toLowerCase() : "";
+
+    const matchesEvent = !eventId ||
+      (evTitleClean && (evName === evTitleClean || evName.includes(evTitleClean) || evTitleClean.includes(evName))) ||
+      (evIdClean && (rEvId === evIdClean || evName === evIdClean)) ||
+      (r.targetTemplateId && (r.targetTemplateId === activeDocId || (activeTplObj?.name && r.targetTemplateId === activeTplObj.name))) ||
+      (Array.isArray(r.assignedDocTypes) && (r.assignedDocTypes.includes(activeDocId) || (activeTplObj?.name && r.assignedDocTypes.includes(activeTplObj.name))));
+    if (!matchesEvent) return false;
+
+    // ── Template / Sub-Workspace Contact Isolation ──
+    if (activeDocId !== "invite" && activeDocId !== "cert") {
+      const targetAudienceMode = activeTplObj?.targetAudience || "assigned"; // "assigned" | "group" | "all" | "event"
+      if (targetAudienceMode === "all" || targetAudienceMode === "event") return true;
+
+      // 1. Direct template assignment
+      const isAssigned = r.targetTemplateId === activeDocId || 
+        (activeTplObj?.id && r.targetTemplateId === activeTplObj.id) || 
+        (activeTplObj?.name && r.targetTemplateId === activeTplObj.name) || 
+        (Array.isArray(r.assignedDocTypes) && (
+          r.assignedDocTypes.includes(activeDocId) || 
+          (activeTplObj?.id && r.assignedDocTypes.includes(activeTplObj.id)) || 
+          (activeTplObj?.name && r.assignedDocTypes.includes(activeTplObj.name))
+        ));
+      if (isAssigned) return true;
+
+      // 2. Group audience mode: match targetGroup or template name
+      const targetGroupName = String(activeTplObj?.targetGroup || activeTplObj?.name || "").trim().toLowerCase();
+      const rGroups = resolveGroups(r).map(g => String(g).trim().toLowerCase());
+      if (targetGroupName) {
+        if (rGroups.some(g => g === targetGroupName || g.includes(targetGroupName) || targetGroupName.includes(g))) return true;
+      }
+
+      // 3. Check if contact record text mentions targetGroup or template name
+      const rText = JSON.stringify(r).toLowerCase();
+      if (targetGroupName && rText.includes(targetGroupName)) return true;
+
+      return false;
+    }
+
+    if (activeDocId === "invite") {
+      if (r.targetTemplateId && r.targetTemplateId !== "invite" && r.targetTemplateId !== "cert") {
+        if (!Array.isArray(r.assignedDocTypes) || !r.assignedDocTypes.includes("invite")) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  });
+
+  return baseMatched;
+};
+
+export const formatWhatsAppTemplateForContact = ({ tplString, reg, allRegs = [], C = {}, eventScope = null, vibhagScope = null }) => {
+  if (!tplString || !reg) return "";
+
+  // Merge with master global guest profile if needed
+  const globalGuests = Array.isArray(allRegs) ? allRegs.filter(r => r && (r.isGlobalGuest === true || r.formId === "global_guest_directory")) : [];
+  let master = null;
+  if (reg.globalGuestId) {
+    master = globalGuests.find(x => x.id === reg.globalGuestId || x.id === `GUEST_${reg.globalGuestId}`);
+  }
+  if (!master && reg.id) {
+    master = globalGuests.find(x => x.id === reg.id || x.globalGuestId === reg.id);
+  }
+  const merged = master ? { ...master, ...reg } : { ...reg };
+
+  const rawParticipantName = String(merged['Participant Name'] || merged['Full Name'] || merged['Student Name'] || merged['Candidate Name'] || merged['Name'] || merged.name || merged['Submitted By'] || 'Participant').replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
+  const rawContactName = String(merged['Submitted By'] || merged['Contact User Name'] || merged['Contact Person'] || merged['Contact Name'] || merged['Submitter Name'] || merged['Full Name'] || 'Member').replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
+  const rawMobile = String(merged['Mobile Number'] || merged.Mobile || merged.mobile || merged.submitterMob || merged['Alternate Mobile Number'] || merged.phone || '').replace(/\D/g, '').slice(-10);
+  const txnId = merged['Transaction ID'] || merged.transactionId || merged.id || 'N/A';
+  const vibhag = merged['Vibhag'] || merged.vibhag || merged['MMP Vibhag'] || merged['Vibhag New'] || (master ? (master.vibhag || master['Vibhag']) : 'All Vibhags');
+  const designation = String(merged['Designation'] || merged.designation || merged['Designation / Role'] || merged['Post'] || merged.role || (master ? (master.Designation || master.designation) : '') || '').trim();
+  
+  // Resolve contact groups
+  let groupsArr = [];
+  if (Array.isArray(merged.groups) && merged.groups.length > 0) groupsArr = merged.groups;
+  else if (Array.isArray(merged.Groups) && merged.Groups.length > 0) groupsArr = merged.Groups;
+  else if (merged.group || merged.Group || merged.category || merged.Category) {
+    groupsArr = String(merged.group || merged.Group || merged.category || merged.Category).split(/[,/|;]+/).map(s => s.trim()).filter(Boolean);
+  } else if (master) {
+    if (Array.isArray(master.groups) && master.groups.length > 0) groupsArr = master.groups;
+    else if (master.group || master.Group) groupsArr = String(master.group || master.Group).split(/[,/|;]+/).map(s => s.trim()).filter(Boolean);
+  }
+  const contactGroup = groupsArr.length > 0 ? groupsArr.join(", ") : (merged.vibhag || merged.Vibhag || "General Committee");
+  const email = merged['Email Address'] || merged.Email || merged.email || (master ? master.email : "") || "";
+  const address = merged.Address || merged.address || (master ? master.address : "") || "";
+  const subWsName = merged.activeDocTpl?.name || merged.customDocName || "Official Pass";
+
+  const stream = merged['Stream / Class'] || merged['Stream'] || merged['Course'] || 'N/A';
+  const percentage = merged['% Obtained'] || merged.percentage || merged['Marks / Percentage'] || 'N/A';
+  const remarks = merged['Remarks'] || merged.remarks || 'Application under review';
+
+  const chosenScope = eventScope || merged.targetEventId || "education2026";
+  const chosenVibhag = (vibhagScope && vibhagScope !== 'auto') 
+    ? vibhagScope 
+    : (merged.vibhagScope === 'all' ? 'all' : (merged.vibhagScope || vibhag));
+  const baseUrl = `${C?.whatsAppPortalUrl || "https://www.mmp-cwc.com/"}`.replace(/\/?$/, '');
+  const certUrl = `${baseUrl}/?cert=${encodeURIComponent(txnId || "")}`;
+  const inviteUrl = `${baseUrl}/?invite=${encodeURIComponent(txnId || "")}`;
+  const docUrl = merged.customDocId ? `${baseUrl}/?doc=${encodeURIComponent(merged.customDocId)}&pass=${encodeURIComponent(txnId || "")}` : null;
+  const portalName = C?.trust?.name || "Mumbai Meghwal Panchayat & Vidya Gohil Trust";
+
+  const eventObj = (C?.events || []).find(e => e.id === merged.eventId || e.title === merged.eventName || e.title === merged.eventTitle);
+  const evTitle = eventObj?.title || merged.eventName || merged.eventTitle || merged.eventId || "Event";
+  const evDate = eventObj?.date ? `${eventObj.date} ${eventObj.month || ''}`.trim() : (merged.Date || merged.eventDate || "2026");
+  const evVenue = eventObj?.location || merged.location || merged.venue || "Mumbai";
+
+  const _nowObj = new Date();
+  const _pad = (n) => String(n).padStart(2, '0');
+  const curDate = `${_pad(_nowObj.getDate())}-${_pad(_nowObj.getMonth() + 1)}-${_nowObj.getFullYear()}`;
+  const curTime = _nowObj.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+  const curDateTime = `${curDate}, ${curTime}`;
+
+  let processed = (tplString || "")
+    .replace(/\{PORTAL_NAME\}/g, portalName)
+    .replace(/\{WEBSITE_NAME\}/g, portalName)
+    .replace(/\{TRUST_NAME\}/g, portalName)
+    .replace(/\{PORTAL_TITLE\}/g, portalName)
+    .replace(/\{EVENT_NAME\}/g, evTitle)
+    .replace(/\{EVENT_TITLE\}/g, evTitle)
+    .replace(/\{EVENT\}/g, evTitle)
+    .replace(/\{CURRENT_DATE\}/g, curDate)
+    .replace(/\{TODAY_DATE\}/g, curDate)
+    .replace(/\{TODAY\}/g, curDate)
+    .replace(/\{CURRENT_TIME\}/g, curTime)
+    .replace(/\{TIME\}/g, curTime)
+    .replace(/\{NOW_TIME\}/g, curTime)
+    .replace(/\{CURRENT_DATETIME\}/g, curDateTime)
+    .replace(/\{DATE_TIME\}/g, curDateTime)
+    .replace(/\{NOW\}/g, curDateTime)
+    .replace(/\{DATE\}/g, evDate)
+    .replace(/\{EVENT_DATE\}/g, evDate)
+    .replace(/\{VENUE\}/g, evVenue)
+    .replace(/\{LOCATION\}/g, evVenue)
+    .replace(/\{CONTACT_GROUP\}/g, contactGroup)
+    .replace(/\{GROUP\}/g, contactGroup)
+    .replace(/\{GROUPS\}/g, contactGroup)
+    .replace(/\{COMMITTEE_GROUP\}/g, contactGroup)
+    .replace(/\{DESIGNATION\}/g, designation)
+    .replace(/\{ROLE\}/g, designation)
+    .replace(/\{INVITEE_NAME\}/g, rawParticipantName)
+    .replace(/\{INVITEE\}/g, rawParticipantName)
+    .replace(/\{CONTACT_USER_NAME\}/g, rawContactName)
+    .replace(/\{CONTACT_NAME\}/g, rawContactName)
+    .replace(/\{CONTACT_PERSON\}/g, rawContactName)
+    .replace(/\{SUBMITTER_NAME\}/g, rawContactName)
+    .replace(/\{PARTICIPANT_NAME\}/g, rawParticipantName)
+    .replace(/\{PARTICIPATER_NAME\}/g, rawParticipantName)
+    .replace(/\{MEMBER_NAME\}/g, rawParticipantName)
+    .replace(/\{STUDENT_NAME\}/g, rawParticipantName)
+    .replace(/\{USER_NAME\}/g, rawContactName)
+    .replace(/\{NAME\}/g, rawParticipantName)
+    .replace(/\{TXN_ID\}/g, txnId || "N/A")
+    .replace(/\{PASS_ID\}/g, txnId || "N/A")
+    .replace(/\{ENTRY_PASS_ID\}/g, txnId || "N/A")
+    .replace(/\{VIBHAG\}/g, vibhag || "All Vibhags")
+    .replace(/\{VIBHAG_NAME\}/g, vibhag || "All Vibhags")
+    .replace(/\{SUB_WORKSPACE_NAME\}/g, subWsName)
+    .replace(/\{TEMPLATE_NAME\}/g, subWsName)
+    .replace(/\{EMAIL\}/g, email)
+    .replace(/\{ADDRESS\}/g, address)
+    .replace(/\{PHONE\}/g, rawMobile || "")
+    .replace(/\{STREAM\}/g, stream || "N/A")
+    .replace(/\{PERCENTAGE\}/g, percentage || "N/A")
+    .replace(/\{REMARKS\}/g, remarks || "Application under review")
+    .replace(/\{MOBILE\}/g, rawMobile || "")
+    .replace(/\{CERTIFICATE_LINK\}/g, certUrl)
+    .replace(/\{CERTIFICATE_URL\}/g, certUrl)
+    .replace(/\{INVITE_PDF_LINK\}/g, inviteUrl)
+    .replace(/\{INVITE_LINK\}/g, inviteUrl)
+    .replace(/\{PASS_LINK\}/g, docUrl || inviteUrl)
+    .replace(/\{PORTAL_URL\}/g, baseUrl)
+    .replace(/\{WEBSITE_URL\}/g, baseUrl)
+    .replace(/\{WEBSITE_HOME\}/g, baseUrl)
+    .replace(/\{HELPLINE_PHONES\}/g, C?.whatsAppHelpline || C?.trust?.phone || "+91 9820785209 / +91 9967821964")
+    .replace(/\{ADMIN_MOBILE\}/g, C?.whatsAppHelpline || C?.trust?.phone || "+91 9820785209");
+
+  const activeTargetScope = (chosenScope && chosenScope !== 'current') ? chosenScope : 'education2026';
+  const activeScopeStats = typeof generateEventScopedStats === 'function'
+    ? generateEventScopedStats(merged, activeTargetScope, allRegs, chosenVibhag)
+    : {};
+  const eduStats = typeof generateEventScopedStats === 'function'
+    ? generateEventScopedStats(merged, 'education2026', allRegs, chosenVibhag)
+    : activeScopeStats;
+
+  processed = processed
+    .replace(/\{TOTAL_STUDENTS_COUNT\}/g, activeScopeStats.totalStudentsCount || 0)
+    .replace(/\{TOTAL_REGISTRATIONS\}/g, activeScopeStats.totalStudentsCount || 0)
+    .replace(/\{TOTAL_COUNT\}/g, activeScopeStats.totalStudentsCount || 0)
+    .replace(/\{APPROVED_STUDENTS_COUNT\}/g, activeScopeStats.approvedStudentsCount || 0)
+    .replace(/\{APPROVED_COUNT\}/g, activeScopeStats.approvedStudentsCount || 0)
+    .replace(/\{PENDING_STUDENTS_COUNT\}/g, activeScopeStats.pendingStudentsCount || 0)
+    .replace(/\{PENDING_COUNT\}/g, activeScopeStats.pendingStudentsCount || 0)
+    .replace(/\{VIBHAG_STUDENT_COUNT\}/g, activeScopeStats.vibhagStudentCount || 0)
+    .replace(/\{VIBHAG_APPROVED_COUNT\}/g, activeScopeStats.vibhagApprovedCount || 0)
+    .replace(/\{VIBHAG_STUDENT_SUMMARY\}/g, activeScopeStats.vibhagStudentSummary || "")
+    .replace(/\{EVENT_STUDENT_SUMMARY\}/g, activeScopeStats.eventRegistrationSummary || "")
+    .replace(/\{EVENT_REGISTRATION_SUMMARY\}/g, activeScopeStats.eventRegistrationSummary || "")
+    .replace(/\{REGISTRATION_STATS\}/g, activeScopeStats.eventRegistrationSummary || "")
+    .replace(/\{VIBHAG_STUDENT_LIST\}/g, activeScopeStats.vibhagStudentList || "")
+    .replace(/\{STUDENT_LIST\}/g, activeScopeStats.vibhagStudentList || "")
+    .replace(/\{STUDENT_DETAILS_LIST\}/g, activeScopeStats.studentDetailsList || "")
+    .replace(/\{DETAILED_STUDENT_LIST\}/g, activeScopeStats.studentDetailsList || "")
+    .replace(/\{ALL_STUDENTS_LIST\}/g, activeScopeStats.allStudentsList || "")
+    .replace(/\{EDU_VIBHAG_STUDENT_LIST\}/g, eduStats.vibhagStudentList || "")
+    .replace(/\{EDU2026_VIBHAG_STUDENT_LIST\}/g, eduStats.vibhagStudentList || "")
+    .replace(/\{EDUCATION_2026_VIBHAG_STUDENT_LIST\}/g, eduStats.vibhagStudentList || "")
+    .replace(/\{EDU_VIBHAG_STUDENT_SUMMARY\}/g, eduStats.vibhagStudentSummary || "")
+    .replace(/\{EDU_ALL_STUDENTS_LIST\}/g, eduStats.allStudentsList || "")
+    .replace(/\{EDU_TOTAL_STUDENTS_COUNT\}/g, eduStats.totalStudentsCount || 0);
+
+  const monsoonStats = typeof generateEventScopedStats === 'function'
+    ? generateEventScopedStats(merged, 'Monsoon', allRegs, chosenVibhag)
+    : null;
+  if (monsoonStats) {
+    processed = processed
+      .replace(/\{MONSOON_VIBHAG_STUDENT_LIST\}/g, monsoonStats.vibhagStudentList || "")
+      .replace(/\{MONSOON_STUDENT_LIST\}/g, monsoonStats.vibhagStudentList || "")
+      .replace(/\{MONSOON_VIBHAG_LIST\}/g, monsoonStats.vibhagStudentList || "")
+      .replace(/\{MONSOON_VIBHAG_SUMMARY\}/g, monsoonStats.vibhagStudentSummary || "")
+      .replace(/\{MONSOON_ALL_LIST\}/g, monsoonStats.allStudentsList || "")
+      .replace(/\{MONSOON_TOTAL_COUNT\}/g, monsoonStats.totalStudentsCount || 0);
+  }
+
+  // ── Universal Dynamic Pivot Tables & Independent Summaries ──
+  processed = processed.replace(/\{(?:PIVOT|UNIQUE_LIST|INDEPENDENT):[^}]+\}/gi, (match) => {
+    return evaluateUniversalPivotTag(match, { allRegs, guests: globalGuests, team: C?.teamItems || [], donations: C?.donations || [], currentEvent: eventObj, format: "whatsapp" }) || match;
+  });
+  processed = processed
+    .replace(/\{Total Count\}/g, evaluateUniversalPivotTag("{Total Count}", { allRegs, currentEvent: eventObj }))
+    .replace(/\{TOTAL_COUNT\}/g, evaluateUniversalPivotTag("{Total Count}", { allRegs, currentEvent: eventObj }))
+    .replace(/\{Education Total Count\}/g, evaluateUniversalPivotTag("{Education Total Count}", { allRegs }))
+    .replace(/\{Contact Groups Total Count\}/g, evaluateUniversalPivotTag("{Contact Groups Total Count}", { allRegs, guests: globalGuests }))
+    .replace(/\{Our Team Total Count\}/g, evaluateUniversalPivotTag("{Our Team Total Count}", { team: C?.teamItems || [] }))
+    .replace(/\{Donation Total Count\}/g, evaluateUniversalPivotTag("{Donation Total Count}", { allRegs }))
+    .replace(/\{Monsoon Total Count\}/g, evaluateUniversalPivotTag("{Monsoon Total Count}", { allRegs }));
+
+  // Universal Dynamic Placeholders: {EVENT_VIBHAG_LIST:Event Name}, {EVENT_SUMMARY:Event Name}, {EVENT_COUNT:Event Name}
+  processed = processed.replace(/\{EVENT_VIBHAG_LIST:([^}]+)\}/gi, (match, evNameArg) => {
+    const s = typeof generateEventScopedStats === 'function' ? generateEventScopedStats(merged, evNameArg.trim(), allRegs, chosenVibhag) : {};
+    return s.vibhagStudentList || "";
+  }).replace(/\{EVENT_VIBHAG_STUDENT_LIST:([^}]+)\}/gi, (match, evNameArg) => {
+    const s = typeof generateEventScopedStats === 'function' ? generateEventScopedStats(merged, evNameArg.trim(), allRegs, chosenVibhag) : {};
+    return s.vibhagStudentList || "";
+  }).replace(/\{EVENT_SUMMARY:([^}]+)\}/gi, (match, evNameArg) => {
+    const s = typeof generateEventScopedStats === 'function' ? generateEventScopedStats(merged, evNameArg.trim(), allRegs, chosenVibhag) : {};
+    return s.eventRegistrationSummary || "";
+  }).replace(/\{EVENT_VIBHAG_SUMMARY:([^}]+)\}/gi, (match, evNameArg) => {
+    const s = typeof generateEventScopedStats === 'function' ? generateEventScopedStats(merged, evNameArg.trim(), allRegs, chosenVibhag) : {};
+    return s.vibhagStudentSummary || "";
+  }).replace(/\{EVENT_ALL_LIST:([^}]+)\}/gi, (match, evNameArg) => {
+    const s = typeof generateEventScopedStats === 'function' ? generateEventScopedStats(merged, evNameArg.trim(), allRegs, chosenVibhag) : {};
+    return s.allStudentsList || "";
+  }).replace(/\{EVENT_COUNT:([^}]+)\}/gi, (match, evNameArg) => {
+    const s = typeof generateEventScopedStats === 'function' ? generateEventScopedStats(merged, evNameArg.trim(), allRegs, chosenVibhag) : {};
+    return s.totalStudentsCount || 0;
+  });
+
+  return processed;
+};
+
+// ── Interactive Frontend Chatbot WhatsApp Dispatcher Card ──
+function ChatbotWhatsAppDispatcherCard({ dispatchData, C, allRegs }) {
+  const { items = [], subWorkspaceName, kbTitle, attachedWhatsAppTplId, eventId, subWorkspaceId } = dispatchData || {};
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const [sendSuccess, setSendSuccess] = useState(false);
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return (
+      <div style={{background:"white",borderRadius:12,border:"1.5px solid #CBD5E1",padding:"16px",marginTop:8,fontSize:".85rem",color:"#64748B",textAlign:"center"}}>
+        ℹ️ No invitees found in <strong>{subWorkspaceName || "this sub-workspace"}</strong>.
+      </div>
+    );
+  }
+
+  const curItem = items[currentIndex] || items[0];
+  const totalCount = items.length;
+
+  const rawParticipantName = curItem.name || curItem['Full Name'] || 'Member';
+  const rawMobile = String(curItem.mobile || curItem['Mobile Number'] || curItem.phone || '').replace(/\D/g, '').slice(-10);
+  const formattedMobile = rawMobile ? `+91 ${rawMobile.slice(0, 5)} ${rawMobile.slice(5)}` : "No Mobile";
+  const vibhag = curItem.vibhag || curItem['Vibhag'] || 'General';
+  const txnId = curItem.txnId || curItem['Transaction ID'] || curItem.id || 'N/A';
+  const messageText = curItem.formattedMessage || "";
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(messageText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSendWhatsApp = () => {
+    if (!rawMobile || rawMobile.length < 10) {
+      alert("Invalid mobile number for recipient: " + rawParticipantName);
+      return;
+    }
+    const cleanMob = `91${rawMobile}`;
+    const waUrl = `https://wa.me/${cleanMob}?text=${encodeURIComponent(messageText)}`;
+    window.open(waUrl, '_blank');
+    setSendSuccess(true);
+    setTimeout(() => setSendSuccess(false), 2500);
+  };
+
+  const handleSendAndNext = () => {
+    handleSendWhatsApp();
+    if (currentIndex < totalCount - 1) {
+      setTimeout(() => {
+        setCurrentIndex(prev => prev + 1);
+      }, 500);
+    }
+  };
+
+  return (
+    <div style={{
+      marginTop: 8,
+      background: "#FFFFFF",
+      borderRadius: 14,
+      border: "1.5px solid #BBF7D0",
+      boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+      overflow: "hidden",
+      display: "flex",
+      flexDirection: "column"
+    }}>
+      {/* Header Banner */}
+      <div style={{
+        background: "linear-gradient(135deg, #15803D, #166534)",
+        color: "white",
+        padding: "10px 14px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 8
+      }}>
+        <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+          <span style={{fontSize:"1.1rem"}}>💌</span>
+          <div style={{fontSize:".84rem",fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+            {kbTitle || subWorkspaceName || "WhatsApp Pass Dispatcher"}
+          </div>
+        </div>
+        <div style={{
+          background: "rgba(255,255,255,0.22)",
+          padding: "3px 10px",
+          borderRadius: 20,
+          fontSize: ".75rem",
+          fontWeight: 800,
+          whiteSpace: "nowrap"
+        }}>
+          {currentIndex + 1} of {totalCount}
+        </div>
+      </div>
+
+      {/* Invitee Details Badge */}
+      <div style={{
+        padding: "12px 14px",
+        background: "#F8FAFC",
+        borderBottom: "1px solid #E2E8F0",
+        display: "flex",
+        flexDirection: "column",
+        gap: 6
+      }}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:6}}>
+          <div style={{fontSize:".92rem",fontWeight:800,color:"#0F172A"}}>
+            {rawParticipantName}
+          </div>
+          <div style={{
+            background: "#DCFCE7",
+            color: "#166534",
+            padding: "2px 8px",
+            borderRadius: 6,
+            fontSize: ".72rem",
+            fontWeight: 800,
+            border: "1px solid #BBF7D0"
+          }}>
+            {txnId}
+          </div>
+        </div>
+
+        <div style={{display:"flex",alignItems:"center",gap:10,fontSize:".76rem",color:"#475569",flexWrap:"wrap"}}>
+          <span style={{display:"flex",alignItems:"center",gap:4,fontWeight:700}}>
+            <span>📱</span> {formattedMobile}
+          </span>
+          <span style={{display:"flex",alignItems:"center",gap:4,fontWeight:700,color:"#15803D"}}>
+            <span>📍</span> {vibhag}
+          </span>
+        </div>
+      </div>
+
+      {/* Message Preview Box */}
+      <div style={{padding: "12px 14px",display:"flex",flexDirection:"column",gap:6}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span style={{fontSize:".72rem",fontWeight:800,color:"#64748B",textTransform:"uppercase",letterSpacing:0.5}}>
+            💬 WhatsApp Message Preview:
+          </span>
+          <button
+            type="button"
+            onClick={handleCopy}
+            style={{
+              background: "none",
+              border: "none",
+              color: copied ? "#15803D" : "#2563EB",
+              fontSize: ".72rem",
+              fontWeight: 800,
+              cursor: "pointer",
+              padding: 0
+            }}
+          >
+            {copied ? "✅ Copied!" : "📋 Copy"}
+          </button>
+        </div>
+
+        <div style={{
+          background: "#FAFDF7",
+          border: "1px solid #E2E8F0",
+          borderRadius: 8,
+          padding: "10px 12px",
+          fontSize: ".75rem",
+          lineHeight: 1.45,
+          color: "#1E293B",
+          maxHeight: 180,
+          overflowY: "auto",
+          whiteSpace: "pre-wrap",
+          fontFamily: "monospace"
+        }}>
+          {messageText}
+        </div>
+      </div>
+
+      {/* Footer Navigation & Actions */}
+      <div style={{
+        padding: "10px 14px",
+        background: "#F8FAFC",
+        borderTop: "1px solid #E2E8F0",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 8,
+        flexWrap: "wrap"
+      }}>
+        {/* Prev / Next Pagination */}
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <button
+            type="button"
+            disabled={currentIndex === 0}
+            onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: "1px solid #CBD5E1",
+              background: currentIndex === 0 ? "#F1F5F9" : "white",
+              color: currentIndex === 0 ? "#94A3B8" : "#334155",
+              fontSize: ".74rem",
+              fontWeight: 700,
+              cursor: currentIndex === 0 ? "not-allowed" : "pointer"
+            }}
+          >
+            ◀ Prev
+          </button>
+          <button
+            type="button"
+            disabled={currentIndex >= totalCount - 1}
+            onClick={() => setCurrentIndex(prev => Math.min(totalCount - 1, prev + 1))}
+            style={{
+              padding: "6px 10px",
+              borderRadius: 6,
+              border: "1px solid #CBD5E1",
+              background: currentIndex >= totalCount - 1 ? "#F1F5F9" : "white",
+              color: currentIndex >= totalCount - 1 ? "#94A3B8" : "#334155",
+              fontSize: ".74rem",
+              fontWeight: 700,
+              cursor: currentIndex >= totalCount - 1 ? "not-allowed" : "pointer"
+            }}
+          >
+            Next ▶ ({currentIndex + 1}/{totalCount})
+          </button>
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <button
+            type="button"
+            onClick={handleSendWhatsApp}
+            style={{
+              padding: "7px 12px",
+              borderRadius: 6,
+              border: "none",
+              background: sendSuccess ? "#15803D" : "#25D366",
+              color: "white",
+              fontSize: ".78rem",
+              fontWeight: 800,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              boxShadow: "0 2px 6px rgba(37,211,102,0.3)"
+            }}
+          >
+            <span>{sendSuccess ? "✅ Sent" : "🟢 Send"}</span>
+          </button>
+
+          {currentIndex < totalCount - 1 && (
+            <button
+              type="button"
+              onClick={handleSendAndNext}
+              style={{
+                padding: "7px 12px",
+                borderRadius: 6,
+                border: "none",
+                background: "#0F766E",
+                color: "white",
+                fontSize: ".78rem",
+                fontWeight: 800,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                boxShadow: "0 2px 6px rgba(15,118,110,0.3)"
+              }}
+              title="Send to current contact and advance to next contact"
+            >
+              <span>Send & Next ➔</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+// ── End Shared Sub-Workspace Utilities ──
+
 function ChatbotAccessManager({ C, setC, auth }) {
   const [activeTab, setActiveTab] = useState("users"); // "users" | "kb"
   const [accessScope, setAccessScope] = useState("individual"); // Default to "individual" (Mobile/Txn only)
@@ -15580,57 +18090,229 @@ function ChatbotAccessManager({ C, setC, auth }) {
   const [allRegisteredUsers, setAllRegisteredUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [searchFilter, setSearchFilter] = useState("");
+  const [selectedWhatsAppTplId, setSelectedWhatsAppTplId] = useState("tpl_edu_appeal");
+  const [cmdColFilter, setCmdColFilter] = useState("all");
+  const [titleColFilter, setTitleColFilter] = useState("all");
+  const [answerColFilter, setAnswerColFilter] = useState("all");
+  const [statusColFilter, setStatusColFilter] = useState("all");
 
   // Default Knowledge Base entries
   const DEFAULT_KB = [
     {
       id: "kb_events",
+      order: 1,
       cmd: "/events",
       icon: "🎓",
       title: "Upcoming Education Felicitation 2026 events",
       answer: "🎓 **Education Felicitation 2026 - Mumbai Meghwal Panchayat & Vidya Gohil Trust**\n\n• **Event**: Annual Student Education Felicitation 2026\n• **Eligibility**: Students scoring 50%+ in 10th, 12th, Degree, Diploma & Post-Graduation\n• **Registration Portal**: Online via website Events section\n• **Venue & Date**: Mumbai (To be officially announced soon)\n• **Required Documents**: Marksheet & Passport Photo\n\nFor assistance with registration, contact your Vibhag Head.",
       enabled: true,
-      adminOnly: false
-    },
-    {
-      id: "kb_edu_committee",
-      cmd: "/edu_committee",
-      icon: "👥",
-      title: "Education Committee Members",
-      answer: "👥 **Education Felicitation 2026 Committee Members**:\n\n• **Pradeep Parmar** — Trustee / Lead Coordinator (+91 9820785209)\n• **Keshav Wagh** — Lower Parel Head (+91 9967821964)\n• **Ashwin Kataria** — Ramdev Nagar Head (+91 8082234187)\n• **Samiksha Chudasama** — Committee Member (+91 7977561920)\n• **Dinesh Sondarva** — Mahalaxmi Head (+91 8779227886)\n• **Khushi Jogadiya** — Pratiksha Nagar Head (+91 8591563577)",
-      enabled: true,
+      roleAccess: "public",
       adminOnly: false
     },
     {
       id: "kb_cwc_committee",
+      order: 13,
       cmd: "/cwc_committee",
       icon: "🏛️",
       title: "CWC Committee Members",
-      answer: "🏛️ **Central Working Committee (CWC) Members**:\n\n• **President**: MMP Central Leadership\n• **General Secretary**: CWC Executive\n• **Treasurer / Financial Head**: Trust Executive\n• **Coordination Team**: Central Vibhag Team\n\n*(You can edit full member details & phone numbers in Admin Panel)*",
+      answer: "🏛️ **Central Working Committee (CWC) Members**:\n\n• **President**: Ravi Dharia - President MMP CWC\n• **General Secretary**: CWC Executive\n• **Treasurer / Financial Head**: Trust Executive\n• **Coordination Team**: Central Vibhag Team\n\n*(You can edit full member details & phone numbers in Admin Panel)*",
       enabled: true,
+      roleAccess: "public",
       adminOnly: false
     },
     {
       id: "kb_donate",
+      order: 12,
       cmd: "/donate",
       icon: "💰",
       title: "80G Tax Donations & Bank Details",
       answer: "💰 **Donations & 80G Tax Exemption**:\n\n• Vidya Gohil Charitable Trust offers **80G Tax Benefits** for all eligible donations under Indian Income Tax regulations.\n• You can donate online securely via Razorpay (UPI, Google Pay, PhonePe, Cards, NetBanking) on our **Donate** page.\n• Automated 80G tax receipts and 10BE acknowledgement certificates are provided.",
-      enabled: false, // Default hidden as per user request for MMP
-      adminOnly: false
+      enabled: true,
+      roleAccess: "public",
+      adminOnly: false,
+      attachedWhatsAppTplId: "tpl_general_donation"
     },
     {
       id: "kb_contact",
+      order: 14,
       cmd: "/contact",
       icon: "📞",
       title: "Trust Helpline & Office Contacts",
       answer: "📞 **Trust Office & Helpline Contacts**:\n\n• **Office**: Mumbai, Maharashtra\n• **Email**: info@mmp-cwc-new.com\n• **Helpline Mobile**: +91 9820785209 / +91 9967821964\n• **Timings**: 10:00 AM – 7:00 PM (Mon – Sat)",
       enabled: true,
+      roleAccess: "public",
       adminOnly: false
+    },
+    {
+      id: "kb_check",
+      order: 7,
+      cmd: "/check",
+      icon: "🔍",
+      title: "Check Application Status",
+      answer: "🔍 **Check Application Status**:\n\nPlease enter your **Transaction ID (e.g. VG-7, EDU26-2)** or **Registered Mobile Number** to look up your live status.",
+      enabled: true,
+      roleAccess: "public",
+      adminOnly: false
+    },
+    {
+      id: "kb_donation_update",
+      order: 11,
+      cmd: "/donation update",
+      icon: "✍️",
+      title: "Record Offline Donation",
+      answer: "✍️ **Record Offline Donation**:\n\nUse the interactive form below to record cash, cheque, or direct bank transfer donations with instant database syncing.",
+      enabled: true,
+      roleAccess: "donation_collector",
+      adminOnly: true,
+      attachedFormId: "builtin_offline_donation",
+      storageDestination: "donations"
+    },
+    {
+      id: "kb_donationsummary",
+      order: 7,
+      cmd: "/don_summary",
+      icon: "📊",
+      title: "Donation Summary (Vibhag-wise Collections)",
+      answer: "📊 **Donation Summary Dashboard**: Real-time breakdown of total collections, online Razorpay vs offline cash/cheque splits, and Vibhag-by-Vibhag financial metrics.",
+      enabled: true,
+      roleAccess: "donation_collector",
+      adminOnly: true,
+      attachedWhatsAppTplId: "tpl_donor_summary"
+    },
+    {
+      id: "kb_donerlist",
+      order: 8,
+      cmd: "/don_list",
+      icon: "📋",
+      title: "Donor Registry List & WhatsApp Broadcast",
+      answer: "📋 **Person-wise Donor Registry**: Numbered list of individual donors, amounts, Vibhags, receipt numbers, and 1-click WhatsApp broadcast generator.",
+      enabled: true,
+      roleAccess: "donation_collector",
+      adminOnly: true,
+      attachedWhatsAppTplId: "tpl_edu_appeal"
+    },
+    {
+      id: "kb_all",
+      order: 4,
+      cmd: "/all",
+      icon: "📈",
+      title: "Summary of ALL Student Registrations",
+      answer: "📈 **All Registrations Summary**:\n\nLive counts and status metrics across all Vibhags and programs.",
+      enabled: true,
+      roleAccess: "vibhag_admin",
+      adminOnly: true
+    },
+    {
+      id: "kb_vibhag",
+      order: 8,
+      cmd: "/vibhag",
+      icon: "📍",
+      title: "Summary by Vibhag #",
+      answer: "📍 **Vibhag-wise Analytics**:\n\nSelect or enter a specific Vibhag (e.g. 10 MAHALAXMI, 15 RAMDEV NAGAR) to see localized registration data.",
+      enabled: true,
+      roleAccess: "vibhag_admin",
+      adminOnly: true
+    },
+    {
+      id: "kb_pending",
+      order: 5,
+      cmd: "/pending",
+      icon: "⏳",
+      title: "Pending Review Registrations",
+      answer: "⏳ **Pending Applications**:\n\nList of student registrations currently awaiting committee document verification.",
+      enabled: true,
+      roleAccess: "vibhag_admin",
+      adminOnly: true
+    },
+    {
+      id: "kb_approved",
+      order: 6,
+      cmd: "/approved",
+      icon: "🟢",
+      title: "Approved Registrations List",
+      answer: "🟢 **Approved Applications**:\n\nList of verified and confirmed student applicants.",
+      enabled: true,
+      roleAccess: "vibhag_admin",
+      adminOnly: true
     }
   ];
 
-  const kbList = Array.isArray(C.chatbotKnowledgeBase) && C.chatbotKnowledgeBase.length > 0 ? C.chatbotKnowledgeBase : DEFAULT_KB;
+  // Merge saved knowledge base by unique ID so edits, renames, and deletions persist 100% reliably
+  const rawKb = Array.isArray(C.chatbotKnowledgeBase) ? C.chatbotKnowledgeBase : [];
+  const kbMap = new Map();
+  DEFAULT_KB.forEach(item => kbMap.set(item.id, { ...item }));
+
+  const SYSTEM_FIXED_CMDS = {
+    "kb_events": "/Edu_events",
+    "kb_edu_committee": "/Edu_committee",
+    "kb_edu_eligibility": "/Edu_eligibility",
+    "kb_all": "/Edu_all",
+    "kb_pending": "/Edu_pending",
+    "kb_approved": "/Edu_approved",
+    "kb_check": "/check",
+    "kb_vibhag": "/vibhag",
+    "kb_donationsummary": "/don_summary",
+    "kb_donerlist": "/don_list",
+    "kb_donation_update": "/don_entry",
+    "kb_donationupdate": "/don_entry",
+    "kb_donate": "/don_80g",
+    "kb_cwc_committee": "/cwc_committee",
+    "kb_contact": "/contact"
+  };
+
+  rawKb.forEach(item => {
+    if (item && item.id) {
+      const existing = kbMap.get(item.id) || {};
+      let correctCmd = item.cmd;
+      
+      // If a command was accidentally overwritten with a duplicate (e.g. /donner or /education)
+      const isDuplicateConflict = item.cmd === "/donner" || item.cmd === "/education" || item.cmd === "/Education";
+      if (SYSTEM_FIXED_CMDS[item.id] && (!item.cmd || isDuplicateConflict)) {
+        correctCmd = SYSTEM_FIXED_CMDS[item.id];
+      }
+      // Ensure distinct descriptive answers for system cards
+      let customAnswer = item.answer;
+      if (item.id === "kb_donationsummary" && (!item.answer || item.answer.includes("Live Donor Registry") || item.answer.includes("Live Donation Collection Summary"))) {
+        customAnswer = "📊 **Donation Summary Dashboard**: Real-time breakdown of total collections, online Razorpay vs offline cash/cheque splits, and Vibhag-by-Vibhag financial metrics.";
+      } else if (item.id === "kb_donerlist" && (!item.answer || item.answer.includes("Live Donation Collection Summary") || item.answer.includes("Live Donor Registry"))) {
+        customAnswer = "📋 **Person-wise Donor Registry**: Numbered list of individual donors, amounts, Vibhags, receipt numbers, and 1-click WhatsApp broadcast generator.";
+      }
+      kbMap.set(item.id, { ...existing, ...item, cmd: correctCmd || existing.cmd, answer: customAnswer || item.answer || existing.answer });
+    } else if (item && item.cmd) {
+      const fallbackId = "kb_" + item.cmd.replace(/\W/g, "");
+      const existing = kbMap.get(fallbackId) || {};
+      kbMap.set(fallbackId, { id: fallbackId, ...existing, ...item });
+    }
+  });
+  const kbList = Array.from(kbMap.values()).map((item, idx) => ({
+    ...item,
+    order: item.order !== undefined && item.order !== null && !isNaN(Number(item.order)) ? Number(item.order) : (idx + 1)
+  })).sort((a, b) => (a.order || 999) - (b.order || 999));
+
+  const uniqueCmds = Array.from(new Set(kbList.map(k => (k.cmd || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const uniqueTitles = Array.from(new Set(kbList.map(k => (k.title || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+
+  const filteredKbList = kbList.filter(item => {
+    if (cmdColFilter && cmdColFilter !== "all") {
+      if ((item.cmd || "").trim().toLowerCase() !== cmdColFilter.toLowerCase()) return false;
+    }
+    if (titleColFilter && titleColFilter !== "all") {
+      if ((item.title || "").trim().toLowerCase() !== titleColFilter.toLowerCase()) return false;
+    }
+    if (answerColFilter && answerColFilter !== "all") {
+      if (answerColFilter === "form" && !item.attachedFormId) return false;
+      if (answerColFilter === "whatsapp" && !item.attachedWhatsAppTplId) return false;
+      if (answerColFilter === "text_only" && (item.attachedFormId || item.attachedWhatsAppTplId)) return false;
+    }
+    if (statusColFilter !== "all") {
+      if (statusColFilter === "visible" && item.enabled === false) return false;
+      if (statusColFilter === "hidden" && item.enabled !== false) return false;
+      if (statusColFilter === "public" && item.roleAccess && item.roleAccess !== "public") return false;
+      if (statusColFilter === "donation_collector" && item.roleAccess !== "donation_collector") return false;
+      if (statusColFilter === "admin" && (!item.adminOnly || item.roleAccess === "public")) return false;
+    }
+    return true;
+  });
 
   // New Q&A Form State
   const [editingKbId, setEditingKbId] = useState(null);
@@ -15640,7 +18322,12 @@ function ChatbotAccessManager({ C, setC, auth }) {
     title: "",
     answer: "",
     enabled: true,
-    adminOnly: false
+    adminOnly: false,
+    attachedFormId: "",
+    storageDestination: "donations",
+    roleAccess: "public",
+    attachedWhatsAppTplId: "",
+    targetEventIds: ["all"]
   });
 
   const VIBHAG_LIST = [
@@ -15746,6 +18433,11 @@ function ChatbotAccessManager({ C, setC, auth }) {
           });
         });
 
+        if (typeof window !== 'undefined' && Array.isArray(regsList) && regsList.length > 0) {
+          window.__MMP_ALL_REGS_RAW__ = regsList;
+          window.__MMP_REGS_CACHE__ = regsList;
+          window.__MMP_INVITE_REGS__ = regsList;
+        }
         setAllRegisteredUsers(Array.from(map.values()));
       } catch (e) {
         console.error("Failed to load registered users for chatbot:", e);
@@ -15772,7 +18464,7 @@ function ChatbotAccessManager({ C, setC, auth }) {
     if (setC) setC(newC);
     try {
       await fbSave(newC, auth?.idToken);
-      alert("Chatbot Knowledge Base saved successfully!");
+      alert("✅ Question & Slash Command saved successfully to database!");
     } catch(e) {
       alert("Failed to save to database: " + e.message);
     }
@@ -15862,7 +18554,34 @@ function ChatbotAccessManager({ C, setC, auth }) {
     saveKnowledgeBaseToFirebase(updated);
   };
 
-  const handleSaveKbForm = (e) => {
+  const moveKbOrder = async (kbId, direction) => {
+    const curIdx = kbList.findIndex(k => k.id === kbId);
+    if (curIdx === -1) return;
+    const targetIdx = direction === "up" ? curIdx - 1 : curIdx + 1;
+    if (targetIdx < 0 || targetIdx >= kbList.length) return;
+
+    const listCopy = [...kbList];
+    const temp = listCopy[curIdx];
+    listCopy[curIdx] = listCopy[targetIdx];
+    listCopy[targetIdx] = temp;
+
+    const reordered = listCopy.map((item, idx) => ({
+      ...item,
+      order: idx + 1
+    }));
+
+    await saveKnowledgeBaseToFirebase(reordered);
+  };
+
+  const updateKbOrderDirect = async (kbId, newOrderVal) => {
+    const num = parseInt(newOrderVal, 10);
+    if (isNaN(num)) return;
+    const updated = kbList.map(item => item.id === kbId ? { ...item, order: num } : item)
+      .sort((a, b) => (a.order || 999) - (b.order || 999));
+    await saveKnowledgeBaseToFirebase(updated);
+  };
+
+  const handleSaveKbForm = async (e) => {
     e.preventDefault();
     let cleanCmd = kbForm.cmd.trim();
     if (!cleanCmd.startsWith("/")) cleanCmd = "/" + cleanCmd;
@@ -15870,19 +18589,54 @@ function ChatbotAccessManager({ C, setC, auth }) {
 
     let updated = [];
     if (editingKbId) {
-      updated = kbList.map(item => item.id === editingKbId ? { ...kbForm, id: editingKbId, cmd: cleanCmd } : item);
+      updated = kbList.map(item => (item.id === editingKbId) ? {
+        ...item,
+        ...kbForm,
+        id: editingKbId,
+        cmd: cleanCmd,
+        title: kbForm.title.trim(),
+        answer: kbForm.answer.trim(),
+        roleAccess: kbForm.roleAccess || "public",
+        adminOnly: kbForm.roleAccess !== "public",
+        attachedWhatsAppTplId: kbForm.attachedWhatsAppTplId || "",
+        attachedFormId: kbForm.attachedFormId || "",
+        storageDestination: kbForm.storageDestination || "donations",
+        connectedEventId: kbForm.connectedEventId || "",
+        connectedSubWorkspaceId: kbForm.connectedSubWorkspaceId || "",
+        connectedSubWorkspaceName: kbForm.connectedSubWorkspaceName || "",
+        targetEventIds: (Array.isArray(kbForm.targetEventIds) && kbForm.targetEventIds.length > 0) ? kbForm.targetEventIds : ["all"]
+      } : item);
     } else {
       const newEntry = {
         ...kbForm,
         id: "kb_" + Date.now(),
-        cmd: cleanCmd
+        cmd: cleanCmd,
+        title: kbForm.title.trim(),
+        answer: kbForm.answer.trim(),
+        roleAccess: kbForm.roleAccess || "public",
+        adminOnly: kbForm.roleAccess !== "public",
+        attachedWhatsAppTplId: kbForm.attachedWhatsAppTplId || "",
+        attachedFormId: kbForm.attachedFormId || "",
+        storageDestination: kbForm.storageDestination || "donations",
+        targetEventIds: (Array.isArray(kbForm.targetEventIds) && kbForm.targetEventIds.length > 0) ? kbForm.targetEventIds : ["all"]
       };
       updated = [...kbList, newEntry];
     }
 
-    saveKnowledgeBaseToFirebase(updated);
+    await saveKnowledgeBaseToFirebase(updated);
     setEditingKbId(null);
-    setKbForm({ cmd: "", icon: "❓", title: "", answer: "", enabled: true, adminOnly: false });
+    setKbForm({
+      cmd: "",
+      icon: "❓",
+      title: "",
+      answer: "",
+      enabled: true,
+      adminOnly: false,
+      attachedFormId: "",
+      storageDestination: "donations",
+      roleAccess: "public",
+      attachedWhatsAppTplId: ""
+    });
   };
 
   const filteredUsers = allRegisteredUsers.filter(u => {
@@ -16082,6 +18836,22 @@ function ChatbotAccessManager({ C, setC, auth }) {
             }}
           >
             🛡️ Restricted Messages & Rules
+          </button>
+          <button
+            onClick={() => setActiveTab("whatsapp")}
+            style={{
+              padding: "8px 14px",
+              borderRadius: 8,
+              fontSize: ".82rem",
+              fontWeight: 800,
+              background: activeTab === "whatsapp" ? "#166534" : "transparent",
+              color: activeTab === "whatsapp" ? "white" : "#166534",
+              border: activeTab === "whatsapp" ? "1px solid #166534" : "1px solid #86EFAC",
+              cursor: "pointer",
+              boxShadow: activeTab === "whatsapp" ? "0 2px 8px rgba(22,101,52,0.3)" : "none"
+            }}
+          >
+            📱 WhatsApp Templates & QR
           </button>
         </div>
       </div>
@@ -16972,7 +19742,19 @@ function ChatbotAccessManager({ C, setC, auth }) {
             </div>
 
             <form onSubmit={handleSaveKbForm} style={{display:"flex",flexDirection:"column",gap:14}}>
-              <div style={{display:"grid",gridTemplateColumns:"100px 160px 1fr 140px",gap:12}}>
+              <div style={{display:"grid",gridTemplateColumns:"70px 90px 160px 1fr 130px",gap:10}}>
+                <div>
+                  <label style={{fontSize:".73rem",fontWeight:800,color:"#1D4ED8",display:"block",marginBottom:4}}># Order:</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={kbForm.order || (editingKbId ? (kbList.find(k=>k.id===editingKbId)?.order || 1) : (kbList.length + 1))}
+                    onChange={e=>setKbForm({...kbForm, order: parseInt(e.target.value, 10) || 1})}
+                    style={{width:"100%",padding:"9px 8px",borderRadius:6,border:"1.5px solid #93C5FD",fontSize:".88rem",fontWeight:800,textAlign:"center",boxSizing:"border-box",background:"#EFF6FF",color:"#1E40AF"}}
+                    title="1 = First, 2 = Second, 3 = Third..."
+                  />
+                </div>
                 <div>
                   <label style={{fontSize:".75rem",fontWeight:700,color:"#475569",display:"block",marginBottom:4}}>Icon:</label>
                   <input
@@ -17071,6 +19853,330 @@ function ChatbotAccessManager({ C, setC, auth }) {
                 />
               </div>
 
+              {/* ── Connect / Filter Target Event(s) ── */}
+              <div style={{background:"#F0F9FF",border:"1.5px solid #BAE6FD",borderRadius:10,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{fontSize:".82rem",fontWeight:800,color:"#0369A1",display:"flex",alignItems:"center",gap:6}}>
+                  <span>🎯</span> Connect / Filter Specific Event(s) Data (Select one or more events to filter chatbot answers):
+                </div>
+
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <div style={{fontSize:".74rem",color:"#0284C7",fontWeight:600}}>
+                    When a user asks this question or executes this slash command, the chatbot response will query and filter data strictly for the selected event(s):
+                  </div>
+
+                  {/* Event Checkboxes */}
+                  <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                    <label style={{display:"inline-flex",alignItems:"center",gap:6,background:"white",padding:"6px 12px",borderRadius:6,border: (!kbForm.targetEventIds || kbForm.targetEventIds.length === 0 || kbForm.targetEventIds.includes('all')) ? "1.5px solid #0284C7" : "1px solid #CBD5E1",fontSize:".78rem",fontWeight:800,cursor:"pointer",color: (!kbForm.targetEventIds || kbForm.targetEventIds.length === 0 || kbForm.targetEventIds.includes('all')) ? "#0369A1" : "#475569"}}>
+                      <input
+                        type="checkbox"
+                        checked={!kbForm.targetEventIds || kbForm.targetEventIds.length === 0 || kbForm.targetEventIds.includes('all')}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setKbForm({ ...kbForm, targetEventIds: ['all'] });
+                          } else {
+                            setKbForm({ ...kbForm, targetEventIds: [] });
+                          }
+                        }}
+                        style={{cursor:"pointer",accentColor:"#0284C7"}}
+                      />
+                      <span>🌐 All Events Combined</span>
+                    </label>
+
+                    {(C.events || []).map(evItem => {
+                      const evKey = evItem.id || evItem.title;
+                      const isSelected = Array.isArray(kbForm.targetEventIds) && kbForm.targetEventIds.includes(evKey);
+                      return (
+                        <label key={evKey} style={{display:"inline-flex",alignItems:"center",gap:6,background: isSelected ? "#E0F2FE" : "white",padding:"6px 12px",borderRadius:6,border: isSelected ? "1.5px solid #0284C7" : "1px solid #CBD5E1",fontSize:".78rem",fontWeight:700,cursor:"pointer",color: isSelected ? "#0369A1" : "#334155"}}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              const cur = Array.isArray(kbForm.targetEventIds) ? kbForm.targetEventIds.filter(x => x !== 'all') : [];
+                              let updated = [];
+                              if (e.target.checked) {
+                                updated = [...cur, evKey];
+                              } else {
+                                updated = cur.filter(x => x !== evKey);
+                              }
+                              if (updated.length === 0) updated = ['all'];
+                              setKbForm({ ...kbForm, targetEventIds: updated });
+                            }}
+                            style={{cursor:"pointer",accentColor:"#0284C7"}}
+                          />
+                          <span>📌 {evItem.title || evItem.id}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+                            {/* ── Connect Sub-Workspace & WhatsApp Pass Dispatcher ── */}
+              <div style={{background:"#FDF2F8",border:"1.5px solid #F472B6",borderRadius:10,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{fontSize:".82rem",fontWeight:800,color:"#9D174D",display:"flex",alignItems:"center",gap:6}}>
+                  <span>💌</span> Connect Sub-Workspace & WhatsApp Dispatcher (Send Passes & Updates from Frontend Chatbot):
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))",gap:12}}>
+                  {/* Sub-Workspace Selector */}
+                  <div>
+                    <label style={{fontSize:".73rem",fontWeight:700,color:"#9D174D",display:"block",marginBottom:3}}>
+                      1. Select Sub-Workspace / Pass Template:
+                    </label>
+                    <select
+                      value={(kbForm.connectedEventId && kbForm.connectedSubWorkspaceId) ? `${kbForm.connectedEventId}:::${kbForm.connectedSubWorkspaceId}` : ""}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (!val) {
+                          setKbForm({ ...kbForm, connectedEventId: "", connectedSubWorkspaceId: "", connectedSubWorkspaceName: "" });
+                          return;
+                        }
+                        const [rawEvId, docId] = val.split(":::");
+                        const evObj = (C.events || []).find(ev => 
+                          (ev.id && ev.id !== "undefined" && ev.id === rawEvId) || 
+                          (ev.title === rawEvId) ||
+                          ((ev.pdfTemplates || []).some(t => t.id === docId || t.name === docId))
+                        );
+                        const evId = (evObj?.id && evObj.id !== "undefined") ? evObj.id : (evObj?.title || rawEvId);
+                        let docName = "Official Invite Letter";
+                        if (docId === 'cert') docName = "Certificate / Receipt";
+                        else if (docId && evObj?.pdfTemplates) {
+                          const t = evObj.pdfTemplates.find(x => x.id === docId);
+                          if (t) docName = t.name;
+                        }
+                        const fullDisplayName = `${evObj?.title || evId} > ${docName}`;
+                        setKbForm({
+                          ...kbForm,
+                          connectedEventId: evId,
+                          connectedSubWorkspaceId: docId,
+                          connectedSubWorkspaceName: fullDisplayName
+                        });
+                      }}
+                      style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1.5px solid #DB2777",fontSize:".84rem",fontWeight:800,background:"white",boxSizing:"border-box",color:"#9D174D",cursor:"pointer"}}
+                    >
+                      <option value="">-- No Sub-Workspace (Standard Text Answer Only) --</option>
+                      {(C.events || []).map(evItem => {
+                        const evId = (evItem.id && evItem.id !== "undefined") ? evItem.id : (evItem.title || "Education Committee");
+                        const evTitle = evItem.title || evItem.id;
+                        const customTpls = evItem.pdfTemplates || [];
+                        return (
+                          <optgroup key={evId} label={`📁 ${evTitle} Workspace`}>
+                            <option value={`${evId}:::invite`}>
+                              {`💌 ${evTitle} ➔ Official Invite Letter`}
+                            </option>
+                            <option value={`${evId}:::cert`}>
+                              {`🎓 ${evTitle} ➔ Certificate / 80G Receipt`}
+                            </option>
+                            {customTpls.map(t => (
+                              <option key={t.id} value={`${evId}:::${t.id}`}>
+                                {`🎟️ ${evTitle} ➔ ${t.name} (Custom Pass / Sub-Workspace)`}
+                              </option>
+                            ))}
+                          </optgroup>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  {/* Target WhatsApp Message Template */}
+                  {kbForm.connectedSubWorkspaceId && (() => {
+                    const selectedEv = (C.events || []).find(e => e.id === kbForm.connectedEventId || e.title === kbForm.connectedEventId);
+                    const associatedTpls = typeof getEventWhatsAppTemplates === 'function' ? getEventWhatsAppTemplates(selectedEv, C) : (selectedEv?.whatsAppTemplates || []);
+                    return (
+                      <div>
+                        <label style={{fontSize:".73rem",fontWeight:700,color:"#9D174D",display:"block",marginBottom:3}}>
+                          2. Select WhatsApp Message Template for Contacts:
+                        </label>
+                        <select
+                          value={kbForm.attachedWhatsAppTplId || ""}
+                          onChange={e => setKbForm({ ...kbForm, attachedWhatsAppTplId: e.target.value })}
+                          style={{width:"100%",padding:"9px 12px",borderRadius:8,border:"1.5px solid #F472B6",fontSize:".84rem",fontWeight:700,background:"white",boxSizing:"border-box",color:"#0F172A",cursor:"pointer"}}
+                        >
+                          <option value="">💌 Default Invitation Pass Message</option>
+
+                          {/* Associated Sub-Workspace WhatsApp Templates (Prioritized) */}
+                          {selectedEv && (
+                            <optgroup label={`📁 ${selectedEv.title || kbForm.connectedEventId} Associated Templates (${associatedTpls.length})`}>
+                              {associatedTpls.map(t => (
+                                <option key={t.id} value={t.id}>
+                                  {`📝 ${t.name} ${t.isDefault ? "(Default)" : ""}`}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+
+                          {/* Other Workspace WhatsApp Templates */}
+                          {(C.events || []).filter(ev => ev.id !== kbForm.connectedEventId && ev.title !== kbForm.connectedEventId).map(evItem => {
+                            const evTitle = evItem.title || evItem.id;
+                            const wsTpls = typeof getEventWhatsAppTemplates === 'function' ? getEventWhatsAppTemplates(evItem, C) : (evItem.whatsAppTemplates || []);
+                            if (!Array.isArray(wsTpls) || wsTpls.length === 0) return null;
+                            return (
+                              <optgroup key={evItem.id || evTitle} label={`📁 ${evTitle} WhatsApp Templates (${wsTpls.length})`}>
+                                {wsTpls.map(t => (
+                                  <option key={t.id} value={t.id}>
+                                    {`📝 ${evTitle} ➔ ${t.name} ${t.isDefault ? "(Default)" : ""}`}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            );
+                          })}
+
+                          {/* Global Broadcast Templates */}
+                          <optgroup label="📢 Global Broadcast Templates">
+                            <option value="tpl_edu_appeal">🎓 Education Felicitation Donation Appeal</option>
+                            <option value="tpl_general_donation">💰 General Community Donation & QR Pay</option>
+                            <option value="tpl_meeting_notice">📢 CWC Committee Meeting Notice</option>
+                            <option value="tpl_donor_summary">📊 Live Vibhag Donation Collection Summary</option>
+                            {(C.whatsappBroadcastTemplates || []).map(t => (
+                              <option key={t.id} value={t.id}>
+                                {`📱 ${t.name || t.id} (Custom Broadcast Template)`}
+                              </option>
+                            ))}
+                          </optgroup>
+                        </select>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {kbForm.connectedSubWorkspaceId && (
+                  <div style={{fontSize:".74rem",color:"#BE185D",lineHeight:1.4,background:"#FFF5F7",padding:"8px 12px",borderRadius:6,border:"1px solid #FCE7F3"}}>
+                    ✨ <strong>Connected Sub-Workspace</strong>: <strong>{kbForm.connectedSubWorkspaceName || kbForm.connectedSubWorkspaceId}</strong><br/>
+                    When users/admins run <strong>{kbForm.cmd || "this command"}</strong> in the frontend chatbot, the bot will load contacts strictly from this sub-workspace and provide 1-tap WhatsApp sending with all live variables filled!
+                  </div>
+                )}
+              </div>
+
+              {/* ── Connect WhatsApp Broadcast Template ── */}
+              <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{fontSize:".82rem",fontWeight:800,color:"#166534",display:"flex",alignItems:"center",gap:6}}>
+                  <span>📱</span> Connect WhatsApp Broadcast Template (Adds 📋 Copy & 🟢 Share WhatsApp buttons to Bot response):
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))",gap:12}}>
+                  <div>
+                    <label style={{fontSize:".73rem",fontWeight:700,color:"#166534",display:"block",marginBottom:3}}>
+                      Select WhatsApp Broadcast Template:
+                    </label>
+                    <select
+                      value={kbForm.attachedWhatsAppTplId || ""}
+                      onChange={e => setKbForm({ ...kbForm, attachedWhatsAppTplId: e.target.value })}
+                      style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #86EFAC",fontSize:".8rem",fontWeight:700,background:"white",boxSizing:"border-box",color:"#0F172A"}}
+                    >
+                      <option value="">💬 No WhatsApp Template (Standard Text Reply Only)</option>
+                      <option value="tpl_edu_appeal">🎓 Education Felicitation Donation Appeal (Bank of Baroda QR)</option>
+                      <option value="tpl_general_donation">💰 General Community Donation & QR Pay</option>
+                      <option value="tpl_meeting_notice">📢 CWC Committee Meeting & Gathering Notice</option>
+                      <option value="tpl_donor_summary">📊 Live Vibhag Donation Collection Summary</option>
+                      {(C.whatsappBroadcastTemplates || []).map(t => (
+                        <option key={t.id} value={t.id}>
+                          {`📱 ${t.name || t.id} (Custom Template)`}
+                        </option>
+                      ))}
+
+                      {/* Sub-Workspace & Event WhatsApp Templates */}
+                      {(C.events || []).map(evItem => {
+                        const evTitle = evItem.title || evItem.id;
+                        const evTpls = typeof getEventWhatsAppTemplates === 'function' ? getEventWhatsAppTemplates(evItem, C) : (evItem.whatsAppTemplates || []);
+                        return (
+                          <optgroup key={`bcast_${evItem.id || evTitle}`} label={`📁 ${evTitle} Workspace Templates (${evTpls.length})`}>
+                            {evTpls.map(t => (
+                              <option key={`bcast_${t.id}`} value={t.id}>
+                                {`📝 ${evTitle} ➔ ${t.name} ${t.isDefault ? "(Default)" : ""}`}
+                              </option>
+                            ))}
+                          </optgroup>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
+
+                {kbForm.attachedWhatsAppTplId && (
+                  <div style={{fontSize:".72rem",color:"#15803D",lineHeight:1.4}}>
+                    ℹ️ When users ask <strong>{kbForm.cmd || "this question"}</strong>, the chatbot response will include <strong>📋 Copy for WhatsApp</strong> and <strong>🟢 Share on WhatsApp</strong> buttons formatted with the connected template.
+                  </div>
+                )}
+              </div>
+
+              {/* ── Connect Interactive Form & Target Storage Destination ── */}
+              <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"14px 16px",display:"flex",flexDirection:"column",gap:12}}>
+                <div style={{fontSize:".82rem",fontWeight:800,color:"#166534",display:"flex",alignItems:"center",gap:6}}>
+                  <span>📝</span> Connect Interactive Form (Displays in Chatbot Conversation):
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))",gap:12}}>
+                  {/* Form Selector */}
+                  <div>
+                    <label style={{fontSize:".73rem",fontWeight:700,color:"#166534",display:"block",marginBottom:3}}>
+                      Select Form from Form Builder:
+                    </label>
+                    <select
+                      value={kbForm.attachedFormId || ""}
+                      onChange={e => {
+                        const formId = e.target.value;
+                        const isDon = formId === "builtin_offline_donation";
+                        setKbForm({
+                          ...kbForm,
+                          attachedFormId: formId,
+                          storageDestination: isDon ? "donations" : (kbForm.storageDestination || "registrations")
+                        });
+                      }}
+                      style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #86EFAC",fontSize:".8rem",fontWeight:700,background:"white",boxSizing:"border-box",color:"#0F172A"}}
+                    >
+                      <option value="">💬 No Form (Text & Links Answer Only)</option>
+                      <option value="builtin_offline_donation">💰 Built-in Offline Donation Entry Form</option>
+                      {(C.forms || []).map(f => (
+                        <option key={f.id} value={f.id}>
+                          📝 {f.name || f.id} (Custom Event Form - {Array.isArray(f.fields) ? f.fields.length : 0} fields)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Target Storage Destination */}
+                  {kbForm.attachedFormId && (
+                    <div>
+                      <label style={{fontSize:".73rem",fontWeight:700,color:"#166534",display:"block",marginBottom:3}}>
+                        Target Storage Destination:
+                      </label>
+                      <select
+                        value={kbForm.storageDestination || "donations"}
+                        onChange={e => setKbForm({ ...kbForm, storageDestination: e.target.value })}
+                        style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #86EFAC",fontSize:".8rem",fontWeight:700,background:"white",boxSizing:"border-box",color:"#15803D"}}
+                      >
+                        <option value="donations">💰 Donations Collection (donations)</option>
+                        <option value="registrations">📥 Registrations Collection (registrations)</option>
+                        <option value="volunteers">👥 Volunteers Collection (volunteers)</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Role / Access Requirement */}
+                  <div>
+                    <label style={{fontSize:".73rem",fontWeight:700,color:"#166534",display:"block",marginBottom:3}}>
+                      Who Can Use This Form / Command:
+                    </label>
+                    <select
+                      value={kbForm.roleAccess || (kbForm.adminOnly ? "vibhag_admin" : "public")}
+                      onChange={e => setKbForm({ ...kbForm, roleAccess: e.target.value, adminOnly: e.target.value !== "public" })}
+                      style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #86EFAC",fontSize:".8rem",fontWeight:700,background:"white",boxSizing:"border-box",color:"#1E293B"}}
+                    >
+                      <option value="public">🌐 Public (All Visitors & Applicants)</option>
+                      <option value="donation_collector">💰 Donation Collectors & Super Admins Only</option>
+                      <option value="vibhag_admin">📍 Vibhag Admins & Super Admins Only</option>
+                      <option value="super_admin">🛡️ Super Admin Only</option>
+                    </select>
+                  </div>
+                </div>
+
+                {kbForm.attachedFormId && (
+                  <div style={{fontSize:".72rem",color:"#15803D",lineHeight:1.4}}>
+                    ℹ️ When users trigger <strong>{kbForm.cmd || "this command"}</strong>, the chatbot will display the complete interactive form in a card and save submitted data directly into <strong>{kbForm.storageDestination === "donations" ? "Donations" : kbForm.storageDestination === "registrations" ? "Registrations" : "Volunteers"}</strong>.
+                  </div>
+                )}
+              </div>
+
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:4}}>
                 <label style={{display:"flex",alignItems:"center",gap:8,fontSize:".8rem",color:"#475569",cursor:"pointer",fontWeight:600}}>
                   <input
@@ -17095,7 +20201,7 @@ function ChatbotAccessManager({ C, setC, auth }) {
                     boxShadow:"0 2px 8px rgba(37,99,235,0.25)"
                   }}
                 >
-                  {editingKbId ? "💾 Save Changes" : "+ Add Slash Command"}
+                  {editingKbId ? "💾 Save Changes & Form Connection" : "+ Add Slash Command & Form Connection"}
                 </button>
               </div>
             </form>
@@ -17103,25 +20209,251 @@ function ChatbotAccessManager({ C, setC, auth }) {
 
           {/* Knowledge Base Table */}
           <div style={{background:"white",borderRadius:12,border:"1px solid #E2E8F0",overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
-            <div style={{padding:"14px 18px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",fontWeight:700,fontSize:".88rem",color:"#0F172A",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span>Configured Questions & Slash Commands ({kbList.length})</span>
-              <span style={{fontSize:".75rem",color:"#64748B"}}>Toggle Hide/Unhide with one click</span>
+            <div style={{padding:"14px 18px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",fontWeight:700,fontSize:".88rem",color:"#0F172A",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <span>Configured Questions & Slash Commands ({filteredKbList.length}{filteredKbList.length !== kbList.length ? ` of ${kbList.length}` : ""})</span>
+                {(cmdColFilter !== "all" || titleColFilter !== "all" || answerColFilter !== "all" || statusColFilter !== "all") && (
+                  <span style={{background:"#FEF3C7",color:"#92400E",fontSize:".72rem",padding:"2px 8px",borderRadius:12,fontWeight:800}}>
+                    Filtered
+                  </span>
+                )}
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                {(cmdColFilter !== "all" || titleColFilter !== "all" || answerColFilter !== "all" || statusColFilter !== "all") && (
+                  <button
+                    type="button"
+                    onClick={() => { setCmdColFilter("all"); setTitleColFilter("all"); setAnswerColFilter("all"); setStatusColFilter("all"); }}
+                    style={{background:"#EF4444",color:"white",border:"none",borderRadius:6,padding:"4px 10px",fontSize:".74rem",fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                  >
+                    <span>✕</span> Reset All Column Filters
+                  </button>
+                )}
+                <span style={{fontSize:".75rem",color:"#64748B"}}>Toggle Hide/Unhide with one click</span>
+              </div>
             </div>
 
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:".85rem"}}>
                 <thead>
                   <tr style={{background:"#1E293B",color:"white"}}>
-                    <th style={{padding:"11px 16px",textAlign:"left",width:140}}>Command (/)</th>
-                    <th style={{padding:"11px 16px",textAlign:"left",width:240}}>Question / Title</th>
-                    <th style={{padding:"11px 16px",textAlign:"left"}}>Answer Preview</th>
-                    <th style={{padding:"11px 16px",textAlign:"center",width:130}}>Status (Hide/Unhide)</th>
-                    <th style={{padding:"11px 16px",textAlign:"right",width:140}}>Actions</th>
+                    {/* 1. Command Dropdown Filter */}
+                    <th style={{padding:"10px 8px",textAlign:"center",width:75,verticalAlign:"top"}}>
+                      <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"center"}}>
+                        <span style={{fontWeight:800,fontSize:".8rem",color:"#38BDF8"}}># Order</span>
+                        <span style={{fontSize:".68rem",color:"#94A3B8"}}>▲ / ▼</span>
+                      </div>
+                    </th>
+                    <th style={{padding:"10px 12px",textAlign:"left",width:180,verticalAlign:"top"}}>
+                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{fontWeight:800,fontSize:".82rem"}}>Command (/)</span>
+                          <span style={{fontSize:".72rem",color:"#38BDF8"}}>▼</span>
+                        </div>
+                        <select
+                          value={cmdColFilter}
+                          onChange={e=>setCmdColFilter(e.target.value)}
+                          style={{
+                            width:"100%",
+                            padding:"6px 8px",
+                            borderRadius:6,
+                            border: cmdColFilter !== "all" ? "1.5px solid #F59E0B" : "1.5px solid #38BDF8",
+                            background:"#0F172A",
+                            color:"#FFFFFF",
+                            fontSize:".75rem",
+                            fontWeight:700,
+                            boxSizing:"border-box",
+                            cursor:"pointer",
+                            outline:"none"
+                          }}
+                        >
+                          <option value="all" style={{background:"#0F172A",color:"white"}}>📂 All Commands ({kbList.length})</option>
+                          {uniqueCmds.map(cmd => (
+                            <option key={cmd} value={cmd} style={{background:"#0F172A",color:"white"}}>
+                              {cmd}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </th>
+
+                    {/* 2. Question / Title Dropdown Filter */}
+                    <th style={{padding:"10px 12px",textAlign:"left",width:240,verticalAlign:"top"}}>
+                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{fontWeight:800,fontSize:".82rem"}}>Question / Title</span>
+                          <span style={{fontSize:".72rem",color:"#38BDF8"}}>▼</span>
+                        </div>
+                        <select
+                          value={titleColFilter}
+                          onChange={e=>setTitleColFilter(e.target.value)}
+                          style={{
+                            width:"100%",
+                            padding:"6px 8px",
+                            borderRadius:6,
+                            border: titleColFilter !== "all" ? "1.5px solid #F59E0B" : "1.5px solid #38BDF8",
+                            background:"#0F172A",
+                            color:"#FFFFFF",
+                            fontSize:".75rem",
+                            fontWeight:700,
+                            boxSizing:"border-box",
+                            cursor:"pointer",
+                            outline:"none"
+                          }}
+                        >
+                          <option value="all" style={{background:"#0F172A",color:"white"}}>📂 All Titles ({uniqueTitles.length})</option>
+                          {uniqueTitles.map(title => (
+                            <option key={title} value={title} style={{background:"#0F172A",color:"white"}}>
+                              {title}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </th>
+
+                    {/* 3. Answer / Attached Type Dropdown Filter */}
+                    <th style={{padding:"10px 12px",textAlign:"left",verticalAlign:"top"}}>
+                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{fontWeight:800,fontSize:".82rem"}}>Answer / Connection</span>
+                          <span style={{fontSize:".72rem",color:"#38BDF8"}}>▼</span>
+                        </div>
+                        <select
+                          value={answerColFilter}
+                          onChange={e=>setAnswerColFilter(e.target.value)}
+                          style={{
+                            width:"100%",
+                            padding:"6px 8px",
+                            borderRadius:6,
+                            border: answerColFilter !== "all" ? "1.5px solid #F59E0B" : "1.5px solid #38BDF8",
+                            background:"#0F172A",
+                            color:"#FFFFFF",
+                            fontSize:".75rem",
+                            fontWeight:700,
+                            boxSizing:"border-box",
+                            cursor:"pointer",
+                            outline:"none"
+                          }}
+                        >
+                          <option value="all" style={{background:"#0F172A",color:"white"}}>📂 All Connection Types</option>
+                          <option value="form" style={{background:"#0F172A",color:"white"}}>📝 With Attached Interactive Form</option>
+                          <option value="whatsapp" style={{background:"#0F172A",color:"white"}}>📱 With Attached WhatsApp Template</option>
+                          <option value="text_only" style={{background:"#0F172A",color:"white"}}>💬 Standard Text Reply Only</option>
+                        </select>
+                      </div>
+                    </th>
+
+                    {/* 4. Status & Role Dropdown Filter */}
+                    <th style={{padding:"10px 12px",textAlign:"center",width:150,verticalAlign:"top"}}>
+                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:4}}>
+                          <span style={{fontWeight:800,fontSize:".82rem"}}>Status & Role</span>
+                          <span style={{fontSize:".72rem",color:"#38BDF8"}}>▼</span>
+                        </div>
+                        <select
+                          value={statusColFilter}
+                          onChange={e=>setStatusColFilter(e.target.value)}
+                          style={{
+                            width:"100%",
+                            padding:"6px 8px",
+                            borderRadius:6,
+                            border: statusColFilter !== "all" ? "1.5px solid #F59E0B" : "1.5px solid #38BDF8",
+                            background:"#0F172A",
+                            color:"#FFFFFF",
+                            fontSize:".75rem",
+                            fontWeight:700,
+                            boxSizing:"border-box",
+                            cursor:"pointer",
+                            outline:"none"
+                          }}
+                        >
+                          <option value="all" style={{background:"#0F172A",color:"white"}}>📂 All Statuses</option>
+                          <option value="visible" style={{background:"#0F172A",color:"white"}}>🟢 Visible Only</option>
+                          <option value="hidden" style={{background:"#0F172A",color:"white"}}>🙈 Hidden Only</option>
+                          <option value="public" style={{background:"#0F172A",color:"white"}}>🌐 Public Access</option>
+                          <option value="donation_collector" style={{background:"#0F172A",color:"white"}}>✍️ Donation Collector Only</option>
+                          <option value="admin" style={{background:"#0F172A",color:"white"}}>🛡️ Admin Only</option>
+                        </select>
+                      </div>
+                    </th>
+
+                    {/* 5. Actions & Reset Button */}
+                    <th style={{padding:"10px 12px",textAlign:"right",width:130,verticalAlign:"top"}}>
+                      <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"flex-end"}}>
+                        <span style={{fontWeight:800,fontSize:".82rem"}}>Actions</span>
+                        {(cmdColFilter !== "all" || titleColFilter !== "all" || answerColFilter !== "all" || statusColFilter !== "all") ? (
+                          <button
+                            type="button"
+                            onClick={() => { setCmdColFilter("all"); setTitleColFilter("all"); setAnswerColFilter("all"); setStatusColFilter("all"); }}
+                            style={{
+                              background:"#EF4444",
+                              color:"white",
+                              border:"none",
+                              borderRadius:4,
+                              padding:"4px 8px",
+                              fontSize:".7rem",
+                              fontWeight:800,
+                              cursor:"pointer",
+                              boxShadow:"0 1px 3px rgba(239,68,68,0.3)"
+                            }}
+                          >
+                            Reset ✕
+                          </button>
+                        ) : (
+                          <span style={{fontSize:".7rem",color:"#94A3B8"}}>Edit / Delete</span>
+                        )}
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {kbList.map((item, idx) => (
+                  {filteredKbList.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{padding:"30px 20px",textAlign:"center",color:"#64748B",fontSize:".85rem"}}>
+                        🔍 No questions or slash commands match the active column filters.
+                        <br />
+                        <button
+                          type="button"
+                          onClick={() => { setCmdColFilter("all"); setTitleColFilter("all"); setAnswerColFilter("all"); setStatusColFilter("all"); }}
+                          style={{marginTop:8,background:"#2563EB",color:"white",border:"none",borderRadius:6,padding:"6px 14px",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
+                        >
+                          Reset Filters
+                        </button>
+                      </td>
+                    </tr>
+                  ) : filteredKbList.map((item, idx) => (
                     <tr key={item.id || idx} style={{borderBottom:"1px solid #F1F5F9",background:item.enabled ? (idx%2===1?"#F8FAFC":"white") : "#FFFBEB"}}>
+                      {/* Order Controls */}
+                      <td style={{padding:"10px 6px",textAlign:"center"}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                          <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                            <button
+                              type="button"
+                              onClick={() => moveKbOrder(item.id, "up")}
+                              disabled={idx === 0}
+                              style={{background:"#F1F5F9",border:"1px solid #CBD5E1",borderRadius:3,padding:"1px 4px",fontSize:".62rem",cursor:idx===0?"default":"pointer",opacity:idx===0?0.3:1}}
+                              title="Move Up"
+                            >
+                              ▲
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveKbOrder(item.id, "down")}
+                              disabled={idx === filteredKbList.length - 1}
+                              style={{background:"#F1F5F9",border:"1px solid #CBD5E1",borderRadius:3,padding:"1px 4px",fontSize:".62rem",cursor:idx===filteredKbList.length-1?"default":"pointer",opacity:idx===filteredKbList.length-1?0.3:1}}
+                              title="Move Down"
+                            >
+                              ▼
+                            </button>
+                          </div>
+                          <input
+                            type="number"
+                            value={item.order || (idx + 1)}
+                            onChange={e => updateKbOrderDirect(item.id, e.target.value)}
+                            style={{width:36,padding:"3px 2px",textAlign:"center",borderRadius:4,border:"1px solid #93C5FD",fontSize:".78rem",fontWeight:800,background:"#EFF6FF",color:"#1D4ED8"}}
+                            title="Direct Order Number (1, 2, 3...)"
+                          />
+                        </div>
+                      </td>
                       <td style={{padding:"12px 16px",fontWeight:800,fontFamily:"monospace",color:"#2563EB",fontSize:".9rem"}}>
                         <span style={{marginRight:6}}>{item.icon || "❓"}</span>
                         {item.cmd}
@@ -17129,11 +20461,53 @@ function ChatbotAccessManager({ C, setC, auth }) {
                       <td style={{padding:"12px 16px",fontWeight:700,color:"#0F172A"}}>
                         {item.title}
                         {item.adminOnly && (
-                          <div style={{fontSize:".68rem",color:"#B45309",fontWeight:800,marginTop:2}}>{lockLabel}</div>
+                          <div style={{fontSize:".68rem",color:"#B45309",fontWeight:800,marginTop:2}}>{item.roleAccess === "donation_collector" ? "🔒 Donation Collector Only" : "🔒 Admin Only"}</div>
                         )}
                       </td>
-                      <td style={{padding:"12px 16px",color:"#475569",fontSize:".8rem",lineHeight:1.4,maxWidth:320,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                        {item.answer}
+                      <td style={{padding:"10px 14px",color:"#334155",fontSize:".8rem",lineHeight:1.4,maxWidth:340}}>
+                        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                          {/* Live System Feature Badge */}
+                          <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+                            {item.id === "kb_donationsummary" && (
+                              <span style={{background:"#EFF6FF",color:"#1D4ED8",padding:"2px 7px",borderRadius:4,fontSize:".68rem",fontWeight:800,border:"1px solid #BFDBFE"}}>
+                                📊 Aggregate Vibhag Metrics Card
+                              </span>
+                            )}
+                            {item.id === "kb_donerlist" && (
+                              <span style={{background:"#FEF3C7",color:"#92400E",padding:"2px 7px",borderRadius:4,fontSize:".68rem",fontWeight:800,border:"1px solid #FDE68A"}}>
+                                📋 Person-wise Donor Table & Broadcast
+                              </span>
+                            )}
+                            {item.id === "kb_all" && (
+                              <span style={{background:"#DCFCE7",color:"#15803D",padding:"2px 7px",borderRadius:4,fontSize:".68rem",fontWeight:800,border:"1px solid #BBF7D0"}}>
+                                📈 Live Registrations Table
+                              </span>
+                            )}
+                            {item.id === "kb_pending" && (
+                              <span style={{background:"#FEF3C7",color:"#B45309",padding:"2px 7px",borderRadius:4,fontSize:".68rem",fontWeight:800,border:"1px solid #FED7AA"}}>
+                                ⏳ Live Pending Applications
+                              </span>
+                            )}
+                            {item.id === "kb_approved" && (
+                              <span style={{background:"#DCFCE7",color:"#15803D",padding:"2px 7px",borderRadius:4,fontSize:".68rem",fontWeight:800,border:"1px solid #BBF7D0"}}>
+                                🟢 Live Approved Applications
+                              </span>
+                            )}
+                            {item.id === "kb_donation_update" && (
+                              <span style={{background:"#F0FDF4",color:"#166534",padding:"2px 7px",borderRadius:4,fontSize:".68rem",fontWeight:800,border:"1px solid #86EFAC"}}>
+                                ✍️ Offline Cash/Cheque Entry Form
+                              </span>
+                            )}
+                            {item.attachedWhatsAppTplId && (
+                              <span style={{background:"#DCFCE7",color:"#15803D",padding:"1px 5px",borderRadius:4,fontSize:".65rem",fontWeight:700}}>
+                                📲 WhatsApp
+                              </span>
+                            )}
+                          </div>
+                          <div style={{color:"#475569",fontSize:".76rem",lineHeight:1.35}}>
+                            {item.answer}
+                          </div>
+                        </div>
                       </td>
                       <td style={{padding:"12px 16px",textAlign:"center"}}>
                         <button
@@ -17181,6 +20555,572 @@ function ChatbotAccessManager({ C, setC, auth }) {
           </div>
         </div>
       )}
+    
+
+                  {/* ── SUB-TAB 5: WhatsApp Templates & QR Standee ── */}
+      {activeTab === "whatsapp" && (() => {
+        const DEFAULT_TEMPLATES = [
+          {
+            id: "tpl_edu_appeal",
+            name: "🎓 Education Felicitation Donation Appeal (Default)",
+            header: ".  🌷 || મુંબઈ મેઘવાળ પંચાયત || 🌷\n         [NGO]\n   •••• સેન્ટ્રલ વર્કિંગ કમિટી ••••\n☸~~~~~~~~~~~~~~~~~☸",
+            appeal: "સુજ્ઞ જ્ઞાતિજનો વિદ્યાર્થી ને પ્રોત્સાહિત કરવા અને તેમનું મનોબળ વધારવા આયોજિત શૈક્ષણિક કાર્યક્રમ વિદ્યાર્થી ગુણગૌરવ પુરસ્કાર માટે દાન ના પ્રવાહ ની અપેક્ષા છે તેથી આપ પણ આપની ઈચ્છા અનુસાર દાન આપી શકો છો.\nહાલમાં આવેલું દાન અને દાતા ઓના નામ નીચે પ્રમાણે છે.",
+            rowPattern: "₹ {AMOUNT}/- {NAME}",
+            totalLabel: "💰 *કુલ દાન રકમ: ₹{TOTAL}* ({COUNT} દાતાઓ)",
+            signatory: "લિ. વિનોદભાઈ મકવાણા / સેન્ટ્રલ વર્કિંગ કમિટી",
+            qrHeader: "💳 *GPay / BHIM QR સ્કેનર & Direct Pay:*",
+            upiId: "mumba98697331@barodampay",
+            donateLink: "https://mmp-cwc.com/donate/",
+            imageSource: "standee",
+            gpayScannerUrl: "./mmp_bhim_qr.png"
+          },
+          {
+            id: "tpl_general_donation",
+            name: "💰 General Community Donation & QR Pay",
+            header: ".  🌷 || મુંબઈ મેઘવાળ પંચાયત || 🌷\n         [NGO]\n   •••• સેન્ટ્રલ વર્કિંગ કમિટી ••••\n☸~~~~~~~~~~~~~~~~~☸",
+            appeal: "જય ભીમ / નમસ્તે જ્ઞાતિજનો, સંસ્થા ના વિવિધ સામાજિક તથા વિકાસ કાર્યો માટે આપનું સ્વૈચ્છિક દાન આવકાર્ય છે.",
+            rowPattern: "₹ {AMOUNT}/- {NAME}",
+            totalLabel: "💰 *કુલ દાન રકમ: ₹{TOTAL}*",
+            signatory: "સેન્ટ્રલ વર્કિંગ કમિટી, મુંબઈ મેઘવાળ પંચાયત",
+            qrHeader: "💳 *Bank of Baroda BHIM UPI / GPay સ્કેનર:*",
+            upiId: "mumba98697331@barodampay",
+            donateLink: "https://mmp-cwc.com/donate/",
+            imageSource: "standee",
+            gpayScannerUrl: "./mmp_bhim_qr.png"
+          },
+          {
+            id: "tpl_meeting_notice",
+            name: "📢 CWC Committee Meeting Notice",
+            header: ".  🌷 || મુંબઈ મેઘવાળ પંચાયત || 🌷\n   •••• સેન્ટ્રલ વર્કિંગ કમિટી ••••\n☸~~~~~~~~~~~~~~~~~☸",
+            appeal: "સર્વે હોદ્દેદારો તથા કારોબારી સભ્યો ને જણાવવાનું કે આગામી મિટિંગ નું આયોજન કરેલ છે. આપની ઉપસ્થિતિ અનિવાર્ય છે.",
+            rowPattern: "• {NAME} ({VIBHAG})",
+            totalLabel: "👥 *કુલ સભ્યો:* {COUNT}",
+            signatory: "લિ. સેન્ટ્રલ વર્કિંગ કમિટી",
+            qrHeader: "",
+            upiId: "mumba98697331@barodampay",
+            donateLink: "https://mmp-cwc.com/",
+            imageSource: "logo",
+            gpayScannerUrl: "./mc_logo.jpg"
+          },
+          {
+            id: "tpl_donor_summary",
+            name: "📊 Live Vibhag Donation Collection Summary",
+            header: ".  🌷 || મુંબઈ મેઘવાળ પંચાયત || 🌷\n   •••• સેન્ટ્રલ વર્કિંગ કમિટી ••••\n☸~~~~~~~~~~~~~~~~~☸",
+            appeal: "વિભાગ વાર આવેલ દાન ની લાઈવ વિગત નીચે મુજબ છે:",
+            rowPattern: "• *{VIBHAG}*: ₹{AMOUNT} ({COUNT} દાતાઓ)",
+            totalLabel: "💰 *સર્વ વિભાગ કુલ રકમ: ₹{TOTAL}*",
+            signatory: "લિ. વિનોદભાઈ મકવાણા / સેન્ટ્રલ વર્કિંગ કમિટી",
+            qrHeader: "💳 *GPay / BHIM QR સ્કેનર & Direct Pay:*",
+            upiId: "mumba98697331@barodampay",
+            donateLink: "https://mmp-cwc.com/donate/",
+            imageSource: "standee",
+            gpayScannerUrl: "./mmp_bhim_qr.png"
+          }
+        ];
+
+        const savedTpls = Array.isArray(C.whatsappBroadcastTemplates) && C.whatsappBroadcastTemplates.length > 0
+          ? C.whatsappBroadcastTemplates
+          : DEFAULT_TEMPLATES;
+
+        const activeTplId = selectedWhatsAppTplId || savedTpls[0].id;
+        const curTpl = savedTpls.find(t => t.id === activeTplId) || savedTpls[0];
+
+        const updateCurTpl = (field, val) => {
+          const updatedList = savedTpls.map(t => {
+            if (t.id === curTpl.id) {
+              return { ...t, [field]: val };
+            }
+            return t;
+          });
+          const legacyObj = curTpl.id === "tpl_edu_appeal" || curTpl.id === savedTpls[0].id
+            ? { ...C.whatsappTemplates, [field === "header" ? "gujaratiHeader" : field === "appeal" ? "gujaratiAppeal" : field === "signatory" ? "gujaratiSignatory" : field]: val }
+            : (C.whatsappTemplates || {});
+          setC({ ...C, whatsappBroadcastTemplates: updatedList, whatsappTemplates: legacyObj });
+        };
+
+        const handleCreateNewTemplate = () => {
+          const name = prompt("Enter a name for your new WhatsApp Message Template (e.g. Medical Aid Appeal):");
+          if (!name || !name.trim()) return;
+          const newId = "tpl_" + Date.now();
+          const newTpl = {
+            id: newId,
+            name: name.trim(),
+            header: ".  🌷 || મુંબઈ મેઘવાળ પંચાયત || 🌷\n         [NGO]\n   •••• સેન્ટ્રલ વર્કિંગ કમિટી ••••\n☸~~~~~~~~~~~~~~~~~☸",
+            appeal: "સુજ્ઞ જ્ઞાતિજનો, " + name.trim() + " અંતર્ગત આપનું સ્વૈચ્છિક દાન આવકાર્ય છે.",
+            rowPattern: "₹ {AMOUNT}/- {NAME}",
+            totalLabel: "💰 *કુલ દાન રકમ: ₹{TOTAL}* ({COUNT} દાતાઓ)",
+            signatory: "લિ. વિનોદભાઈ મકવાણા / સેન્ટ્રલ વર્કિંગ કમિટી",
+            qrHeader: "💳 *GPay / BHIM QR સ્કેનર & Direct Pay:*",
+            upiId: "mumba98697331@barodampay",
+            donateLink: "https://mmp-cwc.com/donate/",
+            imageSource: "standee",
+            gpayScannerUrl: "./mmp_bhim_qr.png"
+          };
+          const updated = [...savedTpls, newTpl];
+          setC({ ...C, whatsappBroadcastTemplates: updated });
+          setSelectedWhatsAppTplId(newId);
+        };
+
+        const handleDeleteTemplate = (idToDelete) => {
+          if (savedTpls.length <= 1) {
+            alert("At least one WhatsApp Template must remain in the system.");
+            return;
+          }
+          if (!confirm("Are you sure you want to delete this WhatsApp Template?")) return;
+          const filtered = savedTpls.filter(t => t.id !== idToDelete);
+          setC({ ...C, whatsappBroadcastTemplates: filtered });
+          setSelectedWhatsAppTplId(filtered[0].id);
+        };
+
+        return (
+          <div style={{background:"white",borderRadius:12,border:"1px solid #E2E8F0",padding:24,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+            
+            {/* Header Title & Template Selector Bar */}
+            <div style={{background:"linear-gradient(135deg, #F0FDF4, #DCFCE7)",border:"1.5px solid #86EFAC",borderRadius:12,padding:16,marginBottom:20}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:12}}>
+                <div>
+                  <h3 style={{fontSize:"1.15rem",fontWeight:800,color:"#166534",margin:"0 0 4px 0",display:"flex",alignItems:"center",gap:8}}>
+                    <span>📱</span> WhatsApp Message Templates Manager
+                  </h3>
+                  <p style={{fontSize:".82rem",color:"#15803D",margin:0}}>
+                    Create, customize, and name multiple broadcast message templates. Connect them to any Chatbot Question or Slash Command.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCreateNewTemplate}
+                  style={{
+                    padding: "9px 18px",
+                    background: "linear-gradient(135deg, #15803D, #166534)",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 8,
+                    fontWeight: 800,
+                    fontSize: ".85rem",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(22,101,52,0.3)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6
+                  }}
+                >
+                  <span>➕</span> Create New WhatsApp Template
+                </button>
+              </div>
+
+              {/* Template Switcher Dropdown */}
+              <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",background:"white",padding:10,borderRadius:8,border:"1px solid #86EFAC"}}>
+                <label style={{fontSize:".82rem",fontWeight:800,color:"#166534",whiteSpace:"nowrap"}}>
+                  📂 Select Template to Edit:
+                </label>
+
+                <select
+                  value={curTpl.id}
+                  onChange={e => setSelectedWhatsAppTplId(e.target.value)}
+                  style={{
+                    flex: 1,
+                    minWidth: 260,
+                    padding: "8px 12px",
+                    borderRadius: 6,
+                    border: "1.5px solid #166534",
+                    fontSize: ".85rem",
+                    fontWeight: 700,
+                    color: "#0F172A",
+                    background: "#F8FAFC"
+                  }}
+                >
+                  {savedTpls.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name || t.id}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => handleDeleteTemplate(curTpl.id)}
+                  style={{
+                    padding: "8px 12px",
+                    background: "#FEE2E2",
+                    color: "#DC2626",
+                    border: "1px solid #FCA5A5",
+                    borderRadius: 6,
+                    fontSize: ".78rem",
+                    fontWeight: 700,
+                    cursor: "pointer"
+                  }}
+                >
+                  🗑️ Delete Template
+                </button>
+              </div>
+            </div>
+
+            <div style={{display:"flex",flexDirection:"column",gap:16}}>
+              
+              {/* Template Name & Identifier */}
+              <div style={{background:"#F8FAFC",border:"1px solid #CBD5E1",borderRadius:8,padding:14}}>
+                <label style={{display:"block",fontSize:".8rem",fontWeight:800,color:"#0F172A",marginBottom:4}}>
+                  🏷️ Template Name / Title (Appears in Question Dropdowns):
+                </label>
+                <input
+                  type="text"
+                  value={curTpl.name || ""}
+                  onChange={e => updateCurTpl("name", e.target.value)}
+                  placeholder="e.g. 🎓 Education Felicitation Donation Appeal"
+                  style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".88rem",fontWeight:700,boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+
+              {/* ── Section Inclusion / Visibility Toggles ── */}
+              <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:14}}>
+                <div style={{fontSize:".82rem",fontWeight:800,color:"#166534",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+                  <span>⚙️</span> Choose Which Sections to Include in this WhatsApp Template:
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))",gap:10,fontSize:".78rem",color:"#1E293B"}}>
+                  <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontWeight:600}}>
+                    <input
+                      type="checkbox"
+                      checked={curTpl.includeHeader !== false}
+                      onChange={e => updateCurTpl("includeHeader", e.target.checked)}
+                    />
+                    1. Header Banner Text
+                  </label>
+                  <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontWeight:600}}>
+                    <input
+                      type="checkbox"
+                      checked={curTpl.includeAppeal !== false}
+                      onChange={e => updateCurTpl("includeAppeal", e.target.checked)}
+                    />
+                    2. Appeal / Body Text
+                  </label>
+                  <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontWeight:600}}>
+                    <input
+                      type="checkbox"
+                      checked={curTpl.includeList !== false}
+                      onChange={e => updateCurTpl("includeList", e.target.checked)}
+                    />
+                    3. Dynamic Rows / List
+                  </label>
+                  <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontWeight:600}}>
+                    <input
+                      type="checkbox"
+                      checked={curTpl.includeTotal !== false}
+                      onChange={e => updateCurTpl("includeTotal", e.target.checked)}
+                    />
+                    4. Total Collection Line
+                  </label>
+                  <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontWeight:600}}>
+                    <input
+                      type="checkbox"
+                      checked={curTpl.includeFooter !== false}
+                      onChange={e => updateCurTpl("includeFooter", e.target.checked)}
+                    />
+                    5. Signatory / Footer Paragraph
+                  </label>
+                  <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontWeight:700,color:curTpl.includeGPay ? "#15803D" : "#475569"}}>
+                    <input
+                      type="checkbox"
+                      checked={curTpl.includeGPay === true}
+                      onChange={e => updateCurTpl("includeGPay", e.target.checked)}
+                    />
+                    6. GPay / UPI QR & Donate Link
+                  </label>
+                </div>
+              </div>
+
+              {/* 1. Header Banner */}
+              <div>
+                <label style={{display:"block",fontSize:".8rem",fontWeight:700,color:"#334155",marginBottom:4}}>
+                  1. Header Banner Text:
+                </label>
+                <textarea
+                  rows={4}
+                  value={curTpl.header !== undefined ? curTpl.header : ".  🌷 || મુંબઈ મેઘવાળ પંચાયત || 🌷\n         [NGO]\n   •••• સેન્ટ્રલ વર્કિંગ કમિટી ••••\n☸~~~~~~~~~~~~~~~~~☸"}
+                  onChange={e => updateCurTpl("header", e.target.value)}
+                  style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",fontFamily:"inherit",boxSizing:"border-box"}}
+                />
+              </div>
+
+              {/* 2. Appeal Body Text */}
+              <div>
+                <label style={{display:"block",fontSize:".8rem",fontWeight:700,color:"#334155",marginBottom:4}}>
+                  2. Appeal Body Text (Gujarati):
+                </label>
+                <textarea
+                  rows={4}
+                  value={curTpl.appeal !== undefined ? curTpl.appeal : ""}
+                  onChange={e => updateCurTpl("appeal", e.target.value)}
+                  style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",fontFamily:"inherit",boxSizing:"border-box"}}
+                />
+              </div>
+
+              {/* 3. Numbered Row Pattern & Total Label */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))",gap:14}}>
+                <div>
+                  <label style={{display:"block",fontSize:".8rem",fontWeight:700,color:"#334155",marginBottom:4}}>
+                    3. Numbered Row Format (Placeholders: <code>{'{AMOUNT}'}</code>, <code>{'{NAME}'}</code>, <code>{'{INDEX}'}</code>, <code>{'{VIBHAG}'}</code>):
+                  </label>
+                  <input
+                    type="text"
+                    value={curTpl.rowPattern || "₹ {AMOUNT}/- {NAME}"}
+                    onChange={e => updateCurTpl("rowPattern", e.target.value)}
+                    style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",boxSizing:"border-box"}}
+                  />
+                </div>
+
+                <div>
+                  <label style={{display:"block",fontSize:".8rem",fontWeight:700,color:"#334155",marginBottom:4}}>
+                    4. Total Collection Line Format (Placeholders: <code>{'{TOTAL}'}</code>, <code>{'{COUNT}'}</code>):
+                  </label>
+                  <input
+                    type="text"
+                    value={curTpl.totalLabel || "💰 *કુલ દાન રકમ: ₹{TOTAL}* ({COUNT} દાતાઓ)"}
+                    onChange={e => updateCurTpl("totalLabel", e.target.value)}
+                    style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",boxSizing:"border-box"}}
+                  />
+                </div>
+              </div>
+
+              {/* 5. Signatory Footer (Multi-line Paragraph Option) */}
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                  <label style={{fontSize:".8rem",fontWeight:700,color:"#334155"}}>
+                    5. Signatory / Footer Signature (Paragraph & Multi-line Support):
+                  </label>
+                  <span style={{fontSize:".7rem",color:"#64748B"}}>Press Enter for new paragraph / line</span>
+                </div>
+                <textarea
+                  rows={4}
+                  value={curTpl.signatory !== undefined ? curTpl.signatory : "લિ. વિનોદભાઈ મકવાણા / સેન્ટ્રલ વર્કિંગ કમિટી"}
+                  onChange={e => updateCurTpl("signatory", e.target.value)}
+                  placeholder="Enter multi-line footer note, instructions, contact details, signatory names..."
+                  style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",fontFamily:"inherit",boxSizing:"border-box",lineHeight:1.5}}
+                />
+              </div>
+
+              {/* 6. QR Code Scanner, Banner Image & UPI ID Settings */}
+              <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:16,marginTop:4}}>
+                <div style={{fontWeight:800,fontSize:".88rem",color:"#166534",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+                  <span>📸</span> 6. QR Code Image / Banner Image & Bank of Baroda UPI Settings:
+                </div>
+
+                {/* Image Source Selector & Uploader */}
+                <div style={{background:"white",padding:12,borderRadius:8,border:"1px solid #BBF7D0",marginBottom:12}}>
+                  <label style={{display:"block",fontSize:".78rem",fontWeight:700,color:"#166534",marginBottom:6}}>
+                    Select Banner / WhatsApp Preview Image Source for this Template:
+                  </label>
+
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateCurTpl("gpayScannerUrl", "./mmp_bhim_qr.png");
+                        updateCurTpl("imageSource", "standee");
+                      }}
+                      style={{
+                        padding:"6px 12px",
+                        borderRadius:6,
+                        fontSize:".75rem",
+                        fontWeight:700,
+                        cursor:"pointer",
+                        border: (!curTpl.imageSource || curTpl.imageSource === "standee") ? "1.5px solid #166534" : "1px solid #CBD5E1",
+                        background: (!curTpl.imageSource || curTpl.imageSource === "standee") ? "#DCFCE7" : "#F8FAFC",
+                        color: (!curTpl.imageSource || curTpl.imageSource === "standee") ? "#15803D" : "#475569"
+                      }}
+                    >
+                      🏦 Bank of Baroda QR Standee
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateCurTpl("gpayScannerUrl", "./mc_logo.jpg");
+                        updateCurTpl("imageSource", "logo");
+                      }}
+                      style={{
+                        padding:"6px 12px",
+                        borderRadius:6,
+                        fontSize:".75rem",
+                        fontWeight:700,
+                        cursor:"pointer",
+                        border: curTpl.imageSource === "logo" ? "1.5px solid #166534" : "1px solid #CBD5E1",
+                        background: curTpl.imageSource === "logo" ? "#DCFCE7" : "#F8FAFC",
+                        color: curTpl.imageSource === "logo" ? "#15803D" : "#475569"
+                      }}
+                    >
+                      🏛️ Trust / Site Logo
+                    </button>
+
+                    <label style={{
+                      padding:"6px 14px",
+                      background:"linear-gradient(135deg, #15803D, #166534)",
+                      color:"white",
+                      borderRadius:6,
+                      fontSize:".75rem",
+                      fontWeight:800,
+                      cursor:"pointer",
+                      display:"flex",
+                      alignItems:"center",
+                      gap:6,
+                      boxShadow:"0 2px 6px rgba(22,101,52,0.25)"
+                    }}>
+                      <span>📤 Upload Custom QR / Banner Image</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{display:"none"}}
+                        onChange={async (e) => {
+                          const file = e.target.files[0];
+                          if (!file) return;
+                          try {
+                            const url = await fbUploadLogo(file, auth?.idToken);
+                            updateCurTpl("gpayScannerUrl", url);
+                            updateCurTpl("imageSource", "custom");
+                            alert("✅ Image successfully uploaded for this template!");
+                          } catch(err) {
+                            alert("Upload failed: " + err.message);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <input
+                      type="text"
+                      value={curTpl.gpayScannerUrl || "./mmp_bhim_qr.png"}
+                      onChange={e => {
+                        updateCurTpl("gpayScannerUrl", e.target.value);
+                        updateCurTpl("imageSource", "custom");
+                      }}
+                      placeholder="Image URL (e.g. ./mmp_bhim_qr.png or https://...)"
+                      style={{flex:1,padding:"7px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".78rem",boxSizing:"border-box",background:"#FFF"}}
+                    />
+                  </div>
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))",gap:12,marginBottom:12}}>
+                  <div>
+                    <label style={{display:"block",fontSize:".75rem",fontWeight:700,color:"#166534",marginBottom:3}}>
+                      QR Section Header:
+                    </label>
+                    <input
+                      type="text"
+                      value={curTpl.qrHeader !== undefined ? curTpl.qrHeader : "💳 *GPay / BHIM QR સ્કેનર & Direct Pay:*"}
+                      onChange={e => updateCurTpl("qrHeader", e.target.value)}
+                      style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #86EFAC",fontSize:".8rem",boxSizing:"border-box",background:"white"}}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{display:"block",fontSize:".75rem",fontWeight:700,color:"#166534",marginBottom:3}}>
+                      Official UPI ID (VPA):
+                    </label>
+                    <input
+                      type="text"
+                      value={curTpl.upiId || "mumba98697331@barodampay"}
+                      onChange={e => updateCurTpl("upiId", e.target.value)}
+                      style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #86EFAC",fontSize:".8rem",fontWeight:700,boxSizing:"border-box",background:"white",color:"#2563EB"}}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{display:"block",fontSize:".75rem",fontWeight:700,color:"#166534",marginBottom:3}}>
+                      Donate QR Webpage Link:
+                    </label>
+                    <input
+                      type="text"
+                      value={curTpl.donateLink || "https://mmp-cwc.com/donate/"}
+                      onChange={e => updateCurTpl("donateLink", e.target.value)}
+                      style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #86EFAC",fontSize:".8rem",boxSizing:"border-box",background:"white"}}
+                    />
+                  </div>
+                </div>
+
+                {/* Active Image Thumbnail & Details */}
+                <div style={{display:"flex",gap:16,alignItems:"center",flexWrap:"wrap",background:"white",padding:12,borderRadius:8,border:"1px solid #BBF7D0"}}>
+                  <img
+                    src={curTpl.gpayScannerUrl || "./mmp_bhim_qr.png"}
+                    alt="Active QR / Banner Preview"
+                    style={{width:90,height:120,objectFit:"contain",borderRadius:6,border:"1.5px solid #86EFAC",background:"white"}}
+                    onError={e => { e.target.src = "./mmp_bhim_qr.png"; }}
+                  />
+                  <div style={{flex:1,fontSize:".78rem",color:"#1E293B",lineHeight:1.6}}>
+                    <div>Active Image: <strong>{curTpl.imageSource === "logo" ? "🏛️ Trust Logo" : curTpl.imageSource === "custom" ? "🖼️ Custom Uploaded Image" : "🏦 Bank of Baroda QR Standee"}</strong></div>
+                    <div>Merchant Name: <strong>MUMBAI MEGHWAL PANCHAYAT</strong></div>
+                    <div>UPI VPA: <strong style={{color:"#2563EB"}}>{curTpl.upiId || "mumba98697331@barodampay"}</strong></div>
+                    <div style={{fontSize:".72rem",color:"#15803D"}}>✅ Linked with automated WhatsApp OpenGraph preview & Donate landing page</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Message Preview Card */}
+              <div style={{background:"#F8FAFC",border:"1px solid #CBD5E1",borderRadius:10,padding:16}}>
+                <div style={{fontSize:".78rem",fontWeight:800,color:"#475569",textTransform:"uppercase",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+                  <span>👁️</span> Live Preview for "{curTpl.name || curTpl.id}":
+                </div>
+                <div style={{background:"#ECE5DD",borderRadius:8,padding:12,fontFamily:"monospace",fontSize:".8rem",lineHeight:1.6,color:"#111827",whiteSpace:"pre-wrap",border:"1px solid #D1D5DB"}}>
+                  {(() => {
+                    const parts = [];
+                    if (curTpl.includeGPay === true) {
+                      parts.push("💳 *દાન QR સ્કેનર:* " + (curTpl.donateLink || "https://mmp-cwc.com/donate/"));
+                    }
+                    if (curTpl.includeHeader !== false) {
+                      parts.push(curTpl.header || ".  🌷 || મુંબઈ મેઘવાળ પંચાયત || 🌷\n         [NGO]\n   •••• સેન્ટ્રલ વર્કિંગ કમિટી ••••\n☸~~~~~~~~~~~~~~~~~☸");
+                    }
+                    if (curTpl.includeAppeal !== false && curTpl.appeal) {
+                      parts.push(curTpl.appeal);
+                    }
+                    if (curTpl.includeList !== false) {
+                      const row1 = (curTpl.rowPattern || "₹ {AMOUNT}/- {NAME}").replace("{AMOUNT}", "5,000").replace("{NAME}", "દાતા ૧ (10 MAHALAXMI)").replace("{VIBHAG}", "10 MAHALAXMI");
+                      const row2 = (curTpl.rowPattern || "₹ {AMOUNT}/- {NAME}").replace("{AMOUNT}", "2,500").replace("{NAME}", "દાતા ૨ (65 KALWA)").replace("{VIBHAG}", "65 KALWA");
+                      parts.push("•••••••••••••••••••••••••••••\n" + row1 + "\n" + row2 + "\n•••••••••••••••••••••••••••••");
+                    }
+                    if (curTpl.includeTotal !== false) {
+                      parts.push((curTpl.totalLabel || "💰 *કુલ દાન રકમ: ₹{TOTAL}* ({COUNT} દાતાઓ)").replace("{TOTAL}", "7,500").replace("{COUNT}", "2"));
+                    }
+                    if (curTpl.includeFooter !== false && curTpl.signatory) {
+                      parts.push(curTpl.signatory);
+                    }
+                    if (curTpl.includeGPay === true) {
+                      parts.push((curTpl.qrHeader || "💳 *GPay / BHIM QR સ્કેનર & Direct Pay:*") + "\n🔗 " + (curTpl.donateLink || "https://mmp-cwc.com/donate/") + "\n📲 UPI ID: " + (curTpl.upiId || "mumba98697331@barodampay"));
+                    }
+                    parts.push("🌐 પોર્ટલ: https://www.mmp-cwc.com");
+                    return parts.join("\n\n");
+                  })()}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await fbSave(C, auth?.idToken);
+                    alert("✅ All WhatsApp Templates, Headers, Footers & QR Settings saved successfully to database!");
+                  } catch(err) {
+                    alert("Save failed: " + err.message);
+                  }
+                }}
+                style={{
+                  padding: "12px 24px",
+                  background: "linear-gradient(135deg, #15803D, #166534)",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 8,
+                  fontWeight: 800,
+                  fontSize: ".9rem",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 8px rgba(22,101,52,0.3)"
+                }}
+              >
+                💾 Save All WhatsApp Templates & Settings to Database
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
     </div>
   );
 }
@@ -18584,7 +22524,210 @@ function VerificationModal({ viewing, setViewing, allRegs, saveVerification, C, 
 
 
 // ── Bulk / Broadcast WhatsApp Message Sender Modal ──────────────────────────────
-function BulkWhatsAppBroadcastModal({ event, recipients = [], C, auth, onLogSent, onClose }) {
+// ── WhatsApp Student Registration Summary & List Placeholders Helper ────────────────
+// Universal Per-Event Registration Data Generator Helper
+export const generateEventScopedStats = (reg, eventKeyOrObj, allRegs = [], vibhagOverride = null) => {
+  const evQuery = typeof eventKeyOrObj === 'string' ? eventKeyOrObj : (eventKeyOrObj?.id || eventKeyOrObj?.title || 'education2026');
+  const evTitle = typeof eventKeyOrObj === 'object' && eventKeyOrObj?.title ? eventKeyOrObj.title : evQuery;
+  const isEdu = evQuery === 'education2026' || (String(evQuery).toLowerCase().includes('education') && !String(evQuery).toLowerCase().includes('committee'));
+
+  // Filter registrations for this specific event query
+  const scopedRegs = (Array.isArray(allRegs) && allRegs.length > 0) ? allRegs.filter(r => {
+    if (!r || typeof r !== 'object') return false;
+    if (r.deleted === true || r.deleted === "true" || r.isDeleted === true || r.isTrash === true || r.inTrash === true || r.status === "Deleted" || r.Status === "Deleted") return false;
+    if (r.isGlobalGuest === true || r.isSpecialGuest === true || Boolean(r.globalGuestId) || r.formId === "global_guest_directory" || r.formId === "global_guest_directory_import") return false;
+
+    // Exclude guest passes, committee invites, and VIP passes
+    const txn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase();
+    if (txn.startsWith("GST-") || txn.startsWith("GUEST-") || txn.startsWith("VIP-") || txn.startsWith("INV-") || txn.startsWith("PASS-")) {
+      return false;
+    }
+
+    // Exclude entries that are clearly workspace committee members or lack any student data
+    const hasStudentMarks = Boolean(r['Stream / Class'] || r['Stream'] || r['Course'] || r['% Obtained'] || r.percentage || r['Marks / Percentage'] || r['Standard'] || r.marksheet || r.studentName || r['Student Name'] || r['Candidate Name']);
+    if (r.isInviteMode || r.targetTemplateId || r.Designation || r.designation || r['Designation / Role']) {
+      if (!hasStudentMarks) return false;
+    }
+
+    // Must have a real valid name, not blank or literal Participant
+    const sNameCheck = String(r['Full Name'] || r['Participant Name'] || r['Student Name'] || r['Candidate Name'] || r.name || r.Name || r['Submitted By'] || '').trim();
+    if (!sNameCheck || sNameCheck.toLowerCase() === 'participant' || sNameCheck.toLowerCase() === 'unspecified' || sNameCheck === '-') {
+      return false;
+    }
+
+    if (isEdu) {
+      const isEduTxn = txn.startsWith("VG-") || txn.startsWith("EDU");
+      const isEduForm = String(r.formId || '').toLowerCase().includes('edu') || String(r.formId || '').toLowerCase().includes('vidya');
+      const evName = String(r.eventName || r.eventTitle || r.eventId || "").toLowerCase();
+      const isRealEduStudent = isEduTxn || isEduForm || (hasStudentMarks && (evName.includes("education") || evName.includes("felicitation") || evName.includes("2026") || evName.includes("vidya") || evName === "" || evName === "unknown event"));
+      return isRealEduStudent;
+    }
+
+    const targetQuery = String(evQuery).toLowerCase().trim();
+    if (targetQuery === 'all') return true;
+
+    const tokens = targetQuery.split(/[\s_/-]+/).filter(w => w.length > 2 && w !== 'event' && w !== 'program');
+    const combinedStr = `${r.eventId || ''} ${r.eventName || ''} ${r.eventTitle || ''} ${r.formId || ''} ${r.purpose || ''} ${r.program || ''} ${r['Purpose / Event Code'] || ''}`.toLowerCase();
+    
+    if (tokens.length > 0) {
+      return tokens.some(tok => combinedStr.includes(tok));
+    }
+    return combinedStr.includes(targetQuery);
+  }) : [];
+
+  const totalCount = scopedRegs.length;
+  const approvedCount = scopedRegs.filter(s => (s.Status === 'Approved' || s.status === 'Approved')).length;
+  const pendingCount = scopedRegs.filter(s => (!s.Status && !s.status) || s.Status === 'Pending' || s.status === 'Pending').length;
+  const needsInfoCount = scopedRegs.filter(s => s.Status === 'Needs Info' || s.status === 'Needs Info').length;
+
+  // Extract all known distinct Vibhag names from scoped student registrations
+  const distinctVibhags = Array.from(new Set(
+    scopedRegs.map(s => typeof getRecordVibhag === 'function' ? getRecordVibhag(s) : (s['Vibhag New'] || s['Vibhag'] || s.vibhag || ''))
+      .filter(v => v && v !== 'Unspecified' && v !== '-' && String(v).toLowerCase() !== 'blank')
+  ));
+
+  // Resolve target geographic Vibhag for recipient
+  const resolveRecipientVibhag = (r) => {
+    if (vibhagOverride === 'all' || r?.vibhagScope === 'all') return '';
+    if (vibhagOverride && vibhagOverride !== 'auto') {
+      return vibhagOverride;
+    }
+    if (!r) return "";
+
+    // 1. Direct Vibhag field on recipient
+    const rawV = String(r['Vibhag New'] || r['Vibhag'] || r.vibhag || r['MMP Vibhag'] || r['Vibhag Name'] || r.assignedVibhag || r.selectedVibhag || "").trim();
+    if (rawV && rawV !== '-' && rawV.toLowerCase() !== 'unspecified' && rawV.toLowerCase() !== 'blank') {
+      const matchDirect = distinctVibhags.find(dv => 
+        dv.toLowerCase() === rawV.toLowerCase() || 
+        dv.toLowerCase().includes(rawV.toLowerCase()) || 
+        rawV.toLowerCase().includes(dv.toLowerCase())
+      );
+      if (matchDirect) return matchDirect;
+    }
+
+    // 2. Search across recipient's Name, Designation, Address, Remarks, Role, Leader Name
+    const recipientBio = `${r.Name || ''} ${r['Full Name'] || ''} ${r['Participant Name'] || ''} ${r.Designation || ''} ${r.designation || ''} ${r['Designation / Role'] || ''} ${r.Address || ''} ${r.address || ''} ${r.Remarks || ''} ${r.remarks || ''} ${r['Parent Leader Name'] || ''} ${r.role || ''}`.toLowerCase();
+
+    for (const dv of distinctVibhags) {
+      const dvClean = dv.replace(/^\d+[\s_-]*/, '').trim().toLowerCase(); // e.g. "mahalaxmi"
+      const dvNum = (dv.match(/^\d+/) || [])[0]; // e.g. "10"
+      
+      if (dvClean.length >= 4 && recipientBio.includes(dvClean)) {
+        return dv;
+      }
+      if (dvNum && (recipientBio.includes(`vibhag ${dvNum}`) || recipientBio.includes(`vibhag-${dvNum}`) || recipientBio.includes(`vibhag no ${dvNum}`) || recipientBio.includes(`vibhag no. ${dvNum}`))) {
+        return dv;
+      }
+    }
+
+    // 3. Fallback: if rawV exists and is not generic committee word, return rawV
+    const nonGeoKeywords = ['cwc', 'trustee', 'kalyan', 'special guest', 'dignitary', 'panchayat'];
+    if (rawV && !nonGeoKeywords.some(kw => rawV.toLowerCase() === kw)) {
+      return rawV;
+    }
+
+    return "";
+  };
+
+  const targetVibhag = resolveRecipientVibhag(reg);
+
+  const matchesTargetVibhag = (studentVibhag, target) => {
+    if (!target) return true;
+    const sv = String(studentVibhag || '').trim().toLowerCase();
+    const tv = String(target || '').trim().toLowerCase();
+    if (!sv || sv === 'unspecified') return false;
+    if (sv === tv || sv.includes(tv) || tv.includes(sv)) return true;
+
+    // Number matching (e.g. "10" in "10 MAHALAXMI")
+    const svNum = (sv.match(/^\d+/) || [])[0];
+    const tvNum = (tv.match(/^\d+/) || [])[0];
+    if (svNum && tvNum && svNum === tvNum) return true;
+
+    // Text matching without number
+    const svClean = sv.replace(/^\d+[\s_-]*/, '').trim();
+    const tvClean = tv.replace(/^\d+[\s_-]*/, '').trim();
+    if (svClean && tvClean && (svClean.includes(tvClean) || tvClean.includes(svClean))) return true;
+
+    return false;
+  };
+
+  const vibhagRegs = targetVibhag 
+    ? scopedRegs.filter(s => {
+        const sv = typeof getRecordVibhag === 'function' ? getRecordVibhag(s) : (s['Vibhag New'] || s['Vibhag'] || s.vibhag || '');
+        return matchesTargetVibhag(sv, targetVibhag);
+      })
+    : scopedRegs;
+
+  const vibhagCount = vibhagRegs.length;
+  const vibhagApproved = vibhagRegs.filter(s => (s.Status === 'Approved' || s.status === 'Approved')).length;
+  const vibhagPending = vibhagRegs.filter(s => (!s.Status && !s.status) || s.Status === 'Pending' || s.status === 'Pending').length;
+
+  const displayScopeName = isEdu ? "Education 2026" : evTitle;
+  const displayVibhagLabel = targetVibhag ? targetVibhag : `All ${displayScopeName} Registrations`;
+
+  // Stream breakdown
+  const streamMap = {};
+  vibhagRegs.forEach(s => {
+    const st = s['Stream / Class'] || s.Stream || s.Course || s.Standard || s.Category || s.category || 'General';
+    streamMap[st] = (streamMap[st] || 0) + 1;
+  });
+  const streamLines = Object.entries(streamMap).map(([st, count]) => `• ${st}: *${count}*`).join('\n');
+
+  const vibhagSummary = `📊 *Registration Summary (${displayVibhagLabel}):*\n• Total: *${vibhagCount}*\n• 🟢 Approved: *${vibhagApproved}* | ⏳ Pending: *${vibhagPending}*${streamLines ? `\n${streamLines}` : ''}`;
+  const eventSummary = targetVibhag
+    ? vibhagSummary
+    : `📊 *Event Registration Summary (${displayScopeName}):*\n• Total: *${totalCount}*\n• 🟢 Approved: *${approvedCount}* | ⏳ Pending: *${pendingCount}*${needsInfoCount > 0 ? ` | ⚠️ Needs Info: *${needsInfoCount}*` : ''}`;
+
+  const vibhagList = vibhagRegs.length > 0
+    ? `📋 *Registered List (${displayVibhagLabel} - ${vibhagCount}):*\n` + vibhagRegs.map((s, idx) => {
+        const sName = String(s['Full Name'] || s['Student Name'] || s['Candidate Name'] || s['Participant Name'] || s.name || s.Name || s['Submitted By'] || 'Participant').replace(/\|/g, ' ').trim();
+        const sStream = s['Stream / Class'] || s.Stream || s.Standard || s.Category || '';
+        const sPct = s['% Obtained'] || s.percentage || s['Marks / Percentage'] || '';
+        const detailStr = [sStream, sPct ? `${sPct}%` : ''].filter(Boolean).join(' - ');
+        return `${idx + 1}. *${sName}*${detailStr ? ` (${detailStr})` : ''}`;
+      }).join('\n')
+    : `📋 *Registered List (${displayVibhagLabel}):* No registrations found for this Vibhag.`;
+
+  const allList = scopedRegs.length > 0
+    ? `📋 *All Registrations (${displayScopeName} - ${totalCount}):*\n` + scopedRegs.map((s, idx) => {
+        const sName = String(s['Full Name'] || s['Student Name'] || s['Candidate Name'] || s['Participant Name'] || s.name || s.Name || s['Submitted By'] || 'Participant').replace(/\|/g, ' ').trim();
+        const sv = typeof getRecordVibhag === 'function' ? getRecordVibhag(s) : (s['Vibhag New'] || s['Vibhag'] || s.vibhag || '');
+        const sStream = s['Stream / Class'] || s.Stream || s.Standard || s.Category || '';
+        return `${idx + 1}. *${sName}*${sStream ? ` (${sStream})` : ''}${sv && sv !== 'Unspecified' ? ` - ${sv}` : ''}`;
+      }).join('\n')
+    : `📋 *All Registrations:* No registrations found for this event.`;
+
+  const isSpecific = Boolean(targetVibhag);
+  const effectiveTotalCount = isSpecific ? vibhagCount : totalCount;
+  const effectiveApprovedCount = isSpecific ? vibhagApproved : approvedCount;
+  const effectivePendingCount = isSpecific ? vibhagPending : pendingCount;
+  const effectiveSummary = isSpecific ? vibhagSummary : eventSummary;
+  const effectiveList = isSpecific ? vibhagList : allList;
+
+  return {
+    targetVibhag,
+    distinctVibhags,
+    isSpecificVibhag: isSpecific,
+    totalStudentsCount: String(effectiveTotalCount),
+    totalCount: String(effectiveTotalCount),
+    approvedStudentsCount: String(effectiveApprovedCount),
+    pendingStudentsCount: String(effectivePendingCount),
+    vibhagStudentCount: String(vibhagCount),
+    vibhagApprovedCount: String(vibhagApproved),
+    vibhagPendingCount: String(vibhagPending),
+    vibhagStudentSummary: isSpecific ? vibhagSummary : eventSummary,
+    eventRegistrationSummary: effectiveSummary,
+    vibhagStudentList: isSpecific ? vibhagList : allList,
+    allStudentsList: effectiveList,
+    studentDetailsList: effectiveList
+  };
+};
+
+export const buildWhatsAppStudentSummaryPlaceholders = (reg, event, allRegs = []) => {
+  return generateEventScopedStats(reg, event || 'education2026', allRegs);
+};
+
+function BulkWhatsAppBroadcastModal({ event, recipients = [], allRegs = [], C, auth, onLogSent, onClose }) {
   if (!event || recipients.length === 0) return null;
 
   const countApproved = recipients.filter(r => (r['Status'] || r.status) === "Approved").length;
@@ -18765,6 +22908,15 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, auth, onLogSent
       .replace(/\{EVENT_NAME\}/g, evTitle)
       .replace(/\{EVENT_TITLE\}/g, evTitle)
       .replace(/\{EVENT\}/g, evTitle)
+      .replace(/\{CURRENT_DATE\}/g, curDate)
+      .replace(/\{TODAY_DATE\}/g, curDate)
+      .replace(/\{TODAY\}/g, curDate)
+      .replace(/\{CURRENT_TIME\}/g, curTime)
+      .replace(/\{TIME\}/g, curTime)
+      .replace(/\{NOW_TIME\}/g, curTime)
+      .replace(/\{CURRENT_DATETIME\}/g, curDateTime)
+      .replace(/\{DATE_TIME\}/g, curDateTime)
+      .replace(/\{NOW\}/g, curDateTime)
       .replace(/\{DATE\}/g, evDate)
       .replace(/\{EVENT_DATE\}/g, evDate)
       .replace(/\{VENUE\}/g, evVenue)
@@ -18800,7 +22952,89 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, auth, onLogSent
       .replace(/\{WEBSITE_URL\}/g, baseUrl)
       .replace(/\{WEBSITE_HOME\}/g, baseUrl)
       .replace(/\{HELPLINE_PHONES\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209 / +91 9967821964")
-      .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209");
+      .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209")
+      .replace(/\{DONATION_PURPOSE\}/g, reg["Purpose"] || reg["Donation Purpose"] || "General Charitable Fund")
+      .replace(/\{TRUST_PAN\}/g, C.trust?.pan || "AAATV1234F")
+      .replace(/\{80G_REG_NO\}/g, C.trust?.reg80G || C.trust?.regNo || "Regd. No. F-13507 (Mumbai)")
+      .replace(/\{TEAM_MEMBER_NAME\}/g, reg["Member Name"] || participantNameVal)
+      .replace(/\{TEAM_DESIGNATION\}/g, reg["Position"] || reg["Designation"] || "Committee Member")
+      .replace(/\{TEAM_COMMITTEE\}/g, reg["Committee"] || "Central Working Committee")
+      .replace(/\{PRESIDENT_NAME\}/g, C.trust?.president || "Kishore Parmar")
+      .replace(/\{GENERAL_SECRETARY_NAME\}/g, C.trust?.secretary || "Pradeep Parmar")
+      .replace(/\{TREASURER_NAME\}/g, C.trust?.treasurer || "Treasurer")
+      .replace(/\{TRUST_NAME\}/g, C.trust?.name || "Mumbai Meghwal Panchayat");
+
+    const customTargetEventId = r?.activeDocTpl?.customTpl?.targetEventId || r?.targetEventId || event?.targetEventId;
+    const activeTargetScope = (customTargetEventId && customTargetEventId !== 'current') ? customTargetEventId : 'education2026';
+    const allPool = (Array.isArray(allRegs) && allRegs.length > 0) ? allRegs : recipients;
+
+    const stats = typeof generateEventScopedStats === 'function'
+      ? generateEventScopedStats(r, activeTargetScope, allPool)
+      : buildWhatsAppStudentSummaryPlaceholders(r, activeTargetScope, allPool);
+
+    const eduStats = typeof generateEventScopedStats === 'function'
+      ? generateEventScopedStats(r, 'education2026', allPool)
+      : stats;
+
+    processed = processed
+      .replace(/\{TOTAL_STUDENTS_COUNT\}/g, stats.totalStudentsCount)
+      .replace(/\{TOTAL_REGISTRATIONS\}/g, stats.totalStudentsCount)
+      .replace(/\{TOTAL_COUNT\}/g, stats.totalStudentsCount)
+      .replace(/\{APPROVED_STUDENTS_COUNT\}/g, stats.approvedStudentsCount)
+      .replace(/\{APPROVED_COUNT\}/g, stats.approvedStudentsCount)
+      .replace(/\{PENDING_STUDENTS_COUNT\}/g, stats.pendingStudentsCount)
+      .replace(/\{PENDING_COUNT\}/g, stats.pendingStudentsCount)
+      .replace(/\{VIBHAG_STUDENT_COUNT\}/g, stats.vibhagStudentCount)
+      .replace(/\{VIBHAG_APPROVED_COUNT\}/g, stats.vibhagApprovedCount)
+      .replace(/\{VIBHAG_STUDENT_SUMMARY\}/g, stats.vibhagStudentSummary)
+      .replace(/\{EVENT_STUDENT_SUMMARY\}/g, stats.eventRegistrationSummary)
+      .replace(/\{EVENT_REGISTRATION_SUMMARY\}/g, stats.eventRegistrationSummary)
+      .replace(/\{REGISTRATION_STATS\}/g, stats.eventRegistrationSummary)
+      .replace(/\{VIBHAG_STUDENT_LIST\}/g, stats.vibhagStudentList)
+      .replace(/\{STUDENT_LIST\}/g, stats.vibhagStudentList)
+      .replace(/\{STUDENT_DETAILS_LIST\}/g, stats.studentDetailsList)
+      .replace(/\{DETAILED_STUDENT_LIST\}/g, stats.studentDetailsList)
+      .replace(/\{ALL_STUDENTS_LIST\}/g, stats.allStudentsList)
+      // Dedicated Education 2026 shortcuts
+      .replace(/\{EDU_VIBHAG_STUDENT_LIST\}/g, eduStats.vibhagStudentList)
+      .replace(/\{EDU2026_VIBHAG_STUDENT_LIST\}/g, eduStats.vibhagStudentList)
+      .replace(/\{EDUCATION_2026_VIBHAG_STUDENT_LIST\}/g, eduStats.vibhagStudentList)
+      .replace(/\{EDU_VIBHAG_STUDENT_SUMMARY\}/g, eduStats.vibhagStudentSummary)
+      .replace(/\{EDU_ALL_STUDENTS_LIST\}/g, eduStats.allStudentsList)
+      .replace(/\{EDU_TOTAL_STUDENTS_COUNT\}/g, eduStats.totalStudentsCount);
+
+    const monsoonStats = typeof generateEventScopedStats === 'function'
+      ? generateEventScopedStats(r, 'Monsoon', allPool)
+      : null;
+    if (monsoonStats) {
+      processed = processed
+        .replace(/\{MONSOON_VIBHAG_STUDENT_LIST\}/g, monsoonStats.vibhagStudentList)
+        .replace(/\{MONSOON_STUDENT_LIST\}/g, monsoonStats.vibhagStudentList)
+        .replace(/\{MONSOON_VIBHAG_LIST\}/g, monsoonStats.vibhagStudentList)
+        .replace(/\{MONSOON_VIBHAG_SUMMARY\}/g, monsoonStats.vibhagStudentSummary)
+        .replace(/\{MONSOON_ALL_LIST\}/g, monsoonStats.allStudentsList)
+        .replace(/\{MONSOON_TOTAL_COUNT\}/g, monsoonStats.totalStudentsCount);
+    }
+
+    processed = processed.replace(/\{EVENT_VIBHAG_LIST:([^}]+)\}/gi, (match, evNameArg) => {
+      const s = generateEventScopedStats(r, evNameArg.trim(), allPool);
+      return s.vibhagStudentList;
+    }).replace(/\{EVENT_VIBHAG_STUDENT_LIST:([^}]+)\}/gi, (match, evNameArg) => {
+      const s = generateEventScopedStats(r, evNameArg.trim(), allPool);
+      return s.vibhagStudentList;
+    }).replace(/\{EVENT_SUMMARY:([^}]+)\}/gi, (match, evNameArg) => {
+      const s = generateEventScopedStats(r, evNameArg.trim(), allPool);
+      return s.eventRegistrationSummary;
+    }).replace(/\{EVENT_VIBHAG_SUMMARY:([^}]+)\}/gi, (match, evNameArg) => {
+      const s = generateEventScopedStats(r, evNameArg.trim(), allPool);
+      return s.vibhagStudentSummary;
+    }).replace(/\{EVENT_ALL_LIST:([^}]+)\}/gi, (match, evNameArg) => {
+      const s = generateEventScopedStats(r, evNameArg.trim(), allPool);
+      return s.allStudentsList;
+    }).replace(/\{EVENT_COUNT:([^}]+)\}/gi, (match, evNameArg) => {
+      const s = generateEventScopedStats(r, evNameArg.trim(), allPool);
+      return s.totalStudentsCount;
+    });
 
     return processed;
   };
@@ -18924,7 +23158,7 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, auth, onLogSent
         : (activeTemplate?.name || "Status Notice");
 
       if (typeof onLogSent === "function") {
-        try { onLogSent(r, msgType); } catch(e){}
+        try { onLogSent(r, msgType, msg); } catch(e){}
       }
 
       if (launchMode === "app") {
@@ -19410,8 +23644,8 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], C, auth, onLogSent
   );
 }
 
-// ── Workspace-Specific Multi-Template Manager Modal ──────────────────────────────
-function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
+// ── Workspace-Specific Multi-Template Manager Modal (Unified WhatsApp & PDF Studio) ─────────
+function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initialTab = "whatsapp", initialPdfTplId = null, allRegs = [] }) {
   if (!event) return null;
 
   const defaultTemplates = [
@@ -19432,6 +23666,12 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
       name: "Event Reminder & Reporting Time Notice",
       isDefault: false,
       text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n⏰ *Gentle Reminder: Education Felicitation 2026*\n═══════════════════════\nNamaste *{STUDENT_NAME}*,\n\nThis is a gentle reminder that the *Annual Student Education Felicitation Ceremony* is scheduled for *02-10-2026 (Friday)*.\n\n• *Invitee Name:* {STUDENT_NAME}\n• *Pass / Txn ID:* {TXN_ID}\n• *Reporting Time:* 09:30 AM Sharp\n• *Venue:* Mumbai, Maharashtra\n\n👉 *Open Your Digital Pass on Mobile:*\n{INVITE_PDF_LINK}\n\nPlease carry your digital pass on your phone for smooth verification at the venue.\n\nWarm regards,\n*Event Management Team*`
+    },
+    {
+      id: "tpl_vibhag_student_report",
+      name: "Vibhag Student Registration Report & List",
+      isDefault: false,
+      text: `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *{EVENT_NAME} - Student Registration Report*\n═══════════════════════\nRespected *{STUDENT_NAME}* (Vibhag Pramukh - *{VIBHAG}*),\n\nHere is the updated list and summary of students registered from your Vibhag for the upcoming *Annual Education Felicitation Ceremony*:\n\n{VIBHAG_STUDENT_SUMMARY}\n\n{VIBHAG_STUDENT_LIST}\n\n👉 *Manage & View Online Pass / Documents:*\n{PORTAL_URL}\n\nPlease review the list. If any eligible student from your Vibhag is missing, kindly assist them in completing registration at the earliest.\n\nWarm regards,\n*Central Working Committee (CWC) & Education Board*\n📞 Committee Helpline: {HELPLINE_PHONES}`
     }
   ];
 
@@ -19439,12 +23679,135 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
     ? event.whatsAppTemplates 
     : defaultTemplates;
 
+  // ── Mode Switcher: "whatsapp" | "pdf" ──
+  const [studioTab, setStudioTab] = useState(initialTab || "whatsapp");
+
+  // WhatsApp Templates State
   const [templates, setTemplates] = useState(JSON.parse(JSON.stringify(currentTemplates)));
   const [activeTplId, setActiveTplId] = useState(templates[0]?.id || "tpl_student_pass");
+  const textareaRef = useRef(null);
+
+  // Live registrations state for extracting actual section fields
+  const [liveRegs, setLiveRegs] = useState(() => {
+    if (Array.isArray(allRegs) && allRegs.length > 0) return allRegs;
+    try {
+      const cached = JSON.parse(localStorage.getItem("mmp_cached_registrations") || "[]");
+      if (Array.isArray(cached) && cached.length > 0) return cached;
+    } catch(e) {}
+    return [];
+  });
+
+  useEffect(() => {
+    if (Array.isArray(allRegs) && allRegs.length > 0) {
+      setLiveRegs(allRegs);
+    } else if (auth?.idToken) {
+      fbFetchRegistrations(auth.idToken).then(d => {
+        if (d && Array.isArray(d)) {
+          setLiveRegs(d);
+          try { localStorage.setItem("mmp_cached_registrations", JSON.stringify(d)); } catch(e){}
+        }
+      }).catch(e => console.error(e));
+    }
+  }, [allRegs, auth]);
+
+  // PDF Passes & Templates State
+  const isDonorWs = Boolean(event?.isDonorWorkspace || String(event?.title || "").toLowerCase().includes("donor"));
+  const initialPdfList = [
+    {
+      id: "invite",
+      name: event.inviteName || event.inviteTitle || (isDonorWs ? "Official Thank You Letter" : "Official Invite Letter"),
+      isPrimary: true,
+      type: "invite",
+      bgUrl: event.inviteBgUrl || "",
+      map: event.inviteMap || {},
+      fontSize: event.inviteFontSize || 16,
+      fontColor: event.inviteFontColor || "#000000",
+      orientation: event.inviteOrientation || "portrait",
+      bgFit: event.inviteBgFit || "letterhead"
+    },
+    ...(event.issueCertificates || event.certBgUrl ? [
+      {
+        id: "cert",
+        name: event.certName || event.certTitle || (isDonorWs ? "Official 80G Receipt PDF" : "Certificate Pass"),
+        isPrimary: true,
+        type: "cert",
+        bgUrl: event.certBgUrl || "",
+        map: event.certMap || {},
+        fontSize: event.certFontSize || 26,
+        fontColor: event.certFontColor || "#000000",
+        orientation: event.certOrientation || "landscape",
+        bgFit: event.certBgFit || "full"
+      }
+    ] : []),
+    ...(event.pdfTemplates || []).map(t => ({
+      ...t,
+      type: "custom",
+      map: t.map || t.fieldMap || {},
+      fontSize: t.fontSize || 16,
+      fontColor: t.fontColor || "#000000",
+      orientation: t.orientation || "portrait",
+      bgFit: t.bgFit || (t.orientation === 'landscape' ? "full" : "letterhead")
+    }))
+  ];
+
+  const [pdfTemplates, setPdfTemplates] = useState(initialPdfList);
+  const [activePdfId, setActivePdfId] = useState(() => {
+    if (initialPdfTplId && initialPdfList.some(p => p.id === initialPdfTplId)) return initialPdfTplId;
+    return initialPdfList[0]?.id || "invite";
+  });
+  const [draggingPdfField, setDraggingPdfField] = useState(null);
+  const [uploadingPdfBg, setUploadingPdfBg] = useState(false);
+  const [showPdfMediaLibrary, setShowPdfMediaLibrary] = useState(false);
+  const canvasContainerRef = useRef(null);
+  const pdfBgInputRef = useRef(null);
+  const [canvasScale, setCanvasScale] = useState(0.85);
+
   const [saving, setSaving] = useState(false);
+  const [variableSearch, setVariableSearch] = useState("");
+  const isEduWs = Boolean(event?.id === 'education2026' || String(event?.title || "").toLowerCase().includes("education"));
+  // Pivot Table & Connected Summaries State (Excel-style)
+  const [showPivotBuilder, setShowPivotBuilder] = useState(false);
+  const [pivotSection, setPivotSection] = useState("Education 2026");
+  const [pivotConnectedDims, setPivotConnectedDims] = useState(["Vibhag"]);
+  const [pivotMetric, setPivotMetric] = useState("Total Count");
+  const [pivotIndependentField, setPivotIndependentField] = useState("");
+
+  // Keep window global in sync for PDF generator
+  if (typeof window !== 'undefined') {
+    window.__MMP_INVITE_REGS__ = liveRegs;
+  }
+
+  const [collapsedCategories, setCollapsedCategories] = useState(() => {
+    return {
+      "🌱 Monsoon Registration Fields": true,
+      "👥 Contact Group & Guest Directory": !isEduWs,
+      "👥 Our Team & Leadership Directory": true,
+      "💰 Donation & 80G Tax Exemption Section": true,
+      "🎟️ Passes, Tokens & Custom Fields": false,
+      "🏛️ Event & Trust Info": true,
+      "📅 Live Current Date & Time": true,
+      "🎓 Education 2026 Summaries & Lists": true
+    };
+  });
+
+  const toggleCategory = (title) => {
+    setCollapsedCategories(prev => ({
+      ...prev,
+      [title]: !prev[title]
+    }));
+  };
+
+  const handleExpandAll = () => setCollapsedCategories({});
+  const handleCollapseAll = () => {
+    const allCollapsed = {};
+    variableCategories.forEach(cat => { allCollapsed[cat.title] = true; });
+    setCollapsedCategories(allCollapsed);
+  };
 
   const activeTpl = templates.find(t => t.id === activeTplId) || templates[0];
+  const activePdf = pdfTemplates.find(p => p.id === activePdfId) || pdfTemplates[0];
 
+  // WhatsApp Handlers
   const handleUpdateActiveTpl = (field, val) => {
     setTemplates(prev => prev.map(t => {
       if (t.id === activeTplId) {
@@ -19486,12 +23849,332 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
     setActiveTplId(remaining[0].id);
   };
 
+  // PDF Handlers
+  const handleUpdateActivePdf = (field, val) => {
+    setPdfTemplates(prev => prev.map(p => {
+      if (p.id === activePdfId) {
+        return { ...p, [field]: val };
+      }
+      return p;
+    }));
+  };
+
+  const handleAddNewPdfTemplate = () => {
+    const name = prompt("Enter Name for new PDF Template (e.g. Food Coupon, Token Number, Gate Pass):");
+    if (!name || !name.trim()) return;
+    const cleanName = name.trim();
+    const newId = "doc_" + Date.now();
+    const newPdf = {
+      id: newId,
+      name: cleanName,
+      type: "custom",
+      targetSection: "invites",
+      targetAudience: "assigned",
+      bgUrl: "",
+      map: {},
+      fontSize: 30,
+      fontColor: "#000000"
+    };
+    setPdfTemplates(prev => [...prev, newPdf]);
+    setActivePdfId(newId);
+  };
+
+  const handleDeletePdfTemplate = (idToDelete) => {
+    const target = pdfTemplates.find(p => p.id === idToDelete);
+    if (target?.isPrimary) {
+      alert("Primary event documents (Invite Letter / Certificate) cannot be deleted.");
+      return;
+    }
+    if (!window.confirm(`Delete PDF template "${target?.name}"?`)) return;
+    const rem = pdfTemplates.filter(p => p.id !== idToDelete);
+    setPdfTemplates(rem);
+    setActivePdfId(rem[0]?.id || "invite");
+  };
+
+  const handlePdfBgUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingPdfBg(true);
+    const reader = new FileReader();
+    reader.onload = (re) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let w = img.width, h = img.height;
+        if (w > 1600 || h > 1600) {
+          if (w >= h) {
+            h = Math.round((1600 / w) * h);
+            w = 1600;
+          } else {
+            w = Math.round((1600 / h) * w);
+            h = 1600;
+          }
+        }
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        const b64 = canvas.toDataURL("image/jpeg", 0.78);
+        const newMediaId = "media_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+        const newMediaDoc = {
+          id: newMediaId,
+          name: activePdf.name || "Event Letterhead",
+          category: "letterhead",
+          url: b64,
+          dimensions: { width: w, height: h },
+          fileSize: `${Math.round(b64.length * 0.75 / 1024)} KB`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        const curMedia = Array.isArray(C.mediaLibrary) ? C.mediaLibrary : [];
+        const updatedMedia = [newMediaDoc, ...curMedia];
+        if (typeof assetCache !== 'undefined') assetCache[newMediaId] = b64;
+        if (setC) setC({ ...C, mediaLibrary: updatedMedia });
+        handleUpdateActivePdf("bgUrl", `media://${newMediaId}`);
+        setUploadingPdfBg(false);
+      };
+      img.onerror = () => setUploadingPdfBg(false);
+      img.src = re.target.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleAddVariableToPdf = (varTag, customCoords = null) => {
+    if (!activePdf) return;
+    const curMap = { ...(activePdf.map || {}) };
+    const x = customCoords ? customCoords.x : 50;
+    const y = customCoords ? customCoords.y : (30 + ((Object.keys(curMap).length % 6) * 10));
+    curMap[varTag] = { x, y, visible: true };
+    handleUpdateActivePdf("map", curMap);
+  };
+
+  const handleRemoveVariableFromPdf = (varTag) => {
+    if (!activePdf) return;
+    const curMap = { ...(activePdf.map || {}) };
+    delete curMap[varTag];
+    handleUpdateActivePdf("map", curMap);
+  };
+
+  // ── On-Badge Variable Connection & Drill-Down Handlers (Excel-like Pivot on Canvas) ──
+  const [activeConnectBadgeKey, setActiveConnectBadgeKey] = useState(null);
+  const [badgeConnectSearch, setBadgeConnectSearch] = useState("");
+
+  const getDrillDownFieldsForBadge = (badgeKey) => {
+    let targetSec = "Education 2026";
+    const lk = String(badgeKey || "").toLowerCase();
+    if (lk.includes("contact") || lk.includes("guest")) {
+      targetSec = "Contact Groups";
+    } else if (lk.includes("team")) {
+      targetSec = "Our Team";
+    } else if (lk.includes("donation")) {
+      targetSec = "Donations";
+    } else if (lk.includes("monsoon")) {
+      targetSec = "Monsoon";
+    } else if (pivotSection) {
+      targetSec = pivotSection;
+    }
+
+    // Comprehensive list of actual fields for each section
+    let allAvailable = [];
+    if (targetSec === "Education 2026") {
+      allAvailable = [
+        "Full Name", "Vibhag", "% Obtained", "Obtained Marks", "Stream", "Gender", "Status", "Out Of Marks",
+        "Age_year", "Address", "Date", "Event", "Transaction ID", "Unique", "Remarks", "Updated By",
+        "Submitted By", "submitterMob", "Mobile Number", "Email Address", "Alternate Mobile Number",
+        "Other Stream", "Marksheet", "Revised Marksheet", "Supporting Document"
+      ];
+    } else if (targetSec === "Contact Groups") {
+      allAvailable = [
+        "Full Name", "Designation", "Mobile Number", "Group", "Email", "Address", "Vibhag Name",
+        "Transaction ID", "Token No", "Seat No", "Pass Link", "Gate Pass"
+      ];
+    } else if (targetSec === "Our Team") {
+      allAvailable = [
+        "Name", "Position", "Committee", "Level", "Mobile", "Profession", "Qualification", "Address",
+        "ID", "Display Order Index", "Parent Leader Name", "Photo URL", "Description"
+      ];
+    } else if (targetSec === "Donations") {
+      allAvailable = [
+        "Donor Name", "Amount", "Payment Mode", "Payment Date", "Purpose", "Financial Year",
+        "PAN Card", "Receipt No", "Mobile", "Email", "Address", "Transaction Ref"
+      ];
+    } else if (targetSec === "Monsoon") {
+      allAvailable = [
+        "Participant Name", "Full Name", "Mobile Number", "Vibhag", "Location / Area",
+        "Number of Saplings", "Status", "Transaction ID", "Remarks"
+      ];
+    }
+
+    // Also dynamically merge any live record fields detected
+    if (typeof sectionFieldMap !== 'undefined' && sectionFieldMap[targetSec]) {
+      sectionFieldMap[targetSec].forEach(f => {
+        if (!allAvailable.includes(f) && f !== "Total Count") {
+          allAvailable.push(f);
+        }
+      });
+    }
+
+    // Exclude dimensions already present in badgeKey
+    const cleanKey = String(badgeKey || "").replace(/[{}]/g, '').toLowerCase();
+    return allAvailable.filter(f => !cleanKey.includes(f.toLowerCase()));
+  };
+
+  const handleDrillDownBadgeWithField = (oldKey, newField) => {
+    if (!activePdf) return;
+    const curMap = { ...(activePdf.map || {}) };
+    const curPos = curMap[oldKey] || { x: 50, y: 50, visible: true };
+
+    const normKey = String(oldKey || "").replace(/[{}]/g, '').trim();
+    let updatedKey = "";
+
+    if (normKey.startsWith("PIVOT:")) {
+      const rest = normKey.replace(/^PIVOT:?/i, '').trim();
+      let secPrefix = "";
+      let body = rest;
+      if (rest.includes(":")) {
+        const colIdx = rest.indexOf(":");
+        secPrefix = rest.substring(0, colIdx + 1);
+        body = rest.substring(colIdx + 1);
+      }
+      const [dimsPart, metricPart = "Total Count"] = body.split("|").map(s => s.trim());
+      const dims = dimsPart.split(",").map(s => s.trim()).filter(Boolean);
+      if (!dims.some(d => d.toLowerCase() === newField.toLowerCase())) {
+        dims.push(newField);
+      }
+      updatedKey = `{PIVOT:${secPrefix}${dims.join(",")}|${metricPart}}`;
+    } else {
+      // oldKey was a simple field like {Total Count} or {Vibhag}
+      if (normKey.toLowerCase().includes("total count") || normKey.toLowerCase().includes("total_count")) {
+        updatedKey = `{PIVOT:${newField}|Total Count}`;
+      } else {
+        updatedKey = `{PIVOT:${normKey},${newField}|Total Count}`;
+      }
+    }
+
+    delete curMap[oldKey];
+    curMap[updatedKey] = { ...curPos, visible: true };
+    handleUpdateActivePdf("map", curMap);
+    setActiveConnectBadgeKey(null);
+  };
+
+  const handleRemoveDimFromBadge = (badgeKey, dimToRemove) => {
+    if (!activePdf) return;
+    const curMap = { ...(activePdf.map || {}) };
+    const curPos = curMap[badgeKey] || { x: 50, y: 50, visible: true };
+
+    const normKey = String(badgeKey || "").replace(/[{}]/g, '').trim();
+    if (!normKey.startsWith("PIVOT:")) return;
+
+    const rest = normKey.replace(/^PIVOT:?/i, '').trim();
+    let secPrefix = "";
+    let body = rest;
+    if (rest.includes(":")) {
+      const colIdx = rest.indexOf(":");
+      secPrefix = rest.substring(0, colIdx + 1);
+      body = rest.substring(colIdx + 1);
+    }
+    const [dimsPart, metricPart = "Total Count"] = body.split("|").map(s => s.trim());
+    const dims = dimsPart.split(",").map(s => s.trim()).filter(d => d.toLowerCase() !== dimToRemove.toLowerCase());
+
+    delete curMap[badgeKey];
+    let updatedKey = "";
+    if (dims.length === 0) {
+      updatedKey = "{Total Count}";
+    } else {
+      updatedKey = `{PIVOT:${secPrefix}${dims.join(",")}|${metricPart}}`;
+    }
+    curMap[updatedKey] = { ...curPos, visible: true };
+    handleUpdateActivePdf("map", curMap);
+  };
+
+  const handleBadgeDropConnect = (e, targetKey) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const dragged = e.dataTransfer.getData("text/plain");
+    if (!dragged) return;
+    const cleanField = dragged.replace(/[{}]/g, '').trim();
+    if (cleanField) {
+      handleDrillDownBadgeWithField(targetKey, cleanField);
+    }
+  };
+
+  const handleCanvasDrop = (e) => {
+    e.preventDefault();
+    if (!canvasContainerRef.current) return;
+    const rawTag = e.dataTransfer.getData("text/plain");
+    if (!rawTag) return;
+    const rect = canvasContainerRef.current.getBoundingClientRect();
+    let x = ((e.clientX - rect.left) / rect.width) * 100;
+    let y = ((e.clientY - rect.top) / rect.height) * 100;
+    x = Math.max(2, Math.min(98, Math.round(x * 10) / 10));
+    y = Math.max(2, Math.min(98, Math.round(y * 10) / 10));
+    handleAddVariableToPdf(rawTag, { x, y });
+  };
+
+  const handlePointerDownBadge = (e, key) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.target.setPointerCapture(e.pointerId);
+    setDraggingPdfField(key);
+  };
+
+  const handlePointerMoveBadge = (e) => {
+    if (!draggingPdfField || !canvasContainerRef.current) return;
+    const rect = canvasContainerRef.current.getBoundingClientRect();
+    let x = ((e.clientX - rect.left) / rect.width) * 100;
+    let y = ((e.clientY - rect.top) / rect.height) * 100;
+    x = Math.max(2, Math.min(98, Math.round(x * 10) / 10));
+    y = Math.max(2, Math.min(98, Math.round(y * 10) / 10));
+    const curMap = { ...(activePdf.map || {}) };
+    curMap[draggingPdfField] = { ...(curMap[draggingPdfField] || {}), x, y, visible: true };
+    handleUpdateActivePdf("map", curMap);
+  };
+
+  const handlePointerUpBadge = (e) => {
+    if (draggingPdfField) {
+      e.target.releasePointerCapture(e.pointerId);
+      setDraggingPdfField(null);
+    }
+  };
+
+  // Unified Save All
   const handleSaveAll = async () => {
     setSaving(true);
     try {
+      const inviteTpl = pdfTemplates.find(p => p.id === "invite");
+      const certTpl = pdfTemplates.find(p => p.id === "cert");
+      const customPdfTpls = pdfTemplates.filter(p => p.type === "custom");
+
       const updatedEvents = (C.events || []).map(e => {
         if (e.id === event.id || e.title === event.title) {
-          return { ...e, whatsAppTemplates: templates };
+          const updated = { 
+            ...e, 
+            whatsAppTemplates: templates,
+            pdfTemplates: customPdfTpls
+          };
+          if (inviteTpl) {
+            updated.inviteName = inviteTpl.name;
+            updated.inviteTitle = inviteTpl.name;
+            updated.inviteBgUrl = inviteTpl.bgUrl;
+            updated.inviteMap = inviteTpl.map;
+            updated.inviteFontSize = inviteTpl.fontSize;
+            updated.inviteFontColor = inviteTpl.fontColor;
+            updated.inviteOrientation = inviteTpl.orientation || "portrait";
+            updated.inviteBgFit = inviteTpl.bgFit || "letterhead";
+          }
+          if (certTpl) {
+            updated.certName = certTpl.name;
+            updated.certTitle = certTpl.name;
+            updated.certBgUrl = certTpl.bgUrl;
+            updated.certMap = certTpl.map;
+            updated.certFontSize = certTpl.fontSize;
+            updated.certFontColor = certTpl.fontColor;
+            updated.certOrientation = certTpl.orientation || "landscape";
+            updated.certBgFit = certTpl.bgFit || "full";
+          }
+          return updated;
         }
         return e;
       });
@@ -19499,7 +24182,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
       const updatedC = { ...C, events: updatedEvents };
       if (setC) setC(updatedC);
       await fbSave(updatedC, auth?.idToken);
-      alert("✅ Workspace WhatsApp Templates saved successfully!");
+      alert("✅ Workspace WhatsApp & PDF Templates saved successfully!");
       onClose();
     } catch (err) {
       console.error(err);
@@ -19509,260 +24192,1792 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose }) {
     }
   };
 
-  const insertPlaceholder = (ph) => {
+  const insertPlaceholderAtCursor = (ph) => {
     if (!activeTpl) return;
-    const cur = activeTpl.text || "";
-    handleUpdateActiveTpl("text", cur + ph);
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart || 0;
+      const end = textarea.selectionEnd || 0;
+      const cur = activeTpl.text || "";
+      const before = cur.substring(0, start);
+      const after = cur.substring(end);
+      const spacePrefix = (before.length > 0 && !before.endsWith(" ") && !before.endsWith("\n")) ? " " : "";
+      const spaceSuffix = (after.length > 0 && !after.startsWith(" ") && !after.startsWith("\n")) ? " " : "";
+      const inserted = spacePrefix + ph + spaceSuffix;
+      const updated = before + inserted + after;
+      handleUpdateActiveTpl("text", updated);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + inserted.length, start + inserted.length);
+      }, 10);
+    } else {
+      const cur = activeTpl.text || "";
+      handleUpdateActiveTpl("text", cur + " " + ph);
+    }
   };
 
-  return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100003,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
-      <div style={{background:"white",borderRadius:16,maxWidth:850,width:"100%",maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 25px 50px -12px rgba(0,0,0,0.35)"}} onClick={e=>e.stopPropagation()}>
-        
-        {/* Header */}
-        <div style={{padding:"18px 24px",background:"linear-gradient(135deg, #15803D, #166534)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div>
-            <h3 style={{fontSize:"1.15rem",fontWeight:800,margin:0,display:"flex",alignItems:"center",gap:8}}>
-              <span>📝</span> WhatsApp Templates for: {event.title || "Workspace"}
-            </h3>
-            <div style={{fontSize:".8rem",opacity:0.9,marginTop:2}}>
-              Create and manage multiple customizable WhatsApp message templates specific to this event.
-            </div>
-          </div>
-          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:32,height:32,color:"white",cursor:"pointer",fontWeight:800}}>✕</button>
-        </div>
+  const handlePaletteItemClick = (varTag) => {
+    if (studioTab === "whatsapp") {
+      insertPlaceholderAtCursor(varTag);
+    } else {
+      handleAddVariableToPdf(varTag);
+    }
+  };
 
-        {/* Body */}
-        <div style={{display:"flex",flex:1,overflow:"hidden"}}>
-          
-          {/* Left: Templates List */}
-          <div style={{width:260,borderRight:"1px solid #E2E8F0",background:"#F8FAFC",display:"flex",flexDirection:"column"}}>
-            <div style={{padding:"12px 14px",borderBottom:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:".75rem",fontWeight:700,color:"#475569",textTransform:"uppercase"}}>Templates ({templates.length})</span>
+  const handleDropOnTextarea = (e) => {
+    e.preventDefault();
+    const draggedText = e.dataTransfer.getData("text/plain");
+    if (!draggedText) return;
+    insertPlaceholderAtCursor(draggedText);
+  };
+
+  // ── Extract Actual Fields per Registration Section (Education, Contact Groups, Our Team, Donations) ──
+  const sectionFieldMap = {};
+
+  // 1. EXACT Education Registration Fields (from actual table export)
+  const exactEduFields = [
+    "Total Count", "Date", "Event", "Transaction ID", "Unique", "Status", "Remarks", "Updated By",
+    "Full Name", "Mobile Number", "Email Address", "% Obtained", "Address", "Age_year",
+    "Alternate Mobile Number", "Gender", "Marksheet", "Obtained Marks", "Other Stream",
+    "Out Of Marks", "Revised Marksheet", "Stream", "Submitted By", "submitterMob",
+    "Supporting Document", "Vibhag",
+    // Backend tracking fields for this section (clearly identified)
+    "passOpenCount", "firstPassOpenedAt", "lastPassOpenedAt", "whatsAppCount",
+    "lastWhatsAppAt", "lastWhatsAppType", "certificateReleased", "inviteLetterReleased"
+  ];
+  sectionFieldMap["Education 2026"] = new Set(exactEduFields);
+
+  // 2. EXACT Contact Groups Fields (from actual table export)
+  const exactContactGroupFields = [
+    "Total Count", "Full Name", "Designation", "Mobile Number", "Group", "Email", "Address", "Vibhag Name",
+    "Transaction ID", "Token No", "Seat No", "Pass Link", "Gate Pass"
+  ];
+  sectionFieldMap["Contact Groups"] = new Set(exactContactGroupFields);
+
+  // 3. EXACT Our Team Fields (from actual table export)
+  const exactOurTeamFields = [
+    "Total Count", "Level", "ID", "Display Order Index", "Name", "Position", "Parent Leader Name",
+    "Committee", "Mobile", "Profession", "Qualification", "Address", "Photo URL", "Description"
+  ];
+  sectionFieldMap["Our Team"] = new Set(exactOurTeamFields);
+
+  // 4. EXACT Donation Section Fields
+  const exactDonationFields = [
+    "Total Count", "Donor Name", "Amount", "Amount in Words", "Payment Mode", "Payment Date",
+    "Transaction Ref", "PAN Card", "Receipt No", "Financial Year", "Purpose",
+    "Mobile", "Email", "Address", "Trust PAN", "80G Registration No"
+  ];
+  sectionFieldMap["Donations"] = new Set(exactDonationFields);
+
+  // 5. EXACT Monsoon Registration Fields
+  const exactMonsoonFields = [
+    "Total Count", "Participant Name", "Full Name", "Mobile Number", "Vibhag",
+    "Location / Area", "Number of Saplings", "Transaction ID", "Status", "Remarks"
+  ];
+  sectionFieldMap["Monsoon"] = new Set(exactMonsoonFields);
+
+  // ── DYNAMIC LINKING: Automatically detect any added/renamed fields in live data ──
+  // A) Link dynamically to actual Education & Monsoon registrations
+  if (Array.isArray(liveRegs) && liveRegs.length > 0) {
+    liveRegs.forEach(r => {
+      if (!r || typeof r !== 'object') return;
+      const rEvId = String(r.eventId || '').trim().toLowerCase();
+      const rEvTitle = String(r.eventName || r.eventTitle || '').trim().toLowerCase();
+      const txn = String(r['Transaction ID'] || r.transactionId || '').toUpperCase();
+      const combined = `${rEvId} ${rEvTitle} ${String(r.program || '')} ${String(r.purpose || '')}`.toLowerCase();
+
+      let targetSec = null;
+      if (txn.startsWith('EDU') || txn.startsWith('VG-') || combined.includes('education') || combined.includes('student') || Boolean(r['Stream / Class'] || r['% Obtained'])) {
+        targetSec = "Education 2026";
+      } else if (combined.includes('monsoon') || combined.includes('tree') || txn.startsWith('MON-')) {
+        targetSec = "Monsoon";
+      }
+
+      if (targetSec && sectionFieldMap[targetSec]) {
+        Object.keys(r).forEach(k => {
+          if (!k.startsWith('_') && k.length < 35 && !['id', 'eventId', 'eventTitle', 'eventName', 'deleted', 'isDeleted', 'isTrash', 'inTrash', 'formId'].includes(k)) {
+            const cleanK = k.trim();
+            const normK = cleanK.toLowerCase().replace(/[\s_-]+/g, '');
+            if (normK === 'vibhagnew' || cleanK === 'Vibhag New') {
+              sectionFieldMap[targetSec].add('Vibhag');
+            } else {
+              sectionFieldMap[targetSec].add(cleanK);
+            }
+          }
+        });
+      }
+    });
+  }
+
+  // B) Link dynamically to actual Contact Groups & Global Guests
+  const guestsList = Array.isArray(C.globalGuests) ? C.globalGuests : [];
+  guestsList.forEach(g => {
+    if (!g || typeof g !== 'object') return;
+    Object.keys(g).forEach(k => {
+      if (!k.startsWith('_') && k.length < 35 && !['id', 'globalGuestId', 'deleted', 'formId'].includes(k)) {
+        sectionFieldMap["Contact Groups"].add(k.trim());
+      }
+    });
+  });
+
+  // C) Link dynamically to actual Our Team items
+  const teamList = Array.isArray(C.teamItems) ? C.teamItems : [];
+  teamList.forEach(t => {
+    if (!t || typeof t !== 'object') return;
+    Object.keys(t).forEach(k => {
+      if (!k.startsWith('_') && k.length < 35 && !['id', 'deleted', 'isSeparator', 'order'].includes(k)) {
+        sectionFieldMap["Our Team"].add(k.trim());
+      }
+    });
+  });
+
+  // Helper to describe backend tracking fields clearly for user
+  const getFieldDescription = (f, secName) => {
+    if (f === 'passOpenCount') return 'Backend Field: Total count of times digital pass was opened';
+    if (f === 'firstPassOpenedAt') return 'Backend Field: Timestamp when pass was first viewed';
+    if (f === 'lastPassOpenedAt') return 'Backend Field: Timestamp when pass was last viewed';
+    if (f === 'whatsAppCount') return 'Backend Field: Number of WhatsApp messages dispatched';
+    if (f === 'lastWhatsAppAt') return 'Backend Field: Timestamp of latest WhatsApp dispatch';
+    if (f === 'lastWhatsAppType') return 'Backend Field: Template type of latest WhatsApp message';
+    if (f === 'certificateReleased') return 'Backend Field: Certificate release status flag';
+    if (f === 'inviteLetterReleased') return 'Backend Field: Official invite letter release flag';
+    if (f === 'submitterMob') return 'Mobile number of registration submitter';
+    if (f === 'Age_year') return 'Calculated applicant age in years';
+    if (f === 'Unique') return 'Duplicate detection status flag';
+    return `Actual ${secName} field: ${f}`;
+  };
+
+  // Construct Simplified, Dynamically Linked Variable Categories by Exact Section
+  const variableCategories = [
+    {
+      title: "📊 Pivot Table & Connected Summaries",
+      color: "#047857",
+      bgColor: "#ECFDF5",
+      borderColor: "#6EE7B7",
+      icon: "📊",
+      vars: [
+        { tag: "{Total Count}", label: "Total Count (Single Value)", desc: "Outputs single count (e.g. 74). Connect with Vibhag to auto-create pivot table!" },
+        { tag: "{PIVOT:Vibhag|Total Count}", label: "Pivot Table: Vibhag | Total Count", desc: "Segregated summary table grouped by Vibhag with totals" },
+        { tag: "{PIVOT:Vibhag,Gender|Total Count}", label: "Pivot Table: Vibhag | Gender | Total Count", desc: "2-dimension drill down table: Vibhag & Gender segregation" },
+        { tag: "{PIVOT:Stream|Total Count}", label: "Pivot Table: Stream | Total Count", desc: "Segregated summary table grouped by Stream" },
+        { tag: "{UNIQUE_LIST:Stream}", label: "Independent Unique List: Stream", desc: "Unique list of streams without drilling down the main pivot table" },
+        { tag: "{PIVOT:Contact Groups:Group|Total Count}", label: "Contact Groups Pivot: Group | Total Count", desc: "Summary table of guest groups" },
+        { tag: "{PIVOT:Our Team:Committee|Total Count}", label: "Our Team Pivot: Committee | Total Count", desc: "Committee wise team member summary" }
+      ]
+    },
+    {
+      title: "🎓 Education 2026 Registration Fields",
+      color: "#15803D",
+      bgColor: "#F0FDF4",
+      borderColor: "#86EFAC",
+      icon: "🎓",
+      vars: Array.from(sectionFieldMap["Education 2026"]).map(f => ({
+        tag: "{" + f + "}",
+        label: f,
+        desc: getFieldDescription(f, "Education 2026"),
+        isBackend: ['passOpenCount', 'firstPassOpenedAt', 'lastPassOpenedAt', 'whatsAppCount', 'lastWhatsAppAt', 'lastWhatsAppType', 'certificateReleased', 'inviteLetterReleased'].includes(f)
+      }))
+    },
+    {
+      title: "👥 Contact Group & Guest Directory",
+      color: "#6D28D9",
+      bgColor: "#F5F3FF",
+      borderColor: "#C4B5FD",
+      icon: "👥",
+      vars: Array.from(sectionFieldMap["Contact Groups"]).map(f => ({
+        tag: "{" + f + "}",
+        label: f,
+        desc: `Actual Contact Group field: ${f}`
+      }))
+    },
+    {
+      title: "👥 Our Team & Leadership Directory",
+      color: "#7C3AED",
+      bgColor: "#FAF5FF",
+      borderColor: "#DDD6FE",
+      icon: "👥",
+      vars: Array.from(sectionFieldMap["Our Team"]).map(f => ({
+        tag: "{" + f + "}",
+        label: f,
+        desc: `Actual Our Team member field: ${f}`
+      }))
+    },
+    {
+      title: "💰 Donation & 80G Tax Exemption Section",
+      color: "#059669",
+      bgColor: "#ECFDF5",
+      borderColor: "#A7F3D0",
+      icon: "💰",
+      vars: Array.from(sectionFieldMap["Donations"]).map(f => ({
+        tag: "{" + f + "}",
+        label: f,
+        desc: `Actual Donation field: ${f}`
+      }))
+    },
+    {
+      title: "🌱 Monsoon Registration Fields",
+      color: "#0284C7",
+      bgColor: "#F0F9FF",
+      borderColor: "#BAE6FD",
+      icon: "🌱",
+      vars: Array.from(sectionFieldMap["Monsoon"]).map(f => ({
+        tag: "{" + f + "}",
+        label: f,
+        desc: `Actual Monsoon field: ${f}`
+      }))
+    },
+    {
+      title: "🎟️ Workspace Passes & Tokens",
+      color: "#D97706",
+      bgColor: "#FFFBEB",
+      borderColor: "#FCD34D",
+      icon: "🎟️",
+      vars: [
+        { tag: "{TOKEN_NO}", label: "Token Number / Food Pass No", desc: "Token number or food pass counter" },
+        { tag: "{SEAT_NO}", label: "Seat / Hall Number", desc: "Assigned auditorium seat or row" },
+        { tag: "{GATE_PASS}", label: "Gate / Entry Pass ID", desc: "Entry gate verification tag" },
+        { tag: "{SUB_WORKSPACE_NAME}", label: "Sub-Workspace Pass Name", desc: "Pass or coupon template name (e.g. 'Food coupon')" },
+        { tag: "{PASS_LINK}", label: "1-Click Digital Pass Link", desc: "Direct personalized invitation pass URL" }
+      ]
+    },
+    {
+      title: "🏛️ Event & Trust Info",
+      color: "#B45309",
+      bgColor: "#FFFBEB",
+      borderColor: "#FCD34D",
+      icon: "🏛️",
+      vars: [
+        { tag: "{EVENT_NAME}", label: "Event Title", desc: "Title of the workspace event" },
+        { tag: "{PORTAL_NAME}", label: "Trust / Portal Name", desc: "Mumbai Meghwal Panchayat" },
+        { tag: "{DATE}", label: "Event Date", desc: "Official date of the ceremony" },
+        { tag: "{VENUE}", label: "Venue Location", desc: "Event venue location" },
+        { tag: "{HELPLINE_PHONES}", label: "Helpline Phone Numbers", desc: "Committee helpline contact numbers" }
+      ]
+    },
+    {
+      title: "📅 Live Current Date & Time",
+      color: "#0891B2",
+      bgColor: "#ECFEFF",
+      borderColor: "#A5F3FC",
+      icon: "📅",
+      vars: [
+        { tag: "{CURRENT_DATE}", label: "Current Date (DD-MM-YYYY)", desc: "Today's live date (e.g. 04-09-2026)" },
+        { tag: "{CURRENT_TIME}", label: "Current Time (HH:mm AM/PM)", desc: "Live current time (e.g. 09:30 AM)" },
+        { tag: "{CURRENT_DATETIME}", label: "Current Date & Time", desc: "Full timestamp (e.g. 04-09-2026, 09:30 AM)" },
+        { tag: "{TODAY}", label: "Today Shortcut", desc: "Alias for today's date" }
+      ]
+    },
+    {
+      title: "🎓 Education 2026 Summaries & Lists",
+      color: "#15803D",
+      bgColor: "#F0FDF4",
+      borderColor: "#86EFAC",
+      icon: "🎓",
+      vars: [
+        { tag: "{VIBHAG_STUDENT_LIST}", label: "Education Vibhag Student List", desc: "Numbered list of Education 2026 students from recipient's Vibhag" },
+        { tag: "{VIBHAG_STUDENT_SUMMARY}", label: "Education Vibhag Summary", desc: "Education 2026 counts & stream breakdown for recipient's Vibhag" },
+        { tag: "{ALL_STUDENTS_LIST}", label: "All Education 2026 Students", desc: "Complete list of all registered students in Education 2026" },
+        { tag: "{TOTAL_STUDENTS_COUNT}", label: "Education Total Count", desc: "Total count of registered students in Education 2026" },
+        { tag: "{EVENT_REGISTRATION_SUMMARY}", label: "Education Stats Breakdown", desc: "Overall Education 2026 stats (Approved, Pending, Needs Info)" }
+      ]
+    }
+  ];
+
+  const charCount = (activeTpl?.text || "").length;
+  const wordCount = (activeTpl?.text || "").trim().split(/\s+/).filter(Boolean).length;
+  const lineCount = (activeTpl?.text || "").split("\n").length;
+
+  // ── Dynamic Pivot Builder Calculations & Helper ──
+  const currentPoolData = (() => {
+    if (pivotSection.includes("Contact") || pivotSection.includes("Guest")) {
+      return Array.isArray(C.globalGuests) ? C.globalGuests : [];
+    }
+    if (pivotSection.includes("Team")) {
+      return Array.isArray(C.teamItems) ? C.teamItems : [];
+    }
+    if (pivotSection.includes("Donation")) {
+      return (Array.isArray(liveRegs) ? liveRegs : []).filter(r => r && (r.formId === 'donation' || String(r['Transaction ID'] || '').toUpperCase().startsWith('DON-') || r.Amount));
+    }
+    if (pivotSection.includes("Monsoon")) {
+      return (Array.isArray(liveRegs) ? liveRegs : []).filter(r => {
+        const txn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase();
+        const ev = String(r.eventId || r.eventName || r.eventTitle || "").toLowerCase();
+        return txn.startsWith("MON-") || ev.includes("monsoon") || ev.includes("tree");
+      });
+    }
+    // Default Education 2026
+    return (Array.isArray(liveRegs) ? liveRegs : []).filter(r => {
+      if (r.isGlobalGuest === true || r.formId === "global_guest_directory") return false;
+      const txn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase();
+      const ev = String(r.eventId || r.eventName || r.eventTitle || "").toLowerCase();
+      return txn.startsWith("EDU") || txn.startsWith("VG-") || ev.includes("education") || Boolean(r['Stream / Class'] || r['% Obtained']);
+    });
+  })();
+
+  const currentSectionTotal = currentPoolData.length || (pivotSection.includes("Education") ? (liveRegs.length > 0 ? liveRegs.length : 74) : 0);
+
+  const currentAvailableDims = (() => {
+    if (pivotSection.includes("Contact")) {
+      return ["Group", "Designation", "Vibhag Name", "Address"];
+    }
+    if (pivotSection.includes("Team")) {
+      return ["Committee", "Position", "Level", "Profession", "Qualification"];
+    }
+    if (pivotSection.includes("Donation")) {
+      return ["Payment Mode", "Financial Year", "Purpose"];
+    }
+    if (pivotSection.includes("Monsoon")) {
+      return ["Vibhag", "Status", "Location / Area"];
+    }
+    return ["Vibhag", "Gender", "Stream", "Status"];
+  })();
+
+  const calculatedPivotTag = (() => {
+    if (pivotConnectedDims.length === 0) {
+      return "{Total Count}";
+    }
+    return `{PIVOT:${pivotSection}:${pivotConnectedDims.join(",")}|${pivotMetric}}`;
+  })();
+
+  const calculatedPreviewText = (() => {
+    return buildUniversalPivotTable({
+      section: pivotSection,
+      dataset: currentPoolData,
+      connectedDims: pivotConnectedDims,
+      metric: pivotMetric,
+      independentField: pivotIndependentField,
+      format: studioTab === "whatsapp" ? "whatsapp" : "pdf_table"
+    });
+  })();
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100003,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div 
+        style={{
+          background:"white",
+          borderRadius:16,
+          maxWidth:1250,
+          width:"98%",
+          height:"92vh",
+          display:"flex",
+          flexDirection:"column",
+          boxShadow:"0 25px 60px rgba(0,0,0,0.4)",
+          overflow:"hidden"
+        }} 
+        onClick={e=>e.stopPropagation()}
+      >
+        {/* ── UNIFIED STUDIO HEADER WITH TOP TABS SWITCHER ── */}
+        <div style={{background:"linear-gradient(135deg, #15803D, #166534)",color:"white",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+            <div>
+              <h3 style={{margin:0,fontSize:"1.1rem",fontWeight:800,display:"flex",alignItems:"center",gap:8}}>
+                <span>🎨</span> Workspace Studio: {event.title}
+              </h3>
+              <div style={{fontSize:".74rem",opacity:0.9,marginTop:2}}>
+                {studioTab === "whatsapp" 
+                  ? "Design rich WhatsApp messages with live student counts and dynamic data." 
+                  : "Upload PDF template backgrounds and drag & drop variables directly onto the pass canvas."}
+              </div>
+            </div>
+
+            {/* Top Segmented Mode Switcher */}
+            <div style={{display:"flex",background:"rgba(0,0,0,0.22)",padding:3,borderRadius:10,gap:3,border:"1px solid rgba(255,255,255,0.2)"}}>
               <button
                 type="button"
-                onClick={handleAddNewTemplate}
-                style={{padding:"4px 8px",background:"#15803D",color:"white",border:"none",borderRadius:6,fontSize:".75rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                onClick={() => setStudioTab("whatsapp")}
+                style={{
+                  padding:"6px 14px",
+                  borderRadius:8,
+                  border:"none",
+                  cursor:"pointer",
+                  fontSize:".78rem",
+                  fontWeight:800,
+                  background: studioTab === "whatsapp" ? "white" : "transparent",
+                  color: studioTab === "whatsapp" ? "#166534" : "rgba(255,255,255,0.9)",
+                  boxShadow: studioTab === "whatsapp" ? "0 2px 6px rgba(0,0,0,0.2)" : "none",
+                  display:"flex",
+                  alignItems:"center",
+                  gap:5,
+                  transition:"all 0.15s"
+                }}
+              >
+                <span>💬</span> WhatsApp Templates ({templates.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStudioTab("pdf")}
+                style={{
+                  padding:"6px 14px",
+                  borderRadius:8,
+                  border:"none",
+                  cursor:"pointer",
+                  fontSize:".78rem",
+                  fontWeight:800,
+                  background: studioTab === "pdf" ? "white" : "transparent",
+                  color: studioTab === "pdf" ? "#166534" : "rgba(255,255,255,0.9)",
+                  boxShadow: studioTab === "pdf" ? "0 2px 6px rgba(0,0,0,0.2)" : "none",
+                  display:"flex",
+                  alignItems:"center",
+                  gap:5,
+                  transition:"all 0.15s"
+                }}
+              >
+                <span>📑</span> PDF Passes & Templates ({pdfTemplates.length})
+              </button>
+            </div>
+          </div>
+
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:32,height:32,color:"white",cursor:"pointer",fontWeight:800,fontSize:"1rem"}}>✕</button>
+        </div>
+
+        {/* ── 3-PANEL BODY ── */}
+        <div style={{display:"flex",flex:1,overflow:"hidden",background:"#F8FAFC"}}>
+          
+          {/* ══════════════════════════════════════════════════════════════
+              LEFT PANEL: LIST OF TEMPLATES (WHATSAPP OR PDF)
+             ══════════════════════════════════════════════════════════════ */}
+          <div style={{width:240,borderRight:"1px solid #E2E8F0",background:"white",display:"flex",flexDirection:"column",flexShrink:0}}>
+            <div style={{padding:"10px 12px",borderBottom:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#F8FAFC"}}>
+              <span style={{fontSize:".74rem",fontWeight:800,color:"#475569",textTransform:"uppercase"}}>
+                {studioTab === "whatsapp" ? `TEMPLATES (${templates.length})` : `PASSES (${pdfTemplates.length})`}
+              </span>
+              <button
+                type="button"
+                onClick={studioTab === "whatsapp" ? handleAddNewTemplate : handleAddNewPdfTemplate}
+                style={{padding:"4px 8px",background:"#15803D",color:"white",border:"none",borderRadius:6,fontSize:".72rem",fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
               >
                 <span>+</span> Add New
               </button>
             </div>
 
-            <div style={{flex:1,overflowY:"auto",padding:8,display:"flex",flexDirection:"column",gap:6}}>
-              {templates.map(t => {
-                const isActive = t.id === activeTplId;
-                return (
-                  <div
-                    key={t.id}
-                    onClick={() => setActiveTplId(t.id)}
-                    style={{
-                      padding:"10px 12px",
-                      borderRadius:8,
-                      border:isActive ? "2px solid #15803D" : "1px solid #E2E8F0",
-                      background:isActive ? "#F0FDF4" : "white",
-                      cursor:"pointer",
-                      display:"flex",
-                      flexDirection:"column",
-                      gap:4,
-                      transition:"all 0.15s"
-                    }}
-                  >
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <span style={{fontSize:".82rem",fontWeight:700,color:isActive ? "#15803D" : "#0F172A",lineHeight:1.3}}>
-                        {t.name}
-                      </span>
-                      {t.isDefault && (
-                        <span style={{background:"#DCFCE7",color:"#15803D",padding:"1px 6px",borderRadius:4,fontSize:".65rem",fontWeight:800}}>
-                          Default
+            <div style={{flex:1,overflowY:"auto",padding:10,display:"flex",flexDirection:"column",gap:6}}>
+              {studioTab === "whatsapp" ? (
+                templates.map(t => {
+                  const isActive = t.id === activeTplId;
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => setActiveTplId(t.id)}
+                      style={{
+                        padding:"9px 12px",
+                        borderRadius:8,
+                        border:isActive ? "2px solid #15803D" : "1px solid #E2E8F0",
+                        background:isActive ? "#F0FDF4" : "white",
+                        cursor:"pointer",
+                        display:"flex",
+                        flexDirection:"column",
+                        gap:3,
+                        boxShadow: isActive ? "0 2px 6px rgba(21,128,61,0.12)" : "none",
+                        transition:"all 0.15s"
+                      }}
+                    >
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:4}}>
+                        <span style={{fontSize:".8rem",fontWeight:700,color:isActive ? "#15803D" : "#0F172A",lineHeight:1.3}}>
+                          {t.name}
                         </span>
-                      )}
+                        {t.isDefault && (
+                          <span style={{background:"#DCFCE7",color:"#15803D",padding:"1px 5px",borderRadius:4,fontSize:".62rem",fontWeight:800,flexShrink:0}}>
+                            Default
+                          </span>
+                        )}
+                      </div>
                     </div>
+                  );
+                })
+              ) : (
+                pdfTemplates.map(p => {
+                  const isActive = p.id === activePdfId;
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => setActivePdfId(p.id)}
+                      style={{
+                        padding:"9px 12px",
+                        borderRadius:8,
+                        border:isActive ? "2px solid #15803D" : "1px solid #E2E8F0",
+                        background:isActive ? "#F0FDF4" : "white",
+                        cursor:"pointer",
+                        display:"flex",
+                        flexDirection:"column",
+                        gap:3,
+                        boxShadow: isActive ? "0 2px 6px rgba(21,128,61,0.12)" : "none",
+                        transition:"all 0.15s"
+                      }}
+                    >
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:4}}>
+                        <strong style={{fontSize:".8rem",color:isActive ? "#15803D" : "#0F172A",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          {p.name}
+                        </strong>
+                        {p.bgUrl ? (
+                          <span style={{background:"#DCFCE7",color:"#15803D",padding:"1px 5px",borderRadius:4,fontSize:".62rem",fontWeight:800}}>
+                            ✓
+                          </span>
+                        ) : (
+                          <span style={{background:"#FEF3C7",color:"#B45309",padding:"1px 5px",borderRadius:4,fontSize:".62rem",fontWeight:800}}>
+                            ⚠️
+                          </span>
+                        )}
+                      </div>
+                      <div style={{fontSize:".66rem",color:"#64748B",display:"flex",justifyContent:"space-between"}}>
+                        <span>{Object.keys(p.map || {}).length} variables</span>
+                        {p.type === "custom" && (
+                          <span 
+                            onClick={(e) => { e.stopPropagation(); handleDeletePdfTemplate(p.id); }}
+                            style={{color:"#DC2626",fontWeight:800,cursor:"pointer"}}
+                            title="Delete template"
+                          >
+                            🗑️
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* ══════════════════════════════════════════════════════════════
+              MIDDLE PANEL: EDITOR (WHATSAPP TEXTAREA OR PDF CANVAS)
+             ══════════════════════════════════════════════════════════════ */}
+          <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",background:"white"}}>
+            {/* Interactive Excel-like Pivot Table & Summary Builder Panel */}
+            {showPivotBuilder && (
+              <div style={{background:"#F0FDF4",borderBottom:"2px solid #86EFAC",padding:"12px 18px",display:"flex",flexDirection:"column",gap:10,boxShadow:"0 4px 12px rgba(21,128,61,0.08)",flexShrink:0,overflowY:"auto",maxHeight:320}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:"1.15rem"}}>📊</span>
+                    <div>
+                      <div style={{fontSize:".84rem",fontWeight:800,color:"#14532D",display:"flex",alignItems:"center",gap:6}}>
+                        <span>Dynamic Pivot Table & Variable Summarizer</span>
+                        <span style={{fontSize:".65rem",background:"#DCFCE7",color:"#15803D",padding:"1px 6px",borderRadius:10,border:"1px solid #86EFAC",fontWeight:700}}>
+                          Excel-Style Connection
+                        </span>
+                      </div>
+                      <div style={{fontSize:".68rem",color:"#166534"}}>
+                        Connect variables to create auto-segregated tables (e.g. Vibhag | Gender | Total Count), or add independent unique lists without hardcoded formulas.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPivotBuilder(false)}
+                    style={{background:"none",border:"none",color:"#15803D",fontWeight:800,cursor:"pointer",fontSize:".9rem",padding:"2px 6px"}}
+                    title="Close Pivot Builder"
+                  >
+                    ✕ Close
+                  </button>
+                </div>
+
+                {/* Section & Controls Grid */}
+                <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap",background:"white",padding:"8px 12px",borderRadius:8,border:"1px solid #BBF7D0"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:".7rem",fontWeight:800,color:"#166534",textTransform:"uppercase"}}>1. Data Section:</span>
+                    {["Education 2026", "Contact Groups", "Our Team", "Donations", "Monsoon"].map(sec => (
+                      <button
+                        key={sec}
+                        type="button"
+                        onClick={() => {
+                          setPivotSection(sec);
+                          setPivotConnectedDims(sec.includes("Contact") ? ["Group"] : sec.includes("Team") ? ["Committee"] : ["Vibhag"]);
+                          setPivotIndependentField("");
+                        }}
+                        style={{
+                          padding:"3px 8px",
+                          borderRadius:5,
+                          border: pivotSection === sec ? "1.5px solid #15803D" : "1px solid #CBD5E1",
+                          fontSize:".7rem",
+                          fontWeight:700,
+                          cursor:"pointer",
+                          background: pivotSection === sec ? "#15803D" : "#F8FAFC",
+                          color: pivotSection === sec ? "white" : "#334155"
+                        }}
+                      >
+                        {sec}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:".7rem",fontWeight:800,color:"#166534",textTransform:"uppercase"}}>2. Metric:</span>
+                    <span style={{background:"#F0FDF4",padding:"2px 8px",borderRadius:5,border:"1px solid #86EFAC",fontSize:".72rem",fontWeight:800,color:"#15803D"}}>
+                      ✓ Total Count ({currentSectionTotal})
+                    </span>
+                  </div>
+                </div>
+
+                {/* Connected Group-by Variables Bar */}
+                <div style={{display:"flex",flexDirection:"column",gap:4,background:"white",padding:"8px 12px",borderRadius:8,border:"1px solid #BBF7D0"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:".7rem",fontWeight:800,color:"#166534",textTransform:"uppercase"}}>
+                      3. Connected Group-by Dimensions (Click to toggle connect/disconnect):
+                    </span>
+                    <span style={{fontSize:".68rem",color:"#15803D",fontWeight:800}}>
+                      Active: {pivotConnectedDims.length > 0 ? pivotConnectedDims.join(" ➔ ") : `None (Outputs Single Count: ${currentSectionTotal})`}
+                    </span>
+                  </div>
+
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+                    {currentAvailableDims.map(dim => {
+                      const isConnected = pivotConnectedDims.includes(dim);
+                      return (
+                        <button
+                          key={dim}
+                          type="button"
+                          onClick={() => {
+                            setPivotConnectedDims(prev => 
+                              prev.includes(dim) ? prev.filter(d => d !== dim) : [...prev, dim]
+                            );
+                          }}
+                          style={{
+                            padding:"3px 9px",
+                            borderRadius:6,
+                            border: isConnected ? "1.5px solid #15803D" : "1px solid #CBD5E1",
+                            background: isConnected ? "#DCFCE7" : "#F8FAFC",
+                            color: isConnected ? "#14532D" : "#475569",
+                            fontSize:".72rem",
+                            fontWeight: isConnected ? 800 : 600,
+                            cursor:"pointer",
+                            display:"flex",
+                            alignItems:"center",
+                            gap:4
+                          }}
+                        >
+                          <span>{isConnected ? "✓" : "+"}</span>
+                          <span>{dim}</span>
+                        </button>
+                      );
+                    })}
+
+                    {pivotConnectedDims.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPivotConnectedDims([])}
+                        style={{background:"none",border:"none",color:"#DC2626",fontSize:".68rem",fontWeight:700,cursor:"pointer",textDecoration:"underline",marginLeft:6}}
+                      >
+                        Clear Dimensions (Single Total)
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Independent Variable row */}
+                  <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:4,marginTop:4,borderTop:"1px dashed #E2E8F0"}}>
+                    <span style={{fontSize:".68rem",fontWeight:800,color:"#475569",textTransform:"uppercase"}}>
+                      Independent Variable (Optional Unique List):
+                    </span>
+                    <select
+                      value={pivotIndependentField}
+                      onChange={e => setPivotIndependentField(e.target.value)}
+                      style={{padding:"2px 8px",borderRadius:5,border:"1px solid #CBD5E1",fontSize:".7rem",fontWeight:700,color:"#1E293B"}}
+                    >
+                      <option value="">-- No Independent Variable --</option>
+                      {currentAvailableDims.map(d => (
+                        <option key={d} value={d}>{d} (Independent Unique List)</option>
+                      ))}
+                    </select>
+                    <span style={{fontSize:".64rem",color:"#64748B",fontStyle:"italic"}}>
+                      *Listed separately, does NOT drill down the main pivot table
+                    </span>
+                  </div>
+                </div>
+
+                {/* Live Real-time Dynamic Preview & Insert Controls */}
+                <div style={{display:"flex",gap:12,alignItems:"stretch"}}>
+                  <div style={{flex:1,display:"flex",flexDirection:"column",gap:3}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:".68rem",fontWeight:800,color:"#166534"}}>
+                      <span>LIVE REAL-TIME PREVIEW:</span>
+                      <span style={{color:"#047857",fontFamily:"monospace"}}>{calculatedPivotTag}</span>
+                    </div>
+                    <pre style={{
+                      background:"#0F172A",
+                      color:"#F8FAFC",
+                      padding:"8px 12px",
+                      borderRadius:6,
+                      fontSize:".72rem",
+                      fontFamily:"Consolas, monospace",
+                      lineHeight:1.35,
+                      maxHeight:110,
+                      overflowY:"auto",
+                      margin:0,
+                      whiteSpace:"pre-wrap",
+                      border:"1px solid #334155"
+                    }}>
+                      {calculatedPreviewText}
+                    </pre>
+                  </div>
+
+                  <div style={{display:"flex",flexDirection:"column",justifyContent:"center",gap:6,minWidth:220}}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (studioTab === "whatsapp") {
+                          insertPlaceholderAtCursor(calculatedPivotTag);
+                        } else {
+                          handleAddVariableToPdf(calculatedPivotTag);
+                        }
+                      }}
+                      style={{
+                        padding:"7px 12px",
+                        background:"#15803D",
+                        color:"white",
+                        border:"none",
+                        borderRadius:6,
+                        fontSize:".76rem",
+                        fontWeight:800,
+                        cursor:"pointer",
+                        display:"flex",
+                        alignItems:"center",
+                        justifyContent:"center",
+                        gap:6,
+                        boxShadow:"0 2px 6px rgba(21,128,61,0.25)"
+                      }}
+                    >
+                      <span>➕</span>
+                      <span>{studioTab === "whatsapp" ? "Insert Table in WhatsApp" : "Add Table on PDF Canvas"}</span>
+                    </button>
+
+                    {pivotIndependentField && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const indTag = `{UNIQUE_LIST:${pivotSection}:${pivotIndependentField}}`;
+                          if (studioTab === "whatsapp") {
+                            insertPlaceholderAtCursor(indTag);
+                          } else {
+                            handleAddVariableToPdf(indTag);
+                          }
+                        }}
+                        style={{
+                          padding:"5px 10px",
+                          background:"#0D9488",
+                          color:"white",
+                          border:"none",
+                          borderRadius:6,
+                          fontSize:".72rem",
+                          fontWeight:800,
+                          cursor:"pointer"
+                        }}
+                      >
+                        ➕ Insert Independent List Only
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(calculatedPreviewText);
+                        alert("✅ Pivot table text copied to clipboard!");
+                      }}
+                      style={{
+                        padding:"4px 8px",
+                        background:"white",
+                        border:"1px solid #CBD5E1",
+                        borderRadius:6,
+                        fontSize:".7rem",
+                        fontWeight:700,
+                        color:"#475569",
+                        cursor:"pointer"
+                      }}
+                    >
+                      📋 Copy Table Text
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {studioTab === "whatsapp" ? (
+            activeTpl && (
+              <div style={{flex:1,padding:"16px 20px",display:"flex",flexDirection:"column",gap:10,overflowY:"auto",background:"white"}}>
+                
+                {/* Template Controls Bar */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",paddingBottom:8,borderBottom:"1px solid #F1F5F9"}}>
+                  <div style={{flex:1,minWidth:220}}>
+                    <label style={{display:"block",fontSize:".72rem",fontWeight:800,color:"#64748B",textTransform:"uppercase",marginBottom:3}}>TEMPLATE NAME</label>
+                    <input
+                      type="text"
+                      value={activeTpl.name}
+                      onChange={e => handleUpdateActiveTpl("name", e.target.value)}
+                      style={{width:"100%",padding:"7px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",fontSize:".88rem",fontWeight:700,color:"#0F172A",boxSizing:"border-box"}}
+                    />
+                  </div>
+
+                  <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:14}}>
+                    <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:".8rem",fontWeight:700,color:"#15803D",background:"#F0FDF4",padding:"6px 12px",borderRadius:8,border:"1px solid #BBF7D0"}}>
+                      <input
+                        type="checkbox"
+                        checked={activeTpl.isDefault || false}
+                        onChange={e => handleUpdateActiveTpl("isDefault", e.target.checked)}
+                        style={{cursor:"pointer",accentColor:"#15803D"}}
+                      />
+                      <span>Set as Default</span>
+                    </label>
+
+                    {templates.length > 1 && !activeTpl.isDefault && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTemplate(activeTpl.id)}
+                        style={{padding:"6px 12px",background:"#FEF2F2",border:"1px solid #FECACA",color:"#DC2626",borderRadius:8,fontSize:".78rem",fontWeight:800,cursor:"pointer"}}
+                        title="Delete this template"
+                      >
+                        🗑️ Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Formatting Toolbar & Drag Tip */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8,background:"#F8FAFC",padding:"6px 10px",borderRadius:8,border:"1px solid #E2E8F0"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                    <span style={{fontSize:".72rem",fontWeight:800,color:"#64748B",marginRight:4}}>QUICK FORMAT:</span>
+                    <button type="button" onClick={() => insertPlaceholderAtCursor("*bold text*")} style={{padding:"2px 7px",borderRadius:4,border:"1px solid #CBD5E1",background:"white",fontSize:".75rem",fontWeight:800,cursor:"pointer"}} title="Bold (*)"><b>B</b></button>
+                    <button type="button" onClick={() => insertPlaceholderAtCursor("_italic text_")} style={{padding:"2px 7px",borderRadius:4,border:"1px solid #CBD5E1",background:"white",fontSize:".75rem",fontStyle:"italic",fontWeight:700,cursor:"pointer"}} title="Italic (_)"><i>I</i></button>
+                    <button type="button" onClick={() => insertPlaceholderAtCursor("~strike~")} style={{padding:"2px 7px",borderRadius:4,border:"1px solid #CBD5E1",background:"white",fontSize:".75rem",textDecoration:"line-through",fontWeight:700,cursor:"pointer"}} title="Strikethrough (~)">S</button>
+                    <button type="button" onClick={() => insertPlaceholderAtCursor("\n• ")} style={{padding:"2px 7px",borderRadius:4,border:"1px solid #CBD5E1",background:"white",fontSize:".75rem",fontWeight:700,cursor:"pointer"}} title="Bullet point">• Bullet</button>
+                    <button type="button" onClick={() => insertPlaceholderAtCursor("👉 ")} style={{padding:"2px 7px",borderRadius:4,border:"1px solid #CBD5E1",background:"white",fontSize:".75rem",fontWeight:700,cursor:"pointer"}} title="Arrow pointer">👉</button>
+                    <button type="button" onClick={() => insertPlaceholderAtCursor("🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n")} style={{padding:"2px 7px",borderRadius:4,border:"1px solid #CBD5E1",background:"white",fontSize:".72rem",fontWeight:700,cursor:"pointer"}} title="Trust Header">🏛️ Header</button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPivotBuilder(prev => !prev)}
+                      style={{
+                        padding:"3px 10px",
+                        borderRadius:6,
+                        border:"1.5px solid #047857",
+                        background: showPivotBuilder ? "#047857" : "#ECFDF5",
+                        color: showPivotBuilder ? "white" : "#065F46",
+                        fontSize:".74rem",
+                        fontWeight:800,
+                        cursor:"pointer",
+                        display:"flex",
+                        alignItems:"center",
+                        gap:5,
+                        boxShadow:"0 1px 4px rgba(4,120,87,0.15)"
+                      }}
+                      title="Connect variables into an Excel-like Pivot Table (e.g. Vibhag | Gender | Total Count)"
+                    >
+                      <span>📊</span>
+                      <span>{showPivotBuilder ? "Hide Pivot Builder" : "Connect Variables / Pivot Table"}</span>
+                      <span style={{fontSize:".62rem",background:showPivotBuilder ? "#065F46" : "#A7F3D0",color:showPivotBuilder ? "white" : "#065F46",padding:"1px 5px",borderRadius:4}}>Excel-like</span>
+                    </button>
+                  </div>
+                  <div style={{fontSize:".7rem",color:"#15803D",fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+                    <span>💡</span> Drag variables from the right panel into editor or click to insert!
+                  </div>
+                </div>
+
+                {/* Big Textarea Editor */}
+                <div style={{flex:1,display:"flex",flexDirection:"column",position:"relative",minHeight:260}}>
+                  <textarea
+                    ref={textareaRef}
+                    value={activeTpl.text || ""}
+                    onChange={e => handleUpdateActiveTpl("text", e.target.value)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={handleDropOnTextarea}
+                    placeholder="Compose your WhatsApp template here. Drag or click any variable on the right to insert..."
+                    style={{
+                      width:"100%",
+                      height:"100%",
+                      minHeight:300,
+                      padding:"14px 16px",
+                      borderRadius:10,
+                      border:"1.5px solid #CBD5E1",
+                      fontSize:".88rem",
+                      lineHeight:1.6,
+                      fontFamily:"Consolas, Monaco, monospace",
+                      boxSizing:"border-box",
+                      background:"#FAFDF7",
+                      color:"#0F172A",
+                      resize:"none",
+                      outline:"none"
+                    }}
+                  />
+                </div>
+
+                {/* Editor Stats Bar */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:".74rem",color:"#64748B",padding:"2px 4px"}}>
+                  <div style={{display:"flex",gap:12}}>
+                    <span>Characters: <strong>{charCount}</strong></span>
+                    <span>Words: <strong>{wordCount}</strong></span>
+                    <span>Lines: <strong>{lineCount}</strong></span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(activeTpl.text || "");
+                      alert("✅ Template text copied to clipboard!");
+                    }}
+                    style={{background:"none",border:"none",color:"#2563EB",cursor:"pointer",fontWeight:700,fontSize:".74rem",textDecoration:"underline"}}
+                  >
+                    📋 Copy Text
+                  </button>
+                </div>
+              </div>
+            )
+          ) : (
+            /* ── PDF PASSES & TEMPLATES VISUAL CANVAS EDITOR ── */
+            activePdf && (
+              <div style={{flex:1,padding:"6px 12px",display:"flex",flexDirection:"column",gap:6,overflowY:"auto",background:"white"}}>
+                
+                {/* Compact Template Name & Media Bar */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",padding:"2px 0 6px 0",borderBottom:"1px solid #E2E8F0"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:220}}>
+                    <label style={{fontSize:".74rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>
+                      ✏️ TEMPLATE:
+                    </label>
+                    <input
+                      type="text"
+                      value={activePdf.name || ""}
+                      onChange={e => handleUpdateActivePdf("name", e.target.value)}
+                      placeholder="e.g. Official Invite Letter, Food Coupon, Gate Pass..."
+                      style={{flex:1,maxWidth:340,padding:"4px 8px",borderRadius:6,border:"1.5px solid #10B981",fontSize:".82rem",fontWeight:700,color:"#0F172A",background:"#FAFDF7",outline:"none"}}
+                    />
+                  </div>
+
+                  {/* Upload Background Image / Fetch from Media Library */}
+                  <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                    <input
+                      type="file"
+                      ref={pdfBgInputRef}
+                      accept="image/*"
+                      onChange={handlePdfBgUpload}
+                      style={{display:"none"}}
+                    />
+
+                    {/* 📁 Primary Button to Fetch Document/Letterhead from Media Library */}
+                    <button
+                      type="button"
+                      onClick={() => setShowPdfMediaLibrary(true)}
+                      style={{
+                        padding:"4px 10px",
+                        background:"linear-gradient(135deg, #0F766E, #047857)",
+                        color:"white",
+                        border:"none",
+                        borderRadius:6,
+                        fontSize:".73rem",
+                        fontWeight:800,
+                        cursor:"pointer",
+                        display:"flex",
+                        alignItems:"center",
+                        gap:5,
+                        boxShadow:"0 1px 4px rgba(15,118,110,0.25)"
+                      }}
+                      title="Fetch existing letterhead or certificate document from Central Media Library (Zero Duplicate Storage)"
+                    >
+                      <span style={{fontSize:".85rem"}}>📁</span>
+                      <span>Fetch from Media Library</span>
+                    </button>
+
+                    {/* ⬆️ Secondary Button to Upload from Computer */}
+                    <button
+                      type="button"
+                      onClick={() => pdfBgInputRef.current?.click()}
+                      disabled={uploadingPdfBg}
+                      style={{
+                        padding:"4px 9px",
+                        background:"#334155",
+                        color:"white",
+                        border:"none",
+                        borderRadius:6,
+                        fontSize:".73rem",
+                        fontWeight:700,
+                        cursor:uploadingPdfBg ? "wait" : "pointer",
+                        display:"flex",
+                        alignItems:"center",
+                        gap:4
+                      }}
+                      title="Upload a new background image directly from your computer (auto-saved to Media Library)"
+                    >
+                      <span>{uploadingPdfBg ? "⏳" : "⬆️"}</span>
+                      <span>{uploadingPdfBg ? "Uploading..." : "Upload File"}</span>
+                    </button>
+
+                    {activePdf.bgUrl && (
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateActivePdf("bgUrl", "")}
+                        style={{padding:"3px 8px",background:"#FEF2F2",border:"1px solid #FECACA",color:"#DC2626",borderRadius:6,fontSize:".71rem",fontWeight:700,cursor:"pointer"}}
+                        title="Remove background image"
+                      >
+                        ✕ Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Compact Canvas Formatting & A4 Controls Toolbar */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:6,background:"#F8FAFC",padding:"4px 8px",borderRadius:6,border:"1px solid #E2E8F0"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                    {/* Page Orientation */}
+                    <div style={{display:"flex",alignItems:"center",gap:1,background:"#E2E8F0",padding:2,borderRadius:5}}>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateActivePdf("orientation", "portrait")}
+                        style={{
+                          padding:"3px 7px",
+                          border:"none",
+                          borderRadius:4,
+                          fontSize:".7rem",
+                          fontWeight:800,
+                          cursor:"pointer",
+                          background: activePdf.orientation !== 'landscape' ? "#15803D" : "transparent",
+                          color: activePdf.orientation !== 'landscape' ? "white" : "#475569"
+                        }}
+                        title="Standard A4 Portrait (210 × 297 mm)"
+                      >
+                        📄 Portrait
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateActivePdf("orientation", "landscape")}
+                        style={{
+                          padding:"3px 7px",
+                          border:"none",
+                          borderRadius:4,
+                          fontSize:".7rem",
+                          fontWeight:800,
+                          cursor:"pointer",
+                          background: activePdf.orientation === 'landscape' ? "#15803D" : "transparent",
+                          color: activePdf.orientation === 'landscape' ? "white" : "#475569"
+                        }}
+                        title="A4 Landscape (297 × 210 mm)"
+                      >
+                        📜 Landscape
+                      </button>
+                    </div>
+
+                    {/* Background Layout / Fit */}
+                    <div style={{display:"flex",alignItems:"center",gap:1,background:"#E2E8F0",padding:2,borderRadius:5}}>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateActivePdf("bgFit", "letterhead")}
+                        style={{
+                          padding:"3px 7px",
+                          border:"none",
+                          borderRadius:4,
+                          fontSize:".7rem",
+                          fontWeight:800,
+                          cursor:"pointer",
+                          background: (activePdf.bgFit === 'letterhead' || (!activePdf.bgFit && activePdf.orientation !== 'landscape')) ? "#0D4B5E" : "transparent",
+                          color: (activePdf.bgFit === 'letterhead' || (!activePdf.bgFit && activePdf.orientation !== 'landscape')) ? "white" : "#475569"
+                        }}
+                        title="Places uploaded banner at top of A4 page"
+                      >
+                        🏷️ Header
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateActivePdf("bgFit", "full")}
+                        style={{
+                          padding:"3px 7px",
+                          border:"none",
+                          borderRadius:4,
+                          fontSize:".7rem",
+                          fontWeight:800,
+                          cursor:"pointer",
+                          background: (activePdf.bgFit === 'full' || (!activePdf.bgFit && activePdf.orientation === 'landscape')) ? "#0D4B5E" : "transparent",
+                          color: (activePdf.bgFit === 'full' || (!activePdf.bgFit && activePdf.orientation === 'landscape')) ? "white" : "#475569"
+                        }}
+                        title="Stretches background to cover full A4 page"
+                      >
+                        🖼️ Full Page
+                      </button>
+                    </div>
+
+                    <span style={{color:"#CBD5E1"}}>|</span>
+
+                    {/* Font Size */}
+                    <div style={{display:"flex",alignItems:"center",gap:3}}>
+                      <label style={{fontSize:".68rem",fontWeight:800,color:"#475569"}}>FONT:</label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="48"
+                        step="1"
+                        value={activePdf.fontSize || (activePdf.orientation === 'landscape' ? 26 : 16)}
+                        onChange={e => handleUpdateActivePdf("fontSize", parseInt(e.target.value))}
+                        style={{width:60,cursor:"pointer"}}
+                      />
+                      <span style={{fontSize:".68rem",fontWeight:800,color:"#0F172A",minWidth:24}}>{activePdf.fontSize || (activePdf.orientation === 'landscape' ? 26 : 16)}px</span>
+                    </div>
+
+                    {/* Color */}
+                    <div style={{display:"flex",alignItems:"center",gap:2}}>
+                      <input
+                        type="color"
+                        value={activePdf.fontColor || "#000000"}
+                        onChange={e => handleUpdateActivePdf("fontColor", e.target.value)}
+                        style={{width:22,height:20,border:"1px solid #CBD5E1",borderRadius:4,cursor:"pointer",padding:0,background:"transparent"}}
+                        title="Badge font color"
+                      />
+                    </div>
+
+                    <span style={{color:"#CBD5E1"}}>|</span>
+
+                    {/* Zoom / Scale */}
+                    <div style={{display:"flex",alignItems:"center",gap:2,background:"#F1F5F9",padding:"1px 4px",borderRadius:5,border:"1px solid #CBD5E1"}}>
+                      <button
+                        type="button"
+                        onClick={() => setCanvasScale(prev => Math.max(0.5, Math.round((prev - 0.1) * 10) / 10))}
+                        style={{border:"none",background:"transparent",cursor:"pointer",fontWeight:800,fontSize:".7rem",padding:"1px 3px"}}
+                        title="Zoom out"
+                      >
+                        -
+                      </button>
+                      <span style={{fontSize:".67rem",fontWeight:800,minWidth:28,textAlign:"center"}}>{Math.round(canvasScale * 100)}%</span>
+                      <button
+                        type="button"
+                        onClick={() => setCanvasScale(prev => Math.min(1.5, Math.round((prev + 0.1) * 10) / 10))}
+                        style={{border:"none",background:"transparent",cursor:"pointer",fontWeight:800,fontSize:".7rem",padding:"1px 3px"}}
+                        title="Zoom in"
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCanvasScale(0.85)}
+                        style={{border:"none",background: canvasScale === 0.85 ? "#CBD5E1" : "#E2E8F0",borderRadius:3,cursor:"pointer",fontWeight:700,fontSize:".62rem",padding:"1px 4px"}}
+                        title="Fit to Screen (85%)"
+                      >
+                        Fit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCanvasScale(1)}
+                        style={{border:"none",background: canvasScale === 1 ? "#CBD5E1" : "#E2E8F0",borderRadius:3,cursor:"pointer",fontWeight:700,fontSize:".62rem",padding:"1px 4px"}}
+                        title="Original 100% size"
+                      >
+                        100%
+                      </button>
+                    </div>
+
+                    <span style={{color:"#CBD5E1"}}>|</span>
+
+                    {/* Pivot Table Connection */}
+                    <button
+                      type="button"
+                      onClick={() => setShowPivotBuilder(prev => !prev)}
+                      style={{
+                        padding:"3px 8px",
+                        borderRadius:5,
+                        border:"1.2px solid #047857",
+                        background: showPivotBuilder ? "#047857" : "#ECFDF5",
+                        color: showPivotBuilder ? "white" : "#065F46",
+                        fontSize:".7rem",
+                        fontWeight:800,
+                        cursor:"pointer",
+                        display:"flex",
+                        alignItems:"center",
+                        gap:4,
+                        boxShadow:"0 1px 3px rgba(4,120,87,0.15)"
+                      }}
+                      title="Connect variables into an Excel-like Pivot Table (e.g. Vibhag | Gender | Total Count)"
+                    >
+                      <span>📊</span>
+                      <span>{showPivotBuilder ? "Hide Pivot" : "Pivot Table"}</span>
+                    </button>
+                  </div>
+
+                  <div style={{fontSize:".68rem",color:"#15803D",fontWeight:700,display:"flex",alignItems:"center",gap:3}}>
+                    <span>🎯</span> Drag variables & drop on A4 page
+                  </div>
+                </div>
+
+                {/* Visual Interactive A4 PDF Canvas Area */}
+                <div 
+                  style={{
+                    flex:1,
+                    display:"flex",
+                    flexDirection:"column",
+                    alignItems:"center",
+                    justifyContent:"flex-start",
+                    background:"#CBD5E1",
+                    borderRadius:10,
+                    padding:"24px 16px",
+                    overflow:"auto",
+                    position:"relative"
+                  }}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={handleCanvasDrop}
+                >
+                  {/* Authentic A4 Paper Sheet */}
+                  <div
+                    ref={canvasContainerRef}
+                    style={{
+                      position:"relative",
+                      width: (activePdf.orientation === 'landscape' ? 842 : 595) * canvasScale,
+                      height: (activePdf.orientation === 'landscape' ? 595 : 842) * canvasScale,
+                      minWidth: (activePdf.orientation === 'landscape' ? 842 : 595) * canvasScale,
+                      minHeight: (activePdf.orientation === 'landscape' ? 595 : 842) * canvasScale,
+                      background:"#FFFFFF",
+                      boxShadow:"0 15px 35px rgba(0,0,0,0.22), 0 3px 10px rgba(0,0,0,0.12)",
+                      borderRadius:4,
+                      overflow:"hidden",
+                      userSelect:"none",
+                      border:"1px solid #94A3B8",
+                      transformOrigin:"top center",
+                      transition:"width 0.15s, height 0.15s"
+                    }}
+                    onPointerMove={handlePointerMoveBadge}
+                    onPointerUp={handlePointerUpBadge}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={handleCanvasDrop}
+                  >
+                    {/* Background layer */}
+                    {activePdf.bgUrl ? (
+                      <>
+                        {(activePdf.bgFit === 'letterhead' || (!activePdf.bgFit && activePdf.orientation !== 'landscape')) ? (
+                          <div style={{position:"absolute",top:0,left:0,right:0,zIndex:1,pointerEvents:"none"}}>
+                            <img
+                              src={resolveMediaUrl(activePdf.bgUrl, C)}
+                              alt="Letterhead Header"
+                              style={{
+                                width:"100%",
+                                height:"auto",
+                                display:"block",
+                                borderBottom:"1px dashed #E2E8F0"
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div style={{position:"absolute",inset:0,zIndex:1,pointerEvents:"none"}}>
+                            <img
+                              src={resolveMediaUrl(activePdf.bgUrl, C)}
+                              alt="Template Background"
+                              style={{
+                                width:"100%",
+                                height:"100%",
+                                objectFit: activePdf.bgFit === 'contain' ? "contain" : "fill",
+                                display:"block"
+                              }}
+                            />
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      /* Blank A4 Sheet Prompt */
+                      <div
+                        onClick={() => pdfBgInputRef.current?.click()}
+                        style={{
+                          position:"absolute",
+                          inset:30,
+                          border:"2px dashed #CBD5E1",
+                          borderRadius:8,
+                          display:"flex",
+                          flexDirection:"column",
+                          alignItems:"center",
+                          justifyContent:"center",
+                          cursor:"pointer",
+                          gap:10,
+                          color:"#64748B",
+                          background:"rgba(248, 250, 252, 0.6)",
+                          zIndex:1
+                        }}
+                      >
+                        <div style={{fontSize:"3rem"}}>📄</div>
+                        <div style={{fontSize:"1.05rem",fontWeight:800,color:"#0F172A"}}>
+                          {activePdf.orientation === 'landscape' ? "A4 Landscape Canvas (297 × 210 mm)" : "A4 Portrait Canvas (210 × 297 mm)"}
+                        </div>
+                        <div style={{fontSize:".78rem",color:"#64748B",maxWidth:360,textAlign:"center",lineHeight:1.4}}>
+                          Click here to upload your Letterhead banner or full Certificate background (JPG/PNG), or drag dynamic variables directly onto this A4 page.
+                        </div>
+                        <button
+                          type="button"
+                          style={{marginTop:6,padding:"8px 18px",background:"#15803D",color:"white",border:"none",borderRadius:8,fontWeight:800,fontSize:".8rem",cursor:"pointer"}}
+                        >
+                          ➕ Upload Letterhead / Background
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Subtle Watermark/Margin indicator so user sees page bounds */}
+                    <div 
+                      style={{
+                        position:"absolute",
+                        bottom:10,
+                        right:14,
+                        fontSize:".62rem",
+                        color:"#94A3B8",
+                        fontWeight:700,
+                        textTransform:"uppercase",
+                        letterSpacing:1,
+                        pointerEvents:"none",
+                        zIndex:2
+                      }}
+                    >
+                      A4 {activePdf.orientation === 'landscape' ? "Landscape (297 × 210 mm)" : "Portrait (210 × 297 mm)"}
+                    </div>
+
+                    {/* Positioned Field Badges with Interactive Drill-Down Connection */}
+                    {Object.entries(activePdf.map || {}).map(([key, pos]) => {
+                      const isBeingDragged = draggingPdfField === key;
+                      const isPivotBadge = key.includes("PIVOT");
+                      const isTotalCountBadge = key.toLowerCase().includes("total count") || key.toLowerCase().includes("total_count");
+                      const isConnectOpen = activeConnectBadgeKey === key;
+                      const availableDrillFields = getDrillDownFieldsForBadge(key);
+
+                      // Parse connected dimensions if it's a pivot badge
+                      const connectedDims = (() => {
+                        if (!isPivotBadge) return [];
+                        const clean = key.replace(/[{}]/g, '').replace(/^PIVOT:?/i, '').trim();
+                        const body = clean.includes(':') ? clean.substring(clean.indexOf(':') + 1) : clean;
+                        const dimsPart = body.split('|')[0] || '';
+                        return dimsPart.split(',').map(s => s.trim()).filter(Boolean);
+                      })();
+
+                      return (
+                        <div
+                          key={key}
+                          onPointerDown={(e) => handlePointerDownBadge(e, key)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => handleBadgeDropConnect(e, key)}
+                          style={{
+                            position:"absolute",
+                            left:`${pos.x}%`,
+                            top:`${pos.y}%`,
+                            transform:"translate(-50%, -50%)",
+                            background: isBeingDragged ? "#1D4ED8" : isPivotBadge ? "#064E3B" : "rgba(15, 23, 42, 0.92)",
+                            color: "white",
+                            padding: isPivotBadge ? "6px 10px" : "4px 8px",
+                            borderRadius:6,
+                            fontSize:`${Math.max(10, Math.min(22, (activePdf.fontSize || (activePdf.orientation === 'landscape' ? 26 : 16)) * (isPivotBadge ? 0.75 : 0.9) * canvasScale))}px`,
+                            fontWeight:800,
+                            fontFamily:"monospace",
+                            cursor:"grab",
+                            whiteSpace: isPivotBadge ? "normal" : "nowrap",
+                            display:"flex",
+                            flexDirection: isPivotBadge ? "column" : "row",
+                            alignItems: isPivotBadge ? "stretch" : "center",
+                            gap:5,
+                            boxShadow:"0 3px 10px rgba(0,0,0,0.35)",
+                            border: isBeingDragged ? "2px solid #93C5FD" : isPivotBadge ? "2px solid #6EE7B7" : "1.5px solid rgba(255,255,255,0.8)",
+                            zIndex: isConnectOpen ? 120 : (isBeingDragged ? 100 : 10),
+                            touchAction:"none",
+                            maxWidth: isPivotBadge ? (340 * canvasScale) : undefined
+                          }}
+                          title={`Drag to move ${key} (X: ${pos.x}%, Y: ${pos.y}%). Drop another variable on this badge to drill down!`}
+                        >
+                          {/* Badge Header: Variable Tag + [+ Connect] Drill-Down Option + [✕ Close] */}
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+                            <span style={{display:"flex",alignItems:"center",gap:4}}>
+                              {isPivotBadge && <span>📊</span>}
+                              <span>{isPivotBadge ? (connectedDims.join(" | ") + " | Total Count") : key}</span>
+                            </span>
+
+                            <div style={{display:"flex",alignItems:"center",gap:3}} onPointerDown={e => e.stopPropagation()}>
+                              {/* 🔗 Option near the red circle to add another variable and drill down */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveConnectBadgeKey(isConnectOpen ? null : key);
+                                }}
+                                style={{
+                                  background: isConnectOpen ? "#10B981" : "rgba(255,255,255,0.22)",
+                                  border: isConnectOpen ? "1.5px solid #A7F3D0" : "1px solid rgba(255,255,255,0.45)",
+                                  borderRadius: 4,
+                                  padding: "1px 6px",
+                                  color: "white",
+                                  fontSize: ".68rem",
+                                  fontWeight: 800,
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 3
+                                }}
+                                title="Click to add another variable (e.g. Vibhag, Gender) to drill down this into a summary table!"
+                              >
+                                <span>+</span>
+                                <span style={{fontSize:".65rem"}}>Connect</span>
+                              </button>
+
+                              {/* Delete entire badge */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveVariableFromPdf(key);
+                                }}
+                                style={{
+                                  background:"rgba(255,255,255,0.2)",
+                                  border:"none",
+                                  borderRadius:"50%",
+                                  width:16,
+                                  height:16,
+                                  color:"white",
+                                  fontSize:".65rem",
+                                  fontWeight:800,
+                                  cursor:"pointer",
+                                  display:"flex",
+                                  alignItems:"center",
+                                  justifyContent:"center",
+                                  marginLeft:2
+                                }}
+                                title={`Remove ${key} from canvas`}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Connected Dimension Chips with individual remove */}
+                          {isPivotBadge && connectedDims.length > 0 && (
+                            <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap",borderTop:"1px solid rgba(255,255,255,0.2)",paddingTop:3}}>
+                              <span style={{fontSize:".62em",color:"#A7F3D0",fontWeight:700}}>Connected:</span>
+                              {connectedDims.map(dim => (
+                                <span
+                                  key={dim}
+                                  style={{
+                                    background:"rgba(16, 185, 129, 0.3)",
+                                    border:"1px solid #34D399",
+                                    borderRadius:3,
+                                    padding:"1px 4px",
+                                    fontSize:".65em",
+                                    fontWeight:700,
+                                    color:"white",
+                                    display:"flex",
+                                    alignItems:"center",
+                                    gap:3
+                                  }}
+                                >
+                                  <span>{dim}</span>
+                                  <span
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveDimFromBadge(key, dim);
+                                    }}
+                                    style={{cursor:"pointer",color:"#FECACA",fontWeight:900}}
+                                    title={`Remove ${dim} from drill down`}
+                                  >
+                                    ✕
+                                  </span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Mini Table Preview for Pivot Badges */}
+                          {isPivotBadge && (
+                            <div style={{fontSize:".72em",whiteSpace:"pre",opacity:0.9,background:"rgba(0,0,0,0.25)",padding:"4px 6px",borderRadius:4,maxHeight:90,overflowY:"auto",lineHeight:1.3}}>
+                              {evaluateUniversalPivotTag(key, { allRegs: liveRegs, guests: C?.globalGuests, team: C?.teamItems, format: "pdf_table" })}
+                            </div>
+                          )}
+
+                          {/* ── Interactive Dropdown Popup to Connect Another Variable ── */}
+                          {isConnectOpen && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              onPointerDown={(e) => e.stopPropagation()}
+                              style={{
+                                position: "absolute",
+                                top: "100%",
+                                left: 0,
+                                marginTop: 6,
+                                background: "white",
+                                color: "#0F172A",
+                                borderRadius: 8,
+                                border: "1.5px solid #10B981",
+                                boxShadow: "0 10px 25px rgba(0,0,0,0.3)",
+                                padding: 8,
+                                zIndex: 1500,
+                                minWidth: 230,
+                                maxWidth: 280,
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 6
+                              }}
+                            >
+                              <div style={{fontSize:".7rem",fontWeight:800,color:"#065F46",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #E2E8F0",paddingBottom:3}}>
+                                <span>🔗 CONNECT VARIABLE:</span>
+                                <span style={{cursor:"pointer",fontWeight:800,fontSize:".8rem",color:"#64748B"}} onClick={() => { setActiveConnectBadgeKey(null); setBadgeConnectSearch(""); }}>✕</span>
+                              </div>
+                              <div style={{fontSize:".64rem",color:"#64748B",lineHeight:1.25}}>
+                                Select any field to drill down into a summary table:
+                              </div>
+
+                              {/* Search input for fields */}
+                              <input
+                                type="text"
+                                placeholder="🔍 Filter fields (e.g. marks, %)..."
+                                value={badgeConnectSearch}
+                                onChange={e => setBadgeConnectSearch(e.target.value)}
+                                style={{
+                                  padding:"4px 8px",
+                                  borderRadius:5,
+                                  border:"1px solid #CBD5E1",
+                                  fontSize:".7rem",
+                                  background:"#FAFDF7",
+                                  outline:"none",
+                                  boxSizing:"border-box",
+                                  width:"100%"
+                                }}
+                              />
+
+                              <div style={{display:"flex",flexDirection:"column",gap:3,maxHeight:200,overflowY:"auto",paddingRight:2}}>
+                                {availableDrillFields
+                                  .filter(f => !badgeConnectSearch.trim() || f.toLowerCase().includes(badgeConnectSearch.toLowerCase().trim()))
+                                  .map(field => (
+                                    <button
+                                      key={field}
+                                      type="button"
+                                      onClick={() => {
+                                        handleDrillDownBadgeWithField(key, field);
+                                        setBadgeConnectSearch("");
+                                      }}
+                                      style={{
+                                        textAlign:"left",
+                                        padding:"4px 8px",
+                                        borderRadius:5,
+                                        border:"1px solid #E2E8F0",
+                                        background:"#F8FAFC",
+                                        fontSize:".72rem",
+                                        fontWeight:700,
+                                        color:"#1E293B",
+                                        cursor:"pointer",
+                                        display:"flex",
+                                        alignItems:"center",
+                                        justifyContent:"space-between"
+                                      }}
+                                      onMouseEnter={e => { e.currentTarget.style.background = "#ECFDF5"; e.currentTarget.style.borderColor = "#6EE7B7"; }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.borderColor = "#E2E8F0"; }}
+                                    >
+                                      <span>+ {field}</span>
+                                      <span style={{fontSize:".65rem",color:"#059669",fontWeight:700}}>Drill Down ➔</span>
+                                    </button>
+                                  ))}
+                                {availableDrillFields.filter(f => !badgeConnectSearch.trim() || f.toLowerCase().includes(badgeConnectSearch.toLowerCase().trim())).length === 0 && (
+                                  <div style={{fontSize:".68rem",color:"#94A3B8",padding:"8px 4px",textAlign:"center"}}>
+                                    No fields match "{badgeConnectSearch}"
+                                  </div>
+                                )}
+                              </div>
+
+                              <div style={{fontSize:".62rem",color:"#059669",borderTop:"1px dashed #E2E8F0",paddingTop:3,fontStyle:"italic"}}>
+                                💡 Tip: You can also drag & drop any variable from the right palette directly onto this badge!
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Active Mapped Variables Summary Bar */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:".74rem",color:"#64748B",padding:"2px 4px",flexWrap:"wrap",gap:8}}>
+                  <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                    <strong style={{color:"#0F172A"}}>Mapped Fields ({Object.keys(activePdf.map || {}).length}):</strong>
+                    {Object.keys(activePdf.map || {}).map(k => (
+                      <span key={k} style={{background:"#EFF6FF",color:"#1D4ED8",padding:"1px 6px",borderRadius:4,fontSize:".68rem",fontWeight:700,border:"1px solid #BFDBFE"}}>
+                        {k}
+                      </span>
+                    ))}
+                  </div>
+
+                  {Object.keys(activePdf.map || {}).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateActivePdf("map", {})}
+                      style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer",fontWeight:700,fontSize:".72rem"}}
+                    >
+                      Clear All Fields
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          )}
+
+          </div>
+
+          {/* ══════════════════════════════════════════════════════════════
+              RIGHT PANEL: DYNAMIC VARIABLES PALETTE (SHARED BY BOTH MODES!)
+             ══════════════════════════════════════════════════════════════ */}
+          <div style={{width:350,borderLeft:"1px solid #E2E8F0",background:"#F8FAFC",display:"flex",flexDirection:"column",flexShrink:0}}>
+            <div style={{padding:"10px 14px",borderBottom:"1px solid #E2E8F0",background:"white",display:"flex",flexDirection:"column",gap:6}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:".76rem",fontWeight:800,color:"#1E293B",display:"flex",alignItems:"center",gap:6}}>
+                  <span>🏷️</span> DYNAMIC VARIABLES PALETTE
+                </span>
+                <span style={{fontSize:".68rem",background: studioTab === "whatsapp" ? "#EFF6FF" : "#F0FDF4",color: studioTab === "whatsapp" ? "#2563EB" : "#15803D",padding:"1px 6px",borderRadius:4,fontWeight:800}}>
+                  {studioTab === "whatsapp" ? "Click to Type" : "Drag to Canvas"}
+                </span>
+              </div>
+              <input
+                type="text"
+                placeholder="🔍 Search variables..."
+                value={variableSearch}
+                onChange={e => setVariableSearch(e.target.value)}
+                style={{width:"100%",padding:"5px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".78rem",boxSizing:"border-box",background:"#FAFDF7"}}
+              />
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:".7rem",padding:"2px 2px",marginTop:2}}>
+                <span style={{color:"#64748B",fontWeight:700}}>
+                  {variableCategories.length} Sections ({variableCategories.reduce((acc, c) => acc + c.vars.length, 0)} Fields)
+                </span>
+                <div style={{display:"flex",gap:6}}>
+                  <button
+                    type="button"
+                    onClick={handleExpandAll}
+                    style={{background:"#F1F5F9",border:"1px solid #CBD5E1",borderRadius:4,padding:"2px 7px",fontSize:".68rem",fontWeight:700,color:"#1E293B",cursor:"pointer"}}
+                    title="Expand all sections"
+                  >
+                    ▾ Expand All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCollapseAll}
+                    style={{background:"#F1F5F9",border:"1px solid #CBD5E1",borderRadius:4,padding:"2px 7px",fontSize:".68rem",fontWeight:700,color:"#1E293B",cursor:"pointer"}}
+                    title="Collapse all sections to focus on one"
+                  >
+                    ▴ Collapse All
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{flex:1,overflowY:"auto",padding:10,display:"flex",flexDirection:"column",gap:10}}>
+              {variableCategories.map((cat, idx) => {
+                const filteredVars = cat.vars.filter(v => 
+                  !variableSearch.trim() || 
+                  v.tag.toLowerCase().includes(variableSearch.toLowerCase()) || 
+                  v.label.toLowerCase().includes(variableSearch.toLowerCase()) ||
+                  v.desc.toLowerCase().includes(variableSearch.toLowerCase())
+                );
+
+                if (filteredVars.length === 0) return null;
+
+                const isCollapsed = Boolean(collapsedCategories[cat.title]);
+                const shouldShowVars = !isCollapsed || Boolean(variableSearch.trim());
+
+                return (
+                  <div key={idx} style={{background:cat.bgColor,border:`1.5px solid ${cat.borderColor}`,borderRadius:10,padding:"8px 10px",display:"flex",flexDirection:"column",gap:6,boxShadow:"0 1px 3px rgba(0,0,0,0.03)"}}>
+                    {/* Collapsible Header */}
+                    <div 
+                      onClick={() => toggleCategory(cat.title)}
+                      style={{
+                        fontSize:".74rem",
+                        fontWeight:800,
+                        color:cat.color,
+                        display:"flex",
+                        justifyContent:"space-between",
+                        alignItems:"center",
+                        cursor:"pointer",
+                        userSelect:"none",
+                        padding:"2px 0"
+                      }}
+                      title="Click to Expand / Collapse this section"
+                    >
+                      <div style={{display:"flex",alignItems:"center",gap:6,textTransform:"uppercase"}}>
+                        <span>{cat.icon}</span>
+                        <span>{cat.title}</span>
+                        <span style={{fontSize:".65rem",background:"rgba(255,255,255,0.7)",padding:"1px 6px",borderRadius:10,fontWeight:700,border:`1px solid ${cat.borderColor}`}}>
+                          {filteredVars.length}
+                        </span>
+                      </div>
+                      <span style={{fontSize:".75rem",fontWeight:800,color:cat.color,padding:"0 4px"}}>
+                        {shouldShowVars ? "▼" : "▶"}
+                      </span>
+                    </div>
+
+                    {/* Collapsible Body */}
+                    {shouldShowVars && (
+                      <div style={{display:"flex",flexDirection:"column",gap:4,paddingTop:2}}>
+                      {filteredVars.map(v => (
+                        <div
+                          key={v.tag}
+                          draggable={true}
+                          onDragStart={(e) => e.dataTransfer.setData("text/plain", v.tag)}
+                          onClick={() => handlePaletteItemClick(v.tag)}
+                          style={{
+                            background:"white",
+                            border:`1px solid ${cat.borderColor}`,
+                            borderRadius:6,
+                            padding:"6px 8px",
+                            cursor:"pointer",
+                            display:"flex",
+                            justifyContent:"space-between",
+                            alignItems:"center",
+                            gap:6,
+                            transition:"all 0.15s",
+                            boxShadow:"0 1px 2px rgba(0,0,0,0.03)"
+                          }}
+                          title={`Click or Drag into ${studioTab === "whatsapp" ? "message editor" : "PDF Canvas"}: ${v.tag}\n${v.desc}`}
+                        >
+                          <div style={{display:"flex",flexDirection:"column",gap:1,overflow:"hidden"}}>
+                            <span style={{fontSize:".74rem",fontWeight:800,color:cat.color,fontFamily:"monospace"}}>
+                              {v.tag}
+                            </span>
+                            <span style={{fontSize:".67rem",color:"#64748B",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                              {v.label}
+                            </span>
+                          </div>
+                          <span style={{fontSize:".72rem",color:"#94A3B8",cursor:"grab",padding:"2px 4px",userSelect:"none"}}>
+                            ⋮⋮
+                          </span>
+                        </div>
+                      ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
           </div>
-
-          {/* Right: Active Template Editor */}
-          {activeTpl && (
-            <div style={{flex:1,padding:"20px 24px",overflowY:"auto",display:"flex",flexDirection:"column",gap:14}}>
-              
-              {/* Template Name & Default Switch */}
-              <div style={{display:"flex",gap:12,alignItems:"flex-end",flexWrap:"wrap"}}>
-                <div style={{flex:1,minWidth:220}}>
-                  <label style={{display:"block",fontSize:".75rem",fontWeight:700,color:"#475569",marginBottom:4}}>TEMPLATE NAME</label>
-                  <input
-                    type="text"
-                    value={activeTpl.name}
-                    onChange={e => handleUpdateActiveTpl("name", e.target.value)}
-                    style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".88rem",fontWeight:600,boxSizing:"border-box"}}
-                  />
-                </div>
-
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:".82rem",fontWeight:700,color:"#15803D",background:"#F0FDF4",padding:"8px 12px",borderRadius:8,border:"1px solid #BBF7D0"}}>
-                    <input
-                      type="checkbox"
-                      checked={activeTpl.isDefault || false}
-                      onChange={e => handleUpdateActiveTpl("isDefault", e.target.checked)}
-                      style={{cursor:"pointer"}}
-                    />
-                    <span>Set as Default Template</span>
-                  </label>
-
-                  {templates.length > 1 && !activeTpl.isDefault && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteTemplate(activeTpl.id)}
-                      style={{padding:"8px 12px",background:"#FEF2F2",border:"1px solid #FECACA",color:"#DC2626",borderRadius:8,fontSize:".8rem",fontWeight:700,cursor:"pointer"}}
-                      title="Delete this template"
-                    >
-                      🗑️ Delete
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Placeholder Pills & URL Builder Helper */}
-              <div>
-                <div style={{fontSize:".75rem",fontWeight:700,color:"#475569",marginBottom:6}}>INSERT PERSONALIZED PLACEHOLDERS:</div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-                  {[
-                    '{EVENT_NAME}',
-                    '{PORTAL_NAME}',
-                    '{CONTACT_USER_NAME}',
-                    '{PARTICIPANT_NAME}',
-                    '{DESIGNATION}',
-                    '{ROLE}',
-                    '{STUDENT_NAME}',
-                    '{TXN_ID}',
-                    '{DATE}',
-                    '{VENUE}',
-                    '{INVITE_PDF_LINK}',
-                    '{CERTIFICATE_LINK}',
-                    '{PORTAL_URL}',
-                    '{VIBHAG}',
-                    '{STREAM}',
-                    '{PERCENTAGE}',
-                    '{HELPLINE_PHONES}'
-                  ].map(ph => (
-                    <button
-                      key={ph}
-                      type="button"
-                      onClick={() => insertPlaceholder(' ' + ph)}
-                      style={{
-                        padding:"5px 10px",
-                        background: ph.includes('EVENT') ? "#FEF3C7" : (ph.includes('DESIGNATION') || ph.includes('ROLE')) ? "#F5F3FF" : ph.includes('CERTIFICATE') ? "#EFF6FF" : ph.includes('INVITE') ? "#F0FDF4" : "#F1F5F9",
-                        border: ph.includes('EVENT') ? "1.5px solid #F59E0B" : (ph.includes('DESIGNATION') || ph.includes('ROLE')) ? "1.5px solid #C4B5FD" : ph.includes('CERTIFICATE') ? "1px solid #93C5FD" : ph.includes('INVITE') ? "1px solid #86EFAC" : "1px solid #CBD5E1",
-                        color: ph.includes('EVENT') ? "#92400E" : (ph.includes('DESIGNATION') || ph.includes('ROLE')) ? "#6D28D9" : ph.includes('CERTIFICATE') ? "#1D4ED8" : ph.includes('INVITE') ? "#15803D" : "#334155",
-                        borderRadius:6,
-                        fontSize:".75rem",
-                        fontWeight:800,
-                        cursor:"pointer",
-                        boxShadow: ph.includes('EVENT') ? "0 1px 4px rgba(245,158,11,0.2)" : (ph.includes('DESIGNATION') || ph.includes('ROLE')) ? "0 1px 4px rgba(109,40,217,0.15)" : "none"
-                      }}
-                    >
-                      + {ph}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Interactive Direct URL Builder & Copy Helper (Supports all Custom PDF Templates) */}
-                <div style={{background:"#F8FAFC",border:"1px solid #CBD5E1",borderRadius:8,padding:"10px 12px",display:"flex",flexDirection:"column",gap:8}}>
-                  <div style={{fontSize:".74rem",fontWeight:800,color:"#334155"}}>🔗 DIRECT URL GENERATOR HELPER:</div>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:"white",padding:"6px 10px",borderRadius:6,border:"1px solid #E2E8F0"}}>
-                    <span style={{fontSize:".75rem",color:"#1E293B",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                      🎓 <strong>Certificate URL:</strong> https://www.mmp-cwc.com/?cert={'{TXN_ID}'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        insertPlaceholder(' https://www.mmp-cwc.com/?cert={TXN_ID}');
-                        alert("Inserted Certificate URL into template!");
-                      }}
-                      style={{padding:"3px 8px",background:"#2563EB",color:"white",border:"none",borderRadius:4,fontSize:".7rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
-                    >
-                      + Insert in Template
-                    </button>
-                  </div>
-
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:"white",padding:"6px 10px",borderRadius:6,border:"1px solid #E2E8F0"}}>
-                    <span style={{fontSize:".75rem",color:"#1E293B",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                      💌 <strong>Invite Pass URL:</strong> https://www.mmp-cwc.com/?invite={'{TXN_ID}'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        insertPlaceholder(' https://www.mmp-cwc.com/?invite={TXN_ID}');
-                        alert("Inserted Invite Pass URL into template!");
-                      }}
-                      style={{padding:"3px 8px",background:"#15803D",color:"white",border:"none",borderRadius:4,fontSize:".7rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
-                    >
-                      + Insert in Template
-                    </button>
-                  </div>
-
-                  {/* List each custom PDF template created for this event */}
-                  {(event?.pdfTemplates || []).map(tpl => {
-                    const customLink = `https://www.mmp-cwc.com/?doc=${tpl.id}&pass={TXN_ID}`;
-                    return (
-                      <div key={tpl.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:"#F0FDF4",padding:"6px 10px",borderRadius:6,border:"1px solid #86EFAC"}}>
-                        <span style={{fontSize:".75rem",color:"#166534",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                          📄 <strong>${tpl.name}:</strong> ${customLink}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            insertPlaceholder(` ${customLink}`);
-                            alert(`Inserted "${tpl.name}" URL into template!`);
-                          }}
-                          style={{padding:"3px 8px",background:"#15803D",color:"white",border:"none",borderRadius:4,fontSize:".7rem",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}
-                        >
-                          + Insert in Template
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Message Textarea */}
-              <div style={{flex:1,display:"flex",flexDirection:"column"}}>
-                <label style={{display:"block",fontSize:".75rem",fontWeight:700,color:"#475569",marginBottom:4}}>MESSAGE CONTENT (WHATSAPP FORMATTED)</label>
-                <textarea
-                  value={activeTpl.text || ""}
-                  onChange={e => handleUpdateActiveTpl("text", e.target.value)}
-                  rows={12}
-                  style={{width:"100%",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",fontSize:".85rem",lineHeight:1.5,fontFamily:"monospace",boxSizing:"border-box",background:"white",resize:"vertical"}}
-                />
-              </div>
-
-            </div>
-          )}
-
         </div>
 
-        {/* Footer */}
-        <div style={{padding:"14px 24px",background:"#F8FAFC",borderTop:"1px solid #E2E8F0",display:"flex",justifyContent:"flex-end",gap:10}}>
-          <button onClick={onClose} style={{padding:"8px 18px",borderRadius:8,background:"white",border:"1px solid #CBD5E1",fontSize:".85rem",cursor:"pointer",fontWeight:600}}>
-            Cancel
-          </button>
-          <button
-            onClick={handleSaveAll}
-            disabled={saving}
-            style={{padding:"8px 24px",borderRadius:8,background:"#15803D",color:"white",border:"none",fontSize:".85rem",fontWeight:700,cursor:saving ? "wait" : "pointer"}}
-          >
-            {saving ? "Saving Templates..." : "💾 Save Workspace Templates"}
-          </button>
-        </div>
+        {/* ── UNIFIED FOOTER BAR ── */}
+        <div style={{padding:"12px 20px",borderTop:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",background:"white"}}>
+          <div style={{fontSize:".76rem",color:"#64748B"}}>
+            Editing: <strong>{studioTab === "whatsapp" ? (activeTpl?.name || "Template") : (activePdf?.name || "Pass")}</strong>
+          </div>
 
+          <div style={{display:"flex",gap:10}}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{padding:"8px 18px",borderRadius:8,background:"#F1F5F9",color:"#475569",border:"1px solid #CBD5E1",fontSize:".82rem",fontWeight:700,cursor:"pointer"}}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={handleSaveAll}
+              style={{
+                padding:"8px 24px",
+                borderRadius:8,
+                background:"linear-gradient(135deg, #15803D, #166534)",
+                color:"white",
+                border:"none",
+                fontSize:".85rem",
+                fontWeight:800,
+                cursor:saving ? "wait" : "pointer",
+                boxShadow:"0 2px 8px rgba(22,101,52,0.3)"
+              }}
+            >
+              {saving ? "Saving Workspace..." : "💾 Save Workspace Templates"}
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Central Media Library Selector Modal for PDF Templates */}
+      <MediaLibraryModal
+        isOpen={showPdfMediaLibrary}
+        onClose={() => setShowPdfMediaLibrary(false)}
+        targetCategory="letterhead"
+        C={C}
+        setC={setC}
+        auth={auth}
+        onSelect={(asset) => {
+          handleUpdateActivePdf("bgUrl", `media://${asset.id}`);
+        }}
+      />
     </div>
   );
 }
-
 // ── WhatsApp Applicant Communication Modal ───────────────────────────────────────
-function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, allRegs = [], onSelectReg }) {
+function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, allRegs = [], recipientList = null, onSelectReg }) {
   if (!reg) return null;
 
   const rawParticipantName = String(reg['Participant Name'] || reg['Full Name'] || reg['Student Name'] || reg['Candidate Name'] || reg['Name'] || reg.name || reg['Submitted By'] || 'Participant').replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
@@ -19777,8 +25992,9 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
   const currentStatus = reg['Status'] || reg.status || 'Pending';
   const remarks = reg['Remarks'] || reg.remarks || 'Application under review';
 
-  const currentIndex = allRegs.findIndex(r => r.id === reg.id || (r['Transaction ID'] && r['Transaction ID'] === reg['Transaction ID']));
-  const totalCount = allRegs.length;
+  const navList = (Array.isArray(recipientList) && recipientList.length > 0) ? recipientList : allRegs;
+  const currentIndex = navList.findIndex(r => r.id === reg.id || (r['Transaction ID'] && r['Transaction ID'] === reg['Transaction ID']));
+  const totalCount = navList.length;
 
   const evName = reg.eventName || reg.eventTitle || reg.eventId || "Education felicitation 2026";
   const eventObj = (C.events || []).find(e => e.id === reg.eventId || e.title === evName || e.titleGu === evName);
@@ -19808,10 +26024,21 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
     ? eventObj.whatsAppTemplates
     : defaultWorkspaceTemplates;
 
-  const defaultTpl = workspaceTemplates.find(t => t.isDefault) || workspaceTemplates[0];
+  const initialEventScope = reg?.targetEventId || reg?.activeDocTpl?.customTpl?.targetEventId || eventObj?.targetEventId || "education2026";
+  const initialVibhagScope = reg?.vibhagScope === "all" ? "all" : (reg?.vibhag || reg?.['Vibhag'] || reg?.['Vibhag New'] || "auto");
+  const [activeModalEvent, setActiveModalEvent] = useState(initialEventScope);
+  const [activeModalVibhag, setActiveModalVibhag] = useState(initialVibhagScope);
+
+  const defaultTpl = workspaceTemplates.find(t => t.isDefault) || workspaceTemplates[0] || defaultWorkspaceTemplates[0];
   const [selectedTplId, setSelectedTplId] = useState(defaultTpl?.id || "tpl_student_pass");
 
-  const formatTemplateString = (tplString, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks, rContactNameArg) => {
+  const formatTemplateString = (tplString, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks, rContactNameArg, eventScopeOverride, vibhagOverrideArg) => {
+    const chosenScope = eventScopeOverride || activeModalEvent || "education2026";
+    let chosenVibhag = vibhagOverrideArg || activeModalVibhag || "auto";
+    if (chosenVibhag === 'auto') {
+      const recV = rVibhag || reg?.['Vibhag New'] || reg?.['Vibhag'] || reg?.vibhag || "";
+      if (recV && recV !== 'All Vibhags') chosenVibhag = recV;
+    }
     const baseUrl = `${C.whatsAppPortalUrl || "https://www.mmp-cwc.com/"}`.replace(/\/?$/, '');
     const certUrl = `${baseUrl}/?cert=${encodeURIComponent(rTxn || "")}`;
     const inviteUrl = `${baseUrl}/?invite=${encodeURIComponent(rTxn || "")}`;
@@ -19822,11 +26049,33 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
     const evDate = eventObj?.date ? `${eventObj.date} ${eventObj.month || ''}`.trim() : (reg.Date || reg.eventDate || "2026");
     const evVenue = eventObj?.location || reg.location || reg.venue || "Mumbai";
 
+    const _mNowObj = new Date();
+    const _mPad = (n) => String(n).padStart(2, '0');
+    const curDate = `${_mPad(_mNowObj.getDate())}-${_mPad(_mNowObj.getMonth() + 1)}-${_mNowObj.getFullYear()}`;
+    const curTime = _mNowObj.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+    const curDateTime = `${curDate}, ${curTime}`;
+
     const rDesignation = String(reg['Designation'] || reg.designation || reg['Designation / Role'] || reg['Post'] || reg.role || reg['Designation (e.g. Trustee / Member)'] || '').trim();
     const contactNameVal = rContactNameArg || rawContactName || rName || "Member";
     const participantNameVal = rName || rawParticipantName || "Participant";
 
+    let modalGroups = [];
+    if (Array.isArray(reg.groups) && reg.groups.length > 0) modalGroups = reg.groups;
+    else if (Array.isArray(reg.Groups) && reg.Groups.length > 0) modalGroups = reg.Groups;
+    else if (reg.group || reg.Group || reg.category || reg.Category) {
+      modalGroups = String(reg.group || reg.Group || reg.category || reg.Category).split(/[,/|;]+/).map(s => s.trim()).filter(Boolean);
+    }
+    const rContactGroup = modalGroups.length > 0 ? modalGroups.join(", ") : (rVibhag || "General Committee");
+    const rEmail = reg['Email Address'] || reg.Email || reg.email || "";
+    const rAddress = reg.Address || reg.address || "";
+    const rSubWsName = reg.activeDocTpl?.name || reg.customDocName || "Official Pass";
+
     let processed = (tplString || "")
+      .replace(/\{CURRENT_DATE\}/g, curDate)
+      .replace(/\{CURRENT_TIME\}/g, curTime)
+      .replace(/\{CURRENT_DATETIME\}/g, curDateTime)
+      .replace(/\{TODAY\}/g, curDate)
+      .replace(/\{NOW\}/g, curDateTime)
       .replace(/\{PORTAL_NAME\}/g, portalName)
       .replace(/\{WEBSITE_NAME\}/g, portalName)
       .replace(/\{TRUST_NAME\}/g, portalName)
@@ -19838,6 +26087,14 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
       .replace(/\{EVENT_DATE\}/g, evDate)
       .replace(/\{VENUE\}/g, evVenue)
       .replace(/\{LOCATION\}/g, evVenue)
+      .replace(/\{CONTACT_GROUP\}/g, rContactGroup)
+      .replace(/\{GROUP\}/g, rContactGroup)
+      .replace(/\{GROUPS\}/g, rContactGroup)
+      .replace(/\{COMMITTEE_GROUP\}/g, rContactGroup)
+      .replace(/\{DESIGNATION\}/g, rDesignation)
+      .replace(/\{ROLE\}/g, rDesignation)
+      .replace(/\{INVITEE_NAME\}/g, participantNameVal)
+      .replace(/\{INVITEE\}/g, participantNameVal)
       .replace(/\{CONTACT_USER_NAME\}/g, contactNameVal)
       .replace(/\{CONTACT_NAME\}/g, contactNameVal)
       .replace(/\{CONTACT_PERSON\}/g, contactNameVal)
@@ -19849,11 +26106,43 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
       .replace(/\{USER_NAME\}/g, contactNameVal)
       .replace(/\{NAME\}/g, participantNameVal)
       .replace(/\{TXN_ID\}/g, rTxn || "N/A")
+      .replace(/\{PASS_ID\}/g, rTxn || "N/A")
+      .replace(/\{ENTRY_PASS_ID\}/g, rTxn || "N/A")
       .replace(/\{VIBHAG\}/g, rVibhag || "All Vibhags")
+      .replace(/\{VIBHAG_NAME\}/g, rVibhag || "All Vibhags")
+      .replace(/\{SUB_WORKSPACE_NAME\}/g, rSubWsName)
+      .replace(/\{TEMPLATE_NAME\}/g, rSubWsName)
+      .replace(/\{EMAIL\}/g, rEmail)
+      .replace(/\{ADDRESS\}/g, rAddress)
+      .replace(/\{RESIDENTIAL_ADDRESS\}/g, rAddress)
+      .replace(/\{PHONE\}/g, rMobile || "")
       .replace(/\{STREAM\}/g, rStream || "N/A")
       .replace(/\{PERCENTAGE\}/g, rPct || "N/A")
       .replace(/\{REMARKS\}/g, rRemarks || "Application under review")
       .replace(/\{MOBILE\}/g, rMobile || "")
+      .replace(/\{FATHER_NAME\}/g, reg["Father's Name"] || reg["Father Name"] || "")
+      .replace(/\{MOTHER_NAME\}/g, reg["Mother's Name"] || reg["Mother Name"] || "")
+      .replace(/\{SURNAME\}/g, reg["Surname"] || "")
+      .replace(/\{GENDER\}/g, reg["Gender"] || "")
+      .replace(/\{DOB\}/g, reg["Date of Birth"] || reg["DOB"] || "")
+      .replace(/\{AGE\}/g, reg["Age"] || "")
+      .replace(/\{SCHOOL_COLLEGE_NAME\}/g, reg["School / College Name"] || reg["College Name"] || reg["School Name"] || "")
+      .replace(/\{PASSING_YEAR\}/g, reg["Passing Year"] || "")
+      .replace(/\{GRADE\}/g, reg["Grade"] || reg["Rank"] || "")
+      .replace(/\{NATIVE_VILLAGE\}/g, reg["Native Village"] || reg["Gam"] || "")
+      .replace(/\{DISTRICT\}/g, reg["District"] || "")
+      .replace(/\{PIN_CODE\}/g, reg["Pin Code"] || "")
+      .replace(/\{ALT_MOBILE\}/g, reg["Alternate Mobile Number"] || "")
+      .replace(/\{TOKEN_NO\}/g, reg["Token No"] || reg["Token Number"] || "")
+      .replace(/\{SEAT_NO\}/g, reg["Seat No"] || reg["Seat Number"] || "")
+      .replace(/\{STATUS\}/g, reg["Status"] || "Approved")
+      .replace(/\{SUBMISSION_DATE\}/g, reg["Timestamp"] || reg["Submission Date"] || "")
+      .replace(/\{DONOR_NAME\}/g, reg["Donor Name"] || reg["Full Name"] || participantNameVal)
+      .replace(/\{DONOR_AMOUNT\}/g, reg["Amount"] || reg["Donation Amount"] || "")
+      .replace(/\{PAYMENT_MODE\}/g, reg["Payment Mode"] || "")
+      .replace(/\{TRANSACTION_REF\}/g, reg["UTR / Ref No"] || reg["Cheque No"] || "")
+      .replace(/\{PAN_CARD\}/g, reg["PAN Card"] || "")
+      .replace(/\{RECEIPT_NO\}/g, reg["Receipt No"] || "")
       .replace(/\{CERTIFICATE_LINK\}/g, certUrl)
       .replace(/\{CERTIFICATE_URL\}/g, certUrl)
       .replace(/\{INVITE_PDF_LINK\}/g, inviteUrl)
@@ -19864,6 +26153,89 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
       .replace(/\{WEBSITE_HOME\}/g, baseUrl)
       .replace(/\{HELPLINE_PHONES\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209 / +91 9967821964")
       .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209");
+
+    // Universal replacement for all exact registration fields from any section (e.g. {Stream / Class}, {% Obtained}, {Native Village})
+    Object.entries(reg || {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && typeof v !== 'object') {
+        const valStr = String(v);
+        processed = processed.replaceAll(`{${k}}`, valStr);
+        const cleanK = k.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '').toUpperCase();
+        if (cleanK) processed = processed.replaceAll(`{${cleanK}}`, valStr);
+      }
+    });
+
+    // 1. Evaluate Active Target Event Placeholders with Vibhag Scope
+    const activeTargetScope = (chosenScope && chosenScope !== 'current') ? chosenScope : 'education2026';
+
+    const activeScopeStats = typeof generateEventScopedStats === 'function'
+      ? generateEventScopedStats(reg, activeTargetScope, allRegs, chosenVibhag)
+      : buildWhatsAppStudentSummaryPlaceholders(reg, activeTargetScope, allRegs);
+
+    const eduStats = typeof generateEventScopedStats === 'function'
+      ? generateEventScopedStats(reg, 'education2026', allRegs, chosenVibhag)
+      : activeScopeStats;
+
+    processed = processed
+      .replace(/\{TOTAL_STUDENTS_COUNT\}/g, activeScopeStats.totalStudentsCount)
+      .replace(/\{TOTAL_REGISTRATIONS\}/g, activeScopeStats.totalStudentsCount)
+      .replace(/\{TOTAL_COUNT\}/g, activeScopeStats.totalStudentsCount)
+      .replace(/\{APPROVED_STUDENTS_COUNT\}/g, activeScopeStats.approvedStudentsCount)
+      .replace(/\{APPROVED_COUNT\}/g, activeScopeStats.approvedStudentsCount)
+      .replace(/\{PENDING_STUDENTS_COUNT\}/g, activeScopeStats.pendingStudentsCount)
+      .replace(/\{PENDING_COUNT\}/g, activeScopeStats.pendingStudentsCount)
+      .replace(/\{VIBHAG_STUDENT_COUNT\}/g, activeScopeStats.vibhagStudentCount)
+      .replace(/\{VIBHAG_APPROVED_COUNT\}/g, activeScopeStats.vibhagApprovedCount)
+      .replace(/\{VIBHAG_STUDENT_SUMMARY\}/g, activeScopeStats.vibhagStudentSummary)
+      .replace(/\{EVENT_STUDENT_SUMMARY\}/g, activeScopeStats.eventRegistrationSummary)
+      .replace(/\{EVENT_REGISTRATION_SUMMARY\}/g, activeScopeStats.eventRegistrationSummary)
+      .replace(/\{REGISTRATION_STATS\}/g, activeScopeStats.eventRegistrationSummary)
+      .replace(/\{VIBHAG_STUDENT_LIST\}/g, activeScopeStats.vibhagStudentList)
+      .replace(/\{STUDENT_LIST\}/g, activeScopeStats.vibhagStudentList)
+      .replace(/\{STUDENT_DETAILS_LIST\}/g, activeScopeStats.studentDetailsList)
+      .replace(/\{DETAILED_STUDENT_LIST\}/g, activeScopeStats.studentDetailsList)
+      .replace(/\{ALL_STUDENTS_LIST\}/g, activeScopeStats.allStudentsList)
+      // Dedicated Education 2026 shortcuts
+      .replace(/\{EDU_VIBHAG_STUDENT_LIST\}/g, eduStats.vibhagStudentList)
+      .replace(/\{EDU2026_VIBHAG_STUDENT_LIST\}/g, eduStats.vibhagStudentList)
+      .replace(/\{EDUCATION_2026_VIBHAG_STUDENT_LIST\}/g, eduStats.vibhagStudentList)
+      .replace(/\{EDU_VIBHAG_STUDENT_SUMMARY\}/g, eduStats.vibhagStudentSummary)
+      .replace(/\{EDU_ALL_STUDENTS_LIST\}/g, eduStats.allStudentsList)
+      .replace(/\{EDU_TOTAL_STUDENTS_COUNT\}/g, eduStats.totalStudentsCount);
+
+    // 2. Evaluate Dedicated Monsoon Event Placeholders
+    const monsoonStats = typeof generateEventScopedStats === 'function'
+      ? generateEventScopedStats(reg, 'Monsoon', allRegs)
+      : null;
+    if (monsoonStats) {
+      processed = processed
+        .replace(/\{MONSOON_VIBHAG_STUDENT_LIST\}/g, monsoonStats.vibhagStudentList)
+        .replace(/\{MONSOON_STUDENT_LIST\}/g, monsoonStats.vibhagStudentList)
+        .replace(/\{MONSOON_VIBHAG_LIST\}/g, monsoonStats.vibhagStudentList)
+        .replace(/\{MONSOON_VIBHAG_SUMMARY\}/g, monsoonStats.vibhagStudentSummary)
+        .replace(/\{MONSOON_ALL_LIST\}/g, monsoonStats.allStudentsList)
+        .replace(/\{MONSOON_TOTAL_COUNT\}/g, monsoonStats.totalStudentsCount);
+    }
+
+    // 3. Dynamic Universal Placeholder Evaluator: {EVENT_VIBHAG_LIST:Event Name} or {EVENT_SUMMARY:Event Name}
+    processed = processed.replace(/\{EVENT_VIBHAG_LIST:([^}]+)\}/gi, (match, evNameArg) => {
+      const s = generateEventScopedStats(reg, evNameArg.trim(), allRegs, chosenVibhag);
+      return s.vibhagStudentList;
+    }).replace(/\{EVENT_VIBHAG_STUDENT_LIST:([^}]+)\}/gi, (match, evNameArg) => {
+      const s = generateEventScopedStats(reg, evNameArg.trim(), allRegs, chosenVibhag);
+      return s.vibhagStudentList;
+    }).replace(/\{EVENT_SUMMARY:([^}]+)\}/gi, (match, evNameArg) => {
+      const s = generateEventScopedStats(reg, evNameArg.trim(), allRegs, chosenVibhag);
+      return s.eventRegistrationSummary;
+    }).replace(/\{EVENT_VIBHAG_SUMMARY:([^}]+)\}/gi, (match, evNameArg) => {
+      const s = generateEventScopedStats(reg, evNameArg.trim(), allRegs, chosenVibhag);
+      return s.vibhagStudentSummary;
+    }).replace(/\{EVENT_ALL_LIST:([^}]+)\}/gi, (match, evNameArg) => {
+      const s = generateEventScopedStats(reg, evNameArg.trim(), allRegs, chosenVibhag);
+      return s.allStudentsList;
+    }).replace(/\{EVENT_COUNT:([^}]+)\}/gi, (match, evNameArg) => {
+      const s = generateEventScopedStats(reg, evNameArg.trim(), allRegs, chosenVibhag);
+      return s.totalStudentsCount;
+    });
 
     return processed;
   };
@@ -19890,7 +26262,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
 
   const [customMessage, setCustomMessage] = useState(() => {
     if (reg.isInviteMode && defaultTpl) {
-      return formatTemplateString(defaultTpl.text, rawName, rawMobile, txnId, vibhag, stream, percentage, remarks);
+      return formatTemplateString(defaultTpl.text, rawName, rawMobile, txnId, vibhag, stream, percentage, remarks, null, initialEventScope, initialVibhagScope);
     }
     return buildTemplateForStatus(currentStatus, rawName, rawMobile, txnId, vibhag, stream, percentage, remarks);
   });
@@ -19899,7 +26271,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
     setSelectedTplId(tplId);
     const chosen = workspaceTemplates.find(t => t.id === tplId);
     if (chosen) {
-      setCustomMessage(formatTemplateString(chosen.text, rawName, recipientMobile, txnId, vibhag, stream, percentage, remarks));
+      setCustomMessage(formatTemplateString(chosen.text, rawName, recipientMobile, txnId, vibhag, stream, percentage, remarks, null, activeModalEvent, activeModalVibhag));
     }
   };
 
@@ -19910,9 +26282,15 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
     const freshRemarks = reg['Remarks'] || reg.remarks || 'Application under review';
     const freshName = String(reg['Full Name'] || reg['Submitted By'] || reg['Participant Name'] || reg.name || 'Applicant').replace(/\|/g, ' ').trim();
     const freshTxn = reg['Transaction ID'] || reg.transactionId || reg.id || 'N/A';
-    const freshVibhag = reg['Vibhag'] || reg.vibhag || reg['MMP Vibhag'] || 'All Vibhags';
+    const freshVibhag = reg['Vibhag New'] || reg['Vibhag'] || reg.vibhag || reg['MMP Vibhag'] || 'All Vibhags';
     const freshStream = reg['Stream / Class'] || reg['Stream'] || reg['Course'] || 'N/A';
     const freshPct = reg['% Obtained'] || reg.percentage || reg['Marks / Percentage'] || 'N/A';
+
+    // 🌟 Re-sync Vibhag & Event scope for the newly selected recipient
+    const newVibhag = reg?.vibhagScope === "all" ? "all" : (freshVibhag !== 'All Vibhags' ? freshVibhag : "auto");
+    const newEvent = reg?.targetEventId || reg?.activeDocTpl?.customTpl?.targetEventId || eventObj?.targetEventId || "education2026";
+    setActiveModalVibhag(newVibhag);
+    setActiveModalEvent(newEvent);
 
     if (reg.isInviteMode) {
       const activeDef = workspaceTemplates.find(t => t.isDefault) || workspaceTemplates[0];
@@ -19920,7 +26298,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
       setSelectedTplId(targetId);
       const chosen = workspaceTemplates.find(t => t.id === targetId) || activeDef;
       if (chosen) {
-        setCustomMessage(formatTemplateString(chosen.text, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks));
+        setCustomMessage(formatTemplateString(chosen.text, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks, null, newEvent, newVibhag));
       }
     } else {
       setCustomMessage(buildTemplateForStatus(freshStatus, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks));
@@ -20005,18 +26383,22 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
 
     try { navigator.clipboard.writeText(customMessage); } catch(e){}
 
+    const msgTypeName = reg.isInviteMode 
+      ? "Official Invitation Pass" 
+      : `${currentStatus} Notice`;
+
+    if (typeof onLogSent === "function") {
+      try { onLogSent(reg, msgTypeName, customMessage); } catch(e){}
+    }
+
     if (launchMode === "app") {
       const appUrl = `whatsapp://send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
       window.location.href = appUrl;
       return;
     }
 
-    const msgTypeName = reg.isInviteMode 
-      ? "Official Invitation Pass" 
-      : `${currentStatus} Notice`;
-
     if (typeof onLogSent === "function") {
-      try { onLogSent(reg, msgTypeName); } catch(e){}
+      try { onLogSent(reg, msgTypeName, customMessage); } catch(e){}
     }
 
     const webUrl = `https://web.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(customMessage)}`;
@@ -20111,45 +26493,138 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
               borderRadius: 10,
               padding: "12px 14px",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
+              flexDirection: "column",
               gap: 10
             }}>
-              <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:250}}>
-                <span style={{fontSize:".84rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>📝 Choose Template:</span>
-                <select
-                  value={selectedTplId}
-                  onChange={e => handleTemplateSelectChange(e.target.value)}
+              {/* Row 1: Choose Template & Reset Draft */}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,width:"100%",flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:240}}>
+                  <span style={{fontSize:".84rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>📝 Choose Template:</span>
+                  <select
+                    value={selectedTplId}
+                    onChange={e => handleTemplateSelectChange(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: "7px 12px",
+                      borderRadius: 6,
+                      border: "1.5px solid #15803D",
+                      fontSize: ".84rem",
+                      fontWeight: 700,
+                      color: "#14532D",
+                      background: "white",
+                      cursor: "pointer",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+                    }}
+                  >
+                    {workspaceTemplates.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} {t.isDefault ? "★ (Default)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleTemplateSelectChange(selectedTplId)}
                   style={{
-                    flex: 1,
-                    padding: "7px 12px",
-                    borderRadius: 6,
-                    border: "1.5px solid #15803D",
-                    fontSize: ".84rem",
-                    fontWeight: 700,
-                    color: "#14532D",
-                    background: "white",
-                    cursor: "pointer",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+                    background:"white",
+                    border:"1px solid #86EFAC",
+                    color:"#15803D",
+                    padding:"6px 12px",
+                    borderRadius:6,
+                    fontSize:".76rem",
+                    fontWeight:700,
+                    cursor:"pointer",
+                    whiteSpace:"nowrap"
                   }}
+                  title="Reset to selected template content"
                 >
-                  {workspaceTemplates.map(t => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} {t.isDefault ? "★ (Default)" : ""}
-                    </option>
-                  ))}
-                </select>
+                  ↺ Reset Draft
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => handleTemplateSelectChange(selectedTplId)}
-                style={{background:"white",border:"1px solid #86EFAC",color:"#15803D",padding:"6px 12px",borderRadius:6,fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
-                title="Reset to selected template content"
-              >
-                ↺ Reset Draft
-              </button>
+              {/* Row 2: Live Event Data Source & Geographic Vibhag Filter */}
+              <div style={{
+                display:"flex",
+                alignItems:"center",
+                justifyContent:"space-between",
+                gap:10,
+                paddingTop: 8,
+                borderTop: "1px dashed #BBF7D0",
+                width:"100%",
+                flexWrap:"wrap"
+              }}>
+                {/* Event Selector */}
+                <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:200}}>
+                  <span style={{fontSize:".8rem",fontWeight:800,color:"#0D4B5E",whiteSpace:"nowrap"}}>🎯 Event:</span>
+                  <select
+                    value={activeModalEvent}
+                    onChange={e => {
+                      const newEv = e.target.value;
+                      setActiveModalEvent(newEv);
+                      const activeTpl = workspaceTemplates.find(t => t.id === selectedTplId) || defaultTpl;
+                      if (activeTpl) {
+                        setCustomMessage(formatTemplateString(activeTpl.text, rawName, recipientMobile, txnId, vibhag, stream, percentage, remarks, null, newEv, activeModalVibhag));
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: "5px 8px",
+                      borderRadius: 6,
+                      border: "1.5px solid #0D4B5E",
+                      fontSize: ".78rem",
+                      fontWeight: 800,
+                      color: "#0F766E",
+                      background: "white",
+                      cursor: "pointer"
+                    }}
+                    title="Switch event registrations source"
+                  >
+                    <option value="education2026">🎓 Education 2026</option>
+                    {(C.events || []).filter(evItem => evItem.id !== 'education2026' && !String(evItem.title || '').toLowerCase().includes('education')).map(evItem => (
+                      <option key={evItem.id || evItem.title} value={evItem.id || evItem.title}>
+                        📌 {evItem.title || evItem.id}
+                      </option>
+                    ))}
+                    <option value="all">🌐 All Events Combined</option>
+                  </select>
+                </div>
+
+                {/* Vibhag Filter */}
+                <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:220}}>
+                  <span style={{fontSize:".8rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>📍 Vibhag:</span>
+                  <select
+                    value={activeModalVibhag}
+                    onChange={e => {
+                      const newV = e.target.value;
+                      setActiveModalVibhag(newV);
+                      const activeTpl = workspaceTemplates.find(t => t.id === selectedTplId) || defaultTpl;
+                      if (activeTpl) {
+                        setCustomMessage(formatTemplateString(activeTpl.text, rawName, recipientMobile, txnId, vibhag, stream, percentage, remarks, null, activeModalEvent, newV));
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: "5px 8px",
+                      borderRadius: 6,
+                      border: "1.5px solid #15803D",
+                      fontSize: ".78rem",
+                      fontWeight: 800,
+                      color: "#166534",
+                      background: "#F0FDF4",
+                      cursor: "pointer"
+                    }}
+                    title="Filter {VIBHAG_STUDENT_LIST} for a specific Vibhag (e.g. 10 MAHALAXMI)"
+                  >
+                    <option value="auto">🎯 Auto (Recipient's Vibhag)</option>
+                    {getStandardVibhagsList(C).map(v => (
+                      <option key={v} value={v}>📍 {v}</option>
+                    ))}
+                    <option value="all">🌐 All Vibhags Combined</option>
+                  </select>
+                </div>
+              </div>
             </div>
           ) : (
             <div style={{
@@ -20246,7 +26721,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
             {currentIndex > 0 && onSelectReg && (
               <button
                 type="button"
-                onClick={() => onSelectReg(allRegs[currentIndex - 1])}
+                onClick={() => onSelectReg(navList[currentIndex - 1])}
                 style={{padding:"9px 12px",background:"#F1F5F9",border:"1px solid #CBD5E1",borderRadius:8,fontSize:".8rem",fontWeight:700,cursor:"pointer"}}
                 title="Previous Applicant"
               >
@@ -20257,7 +26732,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
             {currentIndex >= 0 && currentIndex < totalCount - 1 && onSelectReg && (
               <button
                 type="button"
-                onClick={() => onSelectReg(allRegs[currentIndex + 1])}
+                onClick={() => onSelectReg(navList[currentIndex + 1])}
                 style={{padding:"9px 12px",background:"#F1F5F9",border:"1px solid #CBD5E1",borderRadius:8,fontSize:".8rem",fontWeight:700,cursor:"pointer"}}
                 title="Next Applicant"
               >
@@ -20289,7 +26764,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
               onClick={() => {
                 handleSendWhatsApp();
                 if (currentIndex >= 0 && currentIndex < totalCount - 1 && onSelectReg) {
-                  setTimeout(() => onSelectReg(allRegs[currentIndex + 1]), 400);
+                  setTimeout(() => onSelectReg(navList[currentIndex + 1]), 400);
                 }
               }}
               disabled={sendingApi}
@@ -20734,8 +27209,44 @@ function AdminRegistrations({ mob, C, setC, auth }) {
     return true;
   };
 
+  const getRecordSection = (r) => {
+    if (!r) return "Default";
+    // 1. Direct match on C.events
+    const rEvId = String(r.eventId || '').trim().toLowerCase();
+    const rEvTitle = String(r.eventName || r.eventTitle || '').trim().toLowerCase();
+    const ev = (C.events || []).find(e => {
+      const eId = String(e.id || '').trim().toLowerCase();
+      const eTitle = String(e.title || '').trim().toLowerCase();
+      const eTitleGu = String(e.titleGu || '').trim().toLowerCase();
+      return (eId && (eId === rEvId || rEvId.includes(eId))) ||
+             (eTitle && (eTitle === rEvTitle || rEvTitle.includes(eTitle))) ||
+             (eTitleGu && (eTitleGu === rEvTitle));
+    });
+    if (ev && ev.section) return ev.section;
+
+    // 2. Smart fallback: if title or Txn ID belongs to Education Felicitation
+    const txn = String(r['Transaction ID'] || r.transactionId || '').toUpperCase();
+    const combined = `${rEvId} ${rEvTitle} ${String(r.program || '')} ${String(r.purpose || '')}`.toLowerCase();
+
+    if (txn.startsWith('EDU') || txn.startsWith('VG-') || combined.includes('education') || combined.includes('felicitation') || combined.includes('vidya') || combined.includes('student') || Boolean(r['Stream / Class'] || r['Stream'] || r['% Obtained'])) {
+      const eduSection = (C.eventSections || []).find(s => s.toLowerCase().includes('education')) || 
+                         (C.events || []).map(e => e.section).find(s => s && s.toLowerCase().includes('education')) || 
+                         "Education 2026";
+      return eduSection;
+    }
+
+    return ev?.section || "Default";
+  };
+
   const activeRegsList = regs.filter(isPublicEventRegistration);
   const deletedRegsList = regs.filter(r => (r.deleted === true || r.deleted === "true" || r.isDeleted === true || r.status === "Deleted" || r.Status === "Deleted") && !r.isGlobalGuest && !r.isSpecialGuest);
+
+  // Compute live section distribution counts
+  const sectionCounts = { "All": activeRegsList.length };
+  activeRegsList.forEach(r => {
+    const sec = getRecordSection(r);
+    sectionCounts[sec] = (sectionCounts[sec] || 0) + 1;
+  });
 
   // ── Duplicate Detection Engine (Matches Full Name & Mobile Number) ──
   const dupMap = {};
@@ -20792,9 +27303,8 @@ function AdminRegistrations({ mob, C, setC, auth }) {
   const filteredRegs = activeRegsList.filter(r => {
     if(!r) return false;
     
-    // Group section filter
-    const ev = C.events?.find(e => e.id === r.eventId || e.title === r.eventTitle || e.title === r.eventName || e.titleGu === r.eventName);
-    const evSection = ev?.section || "Default";
+    // Group section filter using smart section resolver
+    const evSection = getRecordSection(r);
     if (selectedSection !== "All") {
       if (selectedSection === "Default") {
         if (evSection !== "Default" && evSection !== "") return false;
@@ -20857,6 +27367,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
       else if(colKey === "Status") rVal = r['Status'] || "Pending";
       else if(colKey === "Transaction ID") rVal = r['Transaction ID'] || "-";
       else if(colKey === "Updated By") rVal = r['Updated By'] || "-";
+      else if(colKey === "Vibhag" || colKey === "Vibhag New" || colKey.toLowerCase().includes("vibhag")) rVal = getRecordVibhag(r);
       else rVal = r[colKey] || "-";
       
       if(!String(rVal).toLowerCase().includes(filterVal.toLowerCase())) return false;
@@ -20875,12 +27386,18 @@ function AdminRegistrations({ mob, C, setC, auth }) {
     if(!r) return;
     Object.keys(r).forEach(k => {
       if (!ignoreKeys.includes(k) && !k.startsWith('_')) {
-        allKeysSet.add(k);
+        const cleanK = k.trim();
+        const normK = cleanK.toLowerCase().replace(/[\s_-]+/g, '');
+        if (normK === 'vibhagnew' || cleanK === 'Vibhag New') {
+          allKeysSet.add('Vibhag');
+        } else {
+          allKeysSet.add(cleanK);
+        }
       }
     });
   });
   
-  let allKeys = Array.from(allKeysSet);
+  let allKeys = Array.from(allKeysSet).filter(k => k !== 'Vibhag New' && k.toLowerCase().replace(/[\s_-]+/g, '') !== 'vibhagnew');
   const priority = ["Full Name", "Name", "Mobile Number", "Mobile", "Phone", "Email Address", "Email"];
   allKeys.sort((a, b) => {
     const ia = priority.indexOf(a);
@@ -20902,6 +27419,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
       else if(colKey === "Unique") val = getDuplicateInfo(r).isDuplicate ? "Duplicate" : "Unique";
       else if(colKey === "Status") val = r['Status'] || "Pending";
       else if(colKey === "Updated By") val = r['Updated By'] || "-";
+      else if(colKey === "Vibhag" || colKey === "Vibhag New" || colKey.toLowerCase().includes("vibhag")) val = getRecordVibhag(r);
       else val = r[colKey] || "-";
       
       if (typeof val === 'string' && val.startsWith('http')) return;
@@ -20968,8 +27486,10 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                 padding:"4px 12px", borderRadius:16, border:"none",
                 background:viewMode==="active"?"var(--dt)":"transparent", color:viewMode==="active"?"white":"var(--tm2)",
                 fontSize:".78rem", fontWeight:viewMode==="active"?700:500, cursor:"pointer"
-              }}>
-                📋 Active ({activeRegsList.length})
+              }}
+              title={selectedSection !== "All" ? `Showing ${filteredRegs.length} entries in ${selectedSection} (Total active across website: ${activeRegsList.length})` : `Total ${activeRegsList.length} active registrations`}
+              >
+                📋 Active ({selectedSection === "All" ? activeRegsList.length : `${filteredRegs.length} / ${activeRegsList.length}`})
               </button>
               <button onClick={()=>setViewMode("trash")} style={{
                 padding:"4px 12px", borderRadius:16, border:"none",
@@ -20989,13 +27509,18 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                   ...(C.events || []).map(e => e.section).filter(Boolean)
                 ])).map(sec => {
                   const isSelected = selectedSection === sec;
+                  const count = sectionCounts[sec] || 0;
+                  const label = sec === "Default" ? "Default Section" : sec === "All" ? "All Groups" : sec;
                   return (
                     <button key={sec} onClick={()=>setSelectedSection(sec)} style={{
                       padding:"4px 12px", borderRadius:16, border:"none",
                       background:isSelected?"var(--dt)":"transparent", color:isSelected?"white":"var(--tm2)",
-                      fontSize:".78rem", fontWeight:isSelected?700:500, cursor:"pointer", transition:"all 0.2s"
-                    }}>
-                      {sec === "Default" ? "Default Section" : sec === "All" ? "All Groups" : sec}
+                      fontSize:".78rem", fontWeight:isSelected?700:500, cursor:"pointer", transition:"all 0.2s",
+                      boxShadow: isSelected ? "0 1px 4px rgba(0,0,0,0.18)" : "none"
+                    }}
+                    title={`Filter to ${label} (${count} registrations)`}
+                    >
+                      {label} ({count})
                     </button>
                   );
                 })}
@@ -21009,8 +27534,7 @@ function AdminRegistrations({ mob, C, setC, auth }) {
             {(() => {
               // Base candidates before status / open pill filters to show accurate bucket counts
               const basePool = activeRegsList.filter(r => {
-                const ev = (C.events || []).find(e => e.id === r.eventId || e.title === r.eventName || e.titleGu === r.eventName);
-                const evSection = ev?.section || "Default";
+                const evSection = getRecordSection(r);
                 if (selectedSection !== "All") {
                   if (selectedSection === "Default") {
                     if (evSection !== "Default" && evSection !== "") return false;
@@ -21223,8 +27747,13 @@ function AdminRegistrations({ mob, C, setC, auth }) {
             <button onClick={handleRefresh} disabled={refreshing} style={{padding:"6px 12px",borderRadius:8,fontSize:".8rem",fontWeight:600,display:"flex",alignItems:"center",gap:4,background:"white",border:"1px solid var(--bd)",color:"var(--dt)",cursor:refreshing?"wait":"pointer",whiteSpace:"nowrap"}}>
               {refreshing ? "..." : "↻"} Refresh
             </button>
-            <button onClick={handleExportCSV} className="bt" style={{padding:"6px 12px",borderRadius:8,fontSize:".8rem",fontWeight:600,display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>
-              <span>📥</span> Export CSV
+            <button 
+              onClick={handleExportCSV} 
+              className="bt" 
+              style={{padding:"6px 12px",borderRadius:8,fontSize:".8rem",fontWeight:600,display:"flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}
+              title={`Export ${filteredRegs.length} rows to CSV (${selectedSection === "All" ? "All Groups" : selectedSection})`}
+            >
+              <span>📥</span> Export CSV ({filteredRegs.length})
             </button>
             {selectedIds.length > 0 && (
               <button
@@ -21349,6 +27878,36 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                 style={{padding:"6px 12px",borderRadius:6,fontSize:".8rem",fontWeight:600,display:"flex",alignItems:"center",gap:4,background:"#FFF4EC",color:"var(--sf)",border:"1px solid var(--sf)",cursor:"pointer",whiteSpace:"nowrap"}}
               >
                 🔢 Sequence Serial Txn IDs
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!confirm(`Merge and unify "Vibhag New" and "Vibhag" across all ${regs.length} registrations in the database? This ensures 100% accurate summaries, chatbot metrics, and clean Excel exports.`)) return;
+                  setRefreshing(true);
+                  let fixedCount = 0;
+                  try {
+                    for (const r of regs) {
+                      const unifiedVibhag = getRecordVibhag(r);
+                      if (r['Vibhag'] !== unifiedVibhag || r['Vibhag New']) {
+                        const updated = { ...r, "Vibhag": unifiedVibhag, vibhag: unifiedVibhag };
+                        delete updated.id; delete updated._submittedAt;
+                        await fbUpdateRegistration(r.id, updated, auth?.idToken);
+                        fixedCount++;
+                      }
+                    }
+                    const fresh = await fbFetchRegistrations(auth?.idToken);
+                    setRegs(fresh || []);
+                    alert(`✅ Successfully unified Vibhag fields for ${fixedCount} registrations in database!`);
+                  } catch(err) {
+                    alert("Error merging Vibhag fields: " + err.message);
+                  } finally {
+                    setRefreshing(false);
+                  }
+                }}
+                style={{padding:"6px 12px",borderRadius:6,fontSize:".8rem",fontWeight:700,display:"flex",alignItems:"center",gap:4,background:"#F0FDF4",color:"#15803D",border:"1.5px solid #86EFAC",cursor:"pointer",whiteSpace:"nowrap"}}
+                title="Merge Vibhag and Vibhag New into single unified Vibhag in Firebase"
+              >
+                <span>🔄</span> Merge & Clean Vibhag Fields
               </button>
             </div>
           </div>
@@ -21710,7 +28269,9 @@ function AdminRegistrations({ mob, C, setC, auth }) {
                       {r['Updated By'] || "-"}
                     </td>
                     {allKeys.map(k => {
-                      let val = r[k] || "-";
+                      let val = (k === 'Vibhag' || k === 'Vibhag New' || k.toLowerCase().includes('vibhag')) 
+                        ? getRecordVibhag(r) 
+                        : (r[k] !== undefined && r[k] !== null && r[k] !== '' ? r[k] : "-");
                       if (typeof val === 'string' && val.startsWith('http')) {
                         const isDoc = val.match(/\.(pdf|doc|docx)/i);
                         if (isDoc) {
@@ -21806,7 +28367,8 @@ function AdminRegistrations({ mob, C, setC, auth }) {
           onClose={() => setWhatsAppModalReg(null)} 
           C={C} 
           auth={auth}
-          allRegs={filteredRegs}
+          allRegs={regs}
+          recipientList={filteredRegs}
           onSelectReg={setWhatsAppModalReg}
           onLogSent={async (r, msgType) => {
             const updatedBy = auth?.email || "Admin";
@@ -22489,6 +29051,928 @@ function BulkSelectionModal({ isOpen, onClose, title, items = [], actionLabel = 
   );
 }
 
+
+// ── IMPORT EVENT & SECTION REGISTRATIONS MODAL ──────────────────────────────────────
+export function ImportEventRegistrationsModal({
+  isOpen,
+  onClose,
+  activeEvent,
+  allEvents = [],
+  allRegs = [],
+  currentDocTpl,
+  availableDocTemplates = [],
+  auth,
+  C = {},
+  onImportSuccess
+}) {
+  if (!isOpen) return null;
+
+  const [selectedSection, setSelectedSection] = useState(() => {
+    // Default to the first event that is NOT the active workspace itself
+    const otherEv = allEvents.find(e => e.id !== activeEvent?.id && e.title !== activeEvent?.title);
+    return otherEv ? otherEv.id : (allEvents[0]?.id || 'all');
+  });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all"); // "all" | "approved" | "new"
+  const [selectedRegIds, setSelectedRegIds] = useState([]);
+  const [targetSubwsId, setTargetSubwsId] = useState(currentDocTpl?.id || "invite");
+  const [importing, setImporting] = useState(false);
+  const [donationsList, setDonationsList] = useState([]);
+  const [loadingDonations, setLoadingDonations] = useState(false);
+
+  // Fetch donations if donor section is selected
+  useEffect(() => {
+    if (selectedSection === 'donors_db') {
+      if (donationsList.length === 0) {
+        setLoadingDonations(true);
+        const token = auth?.idToken || (typeof localStorage !== 'undefined' && localStorage.getItem("trustPublicAuthToken")) || "";
+        if (typeof fbFetchDonations === 'function') {
+          fbFetchDonations(token).then(dons => {
+            setDonationsList(dons || []);
+          }).catch(err => {
+            console.error(err);
+          }).finally(() => {
+            setLoadingDonations(false);
+          });
+        } else {
+          setLoadingDonations(false);
+        }
+      }
+    }
+  }, [selectedSection]);
+
+  // Compute all available sections (events from C.events + distinct events found in allRegs + Donors)
+  const availableSections = useMemo(() => {
+    const list = [];
+    const seenIds = new Set();
+
+    // 1. Defined events
+    (allEvents || []).forEach(ev => {
+      const evId = ev.id || ev.title;
+      if (!seenIds.has(evId)) {
+        seenIds.add(evId);
+        const count = (allRegs || []).filter(r => {
+          if (r.deleted === true || r.isDeleted === true || r.status === "Deleted" || r.Status === "Deleted") return false;
+          let evName = r.eventName || r.eventTitle || r.eventId;
+          return r.eventId === ev.id || evName === ev.title || evName === ev.titleGu;
+        }).length;
+
+        list.push({
+          id: ev.id,
+          title: ev.title || "Event",
+          titleGu: ev.titleGu || "",
+          type: "event",
+          count: count,
+          icon: String(ev.title || '').toLowerCase().includes("edu") ? "🎓" : String(ev.title || '').toLowerCase().includes("sport") ? "🏆" : "📜"
+        });
+      }
+    });
+
+    // 2. Any additional distinct events found in allRegs
+    const distinctEventNames = new Set();
+    (allRegs || []).forEach(r => {
+      if (r.deleted === true || r.isDeleted === true) return;
+      const name = r.eventName || r.eventTitle;
+      if (name && !seenIds.has(name) && !allEvents.some(e => e.title === name || e.id === r.eventId)) {
+        distinctEventNames.add(name);
+      }
+    });
+    distinctEventNames.forEach(name => {
+      const count = (allRegs || []).filter(r => (r.eventName === name || r.eventTitle === name) && !r.deleted).length;
+      list.push({
+        id: "named_" + name,
+        title: name,
+        type: "event",
+        count: count,
+        icon: "📋"
+      });
+    });
+
+    // 3. Donors section
+    const donorRegsCount = (allRegs || []).filter(r => r.isDonor).length;
+    list.push({
+      id: "donors_db",
+      title: "Donors & Contributions Database",
+      type: "donors",
+      count: donorRegsCount > 0 ? donorRegsCount : (donationsList.length || "Live DB"),
+      icon: "💰"
+    });
+
+    return list;
+  }, [allEvents, allRegs, donationsList]);
+
+  // Active section metadata
+  const currentSectionMeta = availableSections.find(s => s.id === selectedSection) || availableSections[0];
+
+  // Raw items for currently selected section
+  const sectionItems = useMemo(() => {
+    if (selectedSection === 'donors_db') {
+      if (donationsList.length > 0) {
+        return donationsList.map(d => ({
+          id: d._docId || d.id,
+          name: d.name,
+          nameGu: d.nameGu || "",
+          mobile: d.phone || d.mobile || "",
+          vibhag: d.vibhag || "General",
+          amount: d.amount,
+          date: d.date,
+          receiptNo: d.receiptNo || d.internalReceiptNo || d.id,
+          purpose: d.purpose || d.program || "Donation",
+          Status: "Approved",
+          isDonor: true,
+          _rawItem: d
+        }));
+      }
+      return (allRegs || []).filter(r => r.isDonor).map(r => ({
+        ...r,
+        name: r["Full Name"] || r["Donor Name"] || r.name,
+        mobile: r["Mobile Number"] || r.mobile || "",
+        vibhag: r.Vibhag || r.vibhag || "General",
+        amount: r.Amount || r.amount,
+        _rawItem: r
+      }));
+    }
+
+    // Filter registrations for selected event
+    return (allRegs || []).filter(r => {
+      if (r.deleted === true || r.isDeleted === true || r.status === "Deleted" || r.Status === "Deleted") return false;
+      const targetMeta = availableSections.find(s => s.id === selectedSection);
+      if (!targetMeta) return false;
+
+      let evName = r.eventName || r.eventTitle || r.eventId;
+      if (selectedSection.startsWith("named_")) {
+        return evName === targetMeta.title;
+      }
+      return r.eventId === targetMeta.id || evName === targetMeta.title || evName === targetMeta.titleGu;
+    }).map(r => ({
+      ...r,
+      name: r["Full Name"] || r["Name"] || r["Participant Name"] || r.name || "Participant",
+      nameGu: r["Full Name (Gujarati)"] || r.nameGu || "",
+      mobile: r["Mobile Number"] || r["Mobile"] || r["WhatsApp Number"] || r.mobile || r.phone || "",
+      vibhag: r.Vibhag || r.vibhag || r["Vibhag New"] || "-",
+      standard: r["Standard"] || r["Std"] || r["Class"] || r["Course"] || "",
+      percentage: r["Percentage"] || r["%"] || r["Percent"] || "",
+      marks: r["Marks Obtained"] || r["Marks"] || "",
+      school: r["School / College Name"] || r["School"] || r["College"] || "",
+      _rawItem: r
+    }));
+  }, [selectedSection, allRegs, donationsList, availableSections]);
+
+  // Check if item is already in active subworkspace
+  const isAlreadyInWorkspace = (item) => {
+    return (allRegs || []).some(r => {
+      if (r.deleted === true || r.isDeleted === true) return false;
+      const idMatch = (r.id === item.id) || (item.isDonor && r.donationId === item.id);
+      const phoneMatch = item.mobile && (String(r["Mobile Number"] || r.mobile || "").replace(/\D/g, "").slice(-10) === String(item.mobile).replace(/\D/g, "").slice(-10));
+      const nameMatch = item.name && String(r["Full Name"] || r.name || "").trim().toLowerCase() === String(item.name).trim().toLowerCase();
+      
+      const isPerson = idMatch || (phoneMatch && nameMatch);
+      if (!isPerson) return false;
+
+      const inEvent = r.eventId === activeEvent?.id || (Array.isArray(r.assignedWorkspaceIds) && r.assignedWorkspaceIds.includes(activeEvent?.id)) || r.workspaceId === activeEvent?.id;
+      const inSubws = (r.targetTemplateId === targetSubwsId) || (Array.isArray(r.assignedDocTypes) && r.assignedDocTypes.includes(targetSubwsId));
+      return inEvent && inSubws;
+    });
+  };
+
+  // Filter items by search and status
+  const filteredItems = useMemo(() => {
+    return sectionItems.filter(item => {
+      // Status filter
+      if (statusFilter === "approved") {
+        if (item.Status !== "Approved" && item.status !== "Approved") return false;
+      } else if (statusFilter === "new") {
+        if (isAlreadyInWorkspace(item)) return false;
+      }
+
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const searchable = [
+          item.name,
+          item.nameGu,
+          item.mobile,
+          item.vibhag,
+          item.standard,
+          item.percentage,
+          item.school,
+          item['Transaction ID'],
+          item.transactionId,
+          item.id,
+          item.receiptNo
+        ].filter(Boolean).join(" ").toLowerCase();
+
+        return searchable.includes(q);
+      }
+
+      return true;
+    });
+  }, [sectionItems, searchQuery, statusFilter, targetSubwsId, allRegs, activeEvent]);
+
+  // Toggle selection
+  const toggleSelect = (id) => {
+    setSelectedRegIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const selectAllFiltered = () => {
+    setSelectedRegIds(filteredItems.map(item => item.id));
+  };
+
+  const deselectAll = () => {
+    setSelectedRegIds([]);
+  };
+
+  // Target subworkspace name
+  const targetDocObj = availableDocTemplates.find(t => t.id === targetSubwsId) || currentDocTpl;
+  const targetDocName = targetDocObj?.name || "Official Invite Letter";
+
+  // Execute Import
+  const handleExecuteImport = async () => {
+    if (selectedRegIds.length === 0) return alert("Please select at least one registration to import.");
+    if (!activeEvent || !activeEvent.id) return alert("Active workspace is not set.");
+
+    const selectedItems = sectionItems.filter(item => selectedRegIds.includes(item.id));
+    const confirmMsg = `Import ${selectedItems.length} registration(s) from "${currentSectionMeta?.title}" into "${targetDocName}" in "${activeEvent.title}"?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setImporting(true);
+    let successCount = 0;
+    const newlyUpdatedOrCreatedRegs = [];
+
+    try {
+      for (const item of selectedItems) {
+        if (item.isDonor && item._rawItem && !item._rawItem.eventId) {
+          // Import new donor entry as registration
+          const d = item._rawItem;
+          const targetId = d._docId || d.id;
+          const existing = (allRegs || []).find(r => r.donationId === targetId && r.eventId === activeEvent.id);
+          if (existing) {
+            const curAssigned = Array.isArray(existing.assignedDocTypes) ? existing.assignedDocTypes : [existing.targetTemplateId || "invite"];
+            const updatedAssigned = Array.from(new Set([...curAssigned, targetSubwsId]));
+            const updated = {
+              ...existing,
+              assignedDocTypes: updatedAssigned,
+              targetTemplateId: targetSubwsId
+            };
+            const clean = { ...updated };
+            delete clean.id; delete clean._submittedAt;
+            await fbUpdateRegistration(existing.id, clean, auth?.idToken);
+            newlyUpdatedOrCreatedRegs.push(updated);
+            successCount++;
+            continue;
+          }
+
+          const newRegEntry = {
+            "Full Name": d.name,
+            "Donor Name": d.name,
+            name: d.name,
+            nameGu: d.nameGu || "",
+            "Mobile Number": d.phone || d.mobile || "",
+            mobile: d.phone || d.mobile || "",
+            "Amount": d.amount,
+            amount: d.amount,
+            "Receipt Number": d.receiptNo || d.internalReceiptNo || d.id,
+            receiptNo: d.receiptNo || d.internalReceiptNo || d.id,
+            "Date": d.date,
+            date: d.date,
+            "Vibhag": d.vibhag || "General",
+            vibhag: d.vibhag || "General",
+            "PAN": d.pan || "",
+            pan: d.pan || "",
+            "Program": d.purpose || d.program || activeEvent.title,
+            "Transaction ID": d.receiptNo || `DON-${String(targetId).slice(-6)}`,
+            transactionId: d.receiptNo || `DON-${String(targetId).slice(-6)}`,
+            Status: "Approved",
+            status: "Approved",
+            eventId: activeEvent.id,
+            eventName: activeEvent.title,
+            workspaceId: activeEvent.id,
+            workspaceName: activeEvent.title,
+            assignedDocTypes: [targetSubwsId],
+            targetTemplateId: targetSubwsId,
+            assignedWorkspaceIds: [activeEvent.id],
+            isDonor: true,
+            donationId: targetId,
+            isSpecialGuest: true
+          };
+
+          const savedRes = await fbSubmitRegistration(newRegEntry, auth?.idToken);
+          newRegEntry.id = savedRes?.name ? savedRes.name.split("/").pop() : `reg_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+          newlyUpdatedOrCreatedRegs.push(newRegEntry);
+          successCount++;
+        } else {
+          // Standard Event Registration
+          const r = item._rawItem || item;
+          const curAssignedDocs = Array.isArray(r.assignedDocTypes) ? r.assignedDocTypes : [r.targetTemplateId || "invite"];
+          const updatedAssignedDocs = Array.from(new Set([...curAssignedDocs, targetSubwsId]));
+          const curWsIds = Array.isArray(r.assignedWorkspaceIds) ? r.assignedWorkspaceIds : [r.eventId].filter(Boolean);
+          const updatedWsIds = Array.from(new Set([...curWsIds, activeEvent.id]));
+
+          const updatedReg = {
+            ...r,
+            eventId: r.eventId || activeEvent.id,
+            assignedDocTypes: updatedAssignedDocs,
+            assignedWorkspaceIds: updatedWsIds,
+            workspaceId: activeEvent.id,
+            workspaceName: activeEvent.title,
+            targetTemplateId: targetSubwsId,
+            Status: r.Status || "Approved",
+            status: r.status || "Approved",
+            isSpecialGuest: r.isSpecialGuest !== undefined ? r.isSpecialGuest : true
+          };
+
+          const cleanCopy = { ...updatedReg };
+          delete cleanCopy.id;
+          delete cleanCopy._submittedAt;
+
+          await fbUpdateRegistration(r.id, cleanCopy, auth?.idToken);
+          newlyUpdatedOrCreatedRegs.push(updatedReg);
+          successCount++;
+        }
+      }
+
+      if (typeof onImportSuccess === 'function') {
+        onImportSuccess(newlyUpdatedOrCreatedRegs);
+      }
+
+      alert(`✅ Successfully imported ${successCount} registration(s) into "${targetDocName}" in "${activeEvent.title}"!\n\nThey are now visible in the table and ready for Invite Letter generation, preview, and WhatsApp dispatch.`);
+      onClose();
+    } catch (e) {
+      alert("Error importing registrations: " + e.message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:100015,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:"white",borderRadius:16,maxWidth:980,width:"100%",maxHeight:"92vh",display:"flex",flexDirection:"column",boxShadow:"0 25px 60px rgba(0,0,0,0.35)",overflow:"hidden"}} onClick={e=>e.stopPropagation()}>
+        
+        {/* Header */}
+        <div style={{background:"linear-gradient(135deg, #1E40AF, #1D4ED8)",color:"white",padding:"16px 22px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <h3 style={{margin:0,fontSize:"1.18rem",fontWeight:800,display:"flex",alignItems:"center",gap:8}}>
+              <span>📥</span> Import Event Registrations into "{activeEvent.title}"
+            </h3>
+            <div style={{fontSize:".76rem",opacity:0.92,marginTop:3}}>
+              Choose any event registration section (e.g. Education 2026, Donors, etc.) to import participants into <strong>{targetDocName}</strong>.
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:32,height:32,color:"white",cursor:"pointer",fontWeight:800,fontSize:"1.1rem"}}>✕</button>
+        </div>
+
+        {/* Section Cards Horizontal Carousel */}
+        <div style={{background:"#F1F5F9",borderBottom:"1.5px solid #CBD5E1",padding:"12px 18px",display:"flex",gap:10,overflowX:"auto",alignItems:"center"}}>
+          <span style={{fontSize:".76rem",fontWeight:800,color:"#475569",textTransform:"uppercase",letterSpacing:"0.5px",whiteSpace:"nowrap"}}>
+            Select Event / Section:
+          </span>
+          {availableSections.map(sec => {
+            const isSelected = selectedSection === sec.id;
+            return (
+              <button
+                key={sec.id}
+                type="button"
+                onClick={() => {
+                  setSelectedSection(sec.id);
+                  setSelectedRegIds([]);
+                }}
+                style={{
+                  padding:"6px 14px",
+                  borderRadius:20,
+                  fontSize:".78rem",
+                  fontWeight:800,
+                  display:"flex",
+                  alignItems:"center",
+                  gap:6,
+                  cursor:"pointer",
+                  whiteSpace:"nowrap",
+                  border: isSelected ? "2px solid #1D4ED8" : "1px solid #CBD5E1",
+                  background: isSelected ? "#EFF6FF" : "white",
+                  color: isSelected ? "#1D4ED8" : "#334155",
+                  boxShadow: isSelected ? "0 2px 8px rgba(29,78,216,0.18)" : "none",
+                  transition: "all 0.15s"
+                }}
+              >
+                <span>{sec.icon}</span>
+                <span>{sec.title}</span>
+                <span style={{
+                  background: isSelected ? "#1D4ED8" : "#E2E8F0",
+                  color: isSelected ? "white" : "#475569",
+                  padding:"1px 6px",
+                  borderRadius:10,
+                  fontSize:".68rem",
+                  fontWeight:800
+                }}>
+                  {sec.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Filter Bar & Target Subworkspace */}
+        <div style={{padding:"12px 18px",background:"white",borderBottom:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+          {/* Search Box */}
+          <div style={{flex:1,minWidth:240}}>
+            <input
+              type="text"
+              placeholder="🔍 Search student name, mobile, percentage, vibhag, transaction ID..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{width:"100%",padding:"7px 12px",borderRadius:6,border:"1.5px solid #CBD5E1",fontSize:".82rem",boxSizing:"border-box"}}
+            />
+          </div>
+
+          {/* Status Filter Pills */}
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <span style={{fontSize:".72rem",color:"#64748B",fontWeight:700}}>Filter:</span>
+            {[
+              { id: 'all', label: 'All (' + sectionItems.length + ')' },
+              { id: 'approved', label: 'Approved Only' },
+              { id: 'new', label: 'Not in Workspace Yet' }
+            ].map(f => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setStatusFilter(f.id)}
+                style={{
+                  padding:"4px 10px",
+                  borderRadius:6,
+                  fontSize:".74rem",
+                  fontWeight:700,
+                  border: statusFilter === f.id ? "1.5px solid #1D4ED8" : "1px solid #E2E8F0",
+                  background: statusFilter === f.id ? "#EFF6FF" : "#F8FAFC",
+                  color: statusFilter === f.id ? "#1D4ED8" : "#475569",
+                  cursor:"pointer"
+                }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Target Subworkspace Dropdown */}
+          <div style={{display:"flex",alignItems:"center",gap:6,background:"#F0FDF4",padding:"4px 10px",borderRadius:6,border:"1px solid #86EFAC"}}>
+            <span style={{fontSize:".72rem",fontWeight:800,color:"#166534"}}>🎯 Destination Tab:</span>
+            <select
+              value={targetSubwsId}
+              onChange={e => setTargetSubwsId(e.target.value)}
+              style={{
+                fontSize:".76rem",
+                fontWeight:800,
+                padding:"3px 8px",
+                borderRadius:4,
+                border:"1px solid #16A34A",
+                background:"white",
+                color:"#166534",
+                cursor:"pointer"
+              }}
+            >
+              {availableDocTemplates.map(tpl => (
+                <option key={tpl.id} value={tpl.id}>
+                  {tpl.icon || '📄'} {tpl.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Selection Bar */}
+        <div style={{padding:"8px 18px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:".78rem"}}>
+          <div>
+            Showing <strong>{filteredItems.length}</strong> of <strong>{sectionItems.length}</strong> registrations from <em>"{currentSectionMeta?.title}"</em>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button
+              type="button"
+              onClick={selectAllFiltered}
+              style={{padding:"4px 10px",background:"white",border:"1px solid #93C5FD",borderRadius:4,color:"#1D4ED8",fontSize:".74rem",fontWeight:700,cursor:"pointer"}}
+            >
+              ✓ Select All ({filteredItems.length})
+            </button>
+            <button
+              type="button"
+              onClick={deselectAll}
+              style={{padding:"4px 10px",background:"white",border:"1px solid #CBD5E1",borderRadius:4,color:"#64748B",fontSize:".74rem",fontWeight:700,cursor:"pointer"}}
+            >
+              Deselect All
+            </button>
+          </div>
+        </div>
+
+        {/* Registrations List Table */}
+        <div style={{flex:1,overflowY:"auto",padding:0}}>
+          {loadingDonations ? (
+            <div style={{textAlign:"center",padding:40,color:"#64748B"}}>⏳ Fetching donations database...</div>
+          ) : filteredItems.length === 0 ? (
+            <div style={{textAlign:"center",padding:40,color:"#64748B"}}>
+              <div style={{fontSize:"2rem",marginBottom:8}}>🔍</div>
+              <div style={{fontSize:".9rem",fontWeight:700}}>No registrations found matching the filters</div>
+              <div style={{fontSize:".76rem",marginTop:4}}>Try clearing search terms or select another event section above.</div>
+            </div>
+          ) : (
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:".78rem"}}>
+              <thead>
+                <tr style={{background:"#F1F5F9",borderBottom:"1.5px solid #CBD5E1",color:"#475569",textAlign:"left"}}>
+                  <th style={{padding:"8px 12px",width:40,textAlign:"center"}}>
+                    <input
+                      type="checkbox"
+                      checked={filteredItems.length > 0 && filteredItems.every(item => selectedRegIds.includes(item.id))}
+                      onChange={e => {
+                        if (e.target.checked) selectAllFiltered();
+                        else deselectAll();
+                      }}
+                      style={{cursor:"pointer",accentColor:"#1D4ED8"}}
+                    />
+                  </th>
+                  <th style={{padding:"8px 12px"}}>Participant & ID</th>
+                  <th style={{padding:"8px 12px"}}>📱 Mobile Number</th>
+                  <th style={{padding:"8px 12px"}}>Vibhag</th>
+                  <th style={{padding:"8px 12px"}}>Academic / Key Info</th>
+                  <th style={{padding:"8px 12px",textAlign:"center"}}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredItems.map((item, idx) => {
+                  const isSelected = selectedRegIds.includes(item.id);
+                  const inSubws = isAlreadyInWorkspace(item);
+
+                  return (
+                    <tr
+                      key={item.id + '_' + idx}
+                      onClick={() => toggleSelect(item.id)}
+                      style={{
+                        borderBottom:"1px solid #E2E8F0",
+                        background: isSelected ? "#EFF6FF" : (idx % 2 === 0 ? "white" : "#F8FAFC"),
+                        cursor:"pointer",
+                        transition:"background 0.12s"
+                      }}
+                    >
+                      <td style={{padding:"8px 12px",textAlign:"center"}} onClick={e => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(item.id)}
+                          style={{cursor:"pointer",accentColor:"#1D4ED8"}}
+                        />
+                      </td>
+                      <td style={{padding:"8px 12px"}}>
+                        <strong style={{color:"#0F172A",fontSize:".82rem"}}>{item.name}</strong>
+                        {item.nameGu && <span style={{display:"block",fontSize:".7rem",color:"#15803D"}}>{item.nameGu}</span>}
+                        <div style={{fontSize:".68rem",color:"#64748B",fontFamily:"monospace",marginTop:2}}>
+                          ID: {item['Transaction ID'] || item.transactionId || item.id}
+                        </div>
+                      </td>
+                      <td style={{padding:"8px 12px",fontWeight:600,color:"#334155"}}>
+                        {item.mobile ? (
+                          <span>+91 {String(item.mobile).replace(/\D/g, '').slice(-10)}</span>
+                        ) : (
+                          <span style={{color:"#94A3B8"}}>-</span>
+                        )}
+                      </td>
+                      <td style={{padding:"8px 12px"}}>
+                        <span style={{background:"#F1F5F9",color:"#475569",padding:"2px 6px",borderRadius:4,fontSize:".72rem",fontWeight:700}}>
+                          {item.vibhag}
+                        </span>
+                      </td>
+                      <td style={{padding:"8px 12px"}}>
+                        {item.amount ? (
+                          <strong style={{color:"#15803D"}}>₹{Number(item.amount).toLocaleString('en-IN')}</strong>
+                        ) : (item.percentage || item.standard) ? (
+                          <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                            <div style={{fontWeight:700,color:"#0F172A"}}>
+                              {item.standard ? `Std: ${item.standard}` : ''} {item.percentage ? `• ${item.percentage}%` : ''}
+                            </div>
+                            {item.school && <div style={{fontSize:".68rem",color:"#64748B"}}>{item.school}</div>}
+                          </div>
+                        ) : (
+                          <span style={{color:"#94A3B8"}}>-</span>
+                        )}
+                      </td>
+                      <td style={{padding:"8px 12px",textAlign:"center"}}>
+                        {inSubws ? (
+                          <span style={{background:"#DCFCE7",color:"#15803D",padding:"2px 8px",borderRadius:12,fontSize:".68rem",fontWeight:800}}>
+                            ✓ In Workspace
+                          </span>
+                        ) : (
+                          <span style={{background:"#F1F5F9",color:"#475569",padding:"2px 8px",borderRadius:12,fontSize:".68rem",fontWeight:700}}>
+                            Available
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Footer Actions */}
+        <div style={{padding:"14px 20px",background:"white",borderTop:"1.5px solid #CBD5E1",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+          <div style={{fontSize:".82rem",color:"#334155"}}>
+            <strong>{selectedRegIds.length}</strong> registration(s) selected to import into <strong>{targetDocName}</strong>
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={importing}
+              style={{padding:"8px 16px",borderRadius:8,border:"1px solid #CBD5E1",background:"white",fontSize:".82rem",fontWeight:600,cursor:importing?"not-allowed":"pointer"}}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={selectedRegIds.length === 0 || importing}
+              onClick={handleExecuteImport}
+              style={{
+                padding:"9px 20px",
+                borderRadius:8,
+                border:"none",
+                background: selectedRegIds.length === 0 ? "#CBD5E1" : "linear-gradient(135deg, #1E40AF, #1D4ED8)",
+                color: selectedRegIds.length === 0 ? "#64748B" : "white",
+                fontSize:".85rem",
+                fontWeight:800,
+                cursor: (selectedRegIds.length === 0 || importing) ? "not-allowed" : "pointer",
+                boxShadow: selectedRegIds.length > 0 ? "0 2px 8px rgba(29,78,216,0.25)" : "none",
+                display:"flex",
+                alignItems:"center",
+                gap:6
+              }}
+            >
+              <span>📥</span> {importing ? "Importing..." : `Import Selected (${selectedRegIds.length}) Registrations`}
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+export function ConnectExistingTemplateModal({
+  isOpen,
+  onClose,
+  activeEvent,
+  C,
+  setC,
+  auth,
+  currentDocTpl,
+  onConnected
+}) {
+  if (!isOpen) return null;
+  const candidates = [];
+  const seenUrls = new Set();
+
+  (C.events || []).forEach(ev => {
+    if (ev.inviteBgUrl && !seenUrls.has(ev.inviteBgUrl)) {
+      seenUrls.add(ev.inviteBgUrl);
+      candidates.push({
+        id: 'tpl_invite_' + (ev.id || ev.title),
+        name: ev.inviteName || ev.inviteTitle || 'Official Invite Letter',
+        source: ev.title || 'Other Event',
+        bgUrl: ev.inviteBgUrl,
+        map: ev.inviteMap || {},
+        fontSize: ev.inviteFontSize || 16,
+        fontColor: ev.inviteFontColor || '#000000',
+        orientation: ev.inviteOrientation || 'portrait',
+        bgFit: ev.inviteBgFit || 'letterhead',
+        targetSection: 'invites',
+        isPrimaryInvite: true
+      });
+    }
+    if (ev.certBgUrl && !seenUrls.has(ev.certBgUrl)) {
+      seenUrls.add(ev.certBgUrl);
+      candidates.push({
+        id: 'tpl_cert_' + (ev.id || ev.title),
+        name: ev.certName || ev.certTitle || 'Certificate Pass',
+        source: ev.title || 'Other Event',
+        bgUrl: ev.certBgUrl,
+        map: ev.certMap || {},
+        fontSize: ev.certFontSize || 26,
+        fontColor: ev.certFontColor || '#000000',
+        orientation: ev.certOrientation || 'landscape',
+        bgFit: ev.certBgFit || 'full',
+        targetSection: 'awards'
+      });
+    }
+    (ev.pdfTemplates || []).forEach(t => {
+      if (t.bgUrl && !seenUrls.has(t.bgUrl)) {
+        seenUrls.add(t.bgUrl);
+        candidates.push({
+          id: t.id,
+          name: t.name,
+          source: ev.title || 'Other Event',
+          bgUrl: t.bgUrl,
+          map: t.map || t.fieldMap || {},
+          fontSize: t.fontSize || 16,
+          fontColor: t.fontColor || '#000000',
+          orientation: t.orientation || 'portrait',
+          bgFit: t.bgFit || 'letterhead',
+          targetSection: t.targetSection || 'invites'
+        });
+      }
+    });
+  });
+
+  (C.mediaLibrary || []).filter(m => m.category === 'letterheads' || m.category === 'certificates' || m.type === 'document' || m.type === 'image').forEach(m => {
+    const resolvedUrl = m.url;
+    if (!seenUrls.has(resolvedUrl)) {
+      seenUrls.add(resolvedUrl);
+      candidates.push({
+        id: 'media_' + m.id,
+        name: m.name || 'Media Library Letterhead',
+        source: 'Central Media Library (' + (m.category || 'Assets') + ')',
+        bgUrl: m.url,
+        map: {},
+        fontSize: 16,
+        fontColor: '#000000',
+        orientation: 'portrait',
+        bgFit: 'letterhead',
+        targetSection: 'invites',
+        isMediaAsset: true
+      });
+    }
+  });
+
+  const handleApplyConnect = async (tpl) => {
+    const defaultName = tpl.name ? tpl.name.replace(/\s*\(.*?\)\s*$/, '') : 'Letterhead Template';
+    const confirmName = prompt('Enter tab name for this template in "' + (activeEvent.title || 'Workspace') + '":', defaultName);
+    if (!confirmName || !confirmName.trim()) return;
+    const cleanName = confirmName.trim();
+
+    const isReplacingInvite = currentDocTpl?.id === 'invite' || !activeEvent.inviteBgUrl;
+    const shouldSetPrimary = isReplacingInvite && window.confirm('Set "' + cleanName + '" as the primary Official Invite Letter background for "' + (activeEvent.title || 'Workspace') + '"?\n\n(Click Cancel to add it as a new separate sub-workspace pass tab instead)');
+
+    try {
+      const currentEvents = C.events || [];
+      let updatedTargetEvent = { ...activeEvent };
+      let newActiveId = 'invite';
+
+      if (shouldSetPrimary) {
+        updatedTargetEvent = {
+          ...updatedTargetEvent,
+          inviteName: cleanName,
+          inviteTitle: cleanName,
+          inviteBgUrl: tpl.bgUrl,
+          inviteMap: tpl.map || {},
+          inviteFontSize: tpl.fontSize || 16,
+          inviteFontColor: tpl.fontColor || '#000000',
+          inviteOrientation: tpl.orientation || 'portrait',
+          inviteBgFit: tpl.bgFit || 'letterhead'
+        };
+        newActiveId = 'invite';
+      } else {
+        const newDocId = 'doc_' + Date.now();
+        const newTplObj = {
+          id: newDocId,
+          name: cleanName,
+          targetSection: tpl.targetSection || 'invites',
+          targetAudience: 'assigned',
+          bgUrl: tpl.bgUrl,
+          map: tpl.map || {},
+          fontSize: tpl.fontSize || 16,
+          fontColor: tpl.fontColor || '#000000',
+          orientation: tpl.orientation || 'portrait',
+          bgFit: tpl.bgFit || 'letterhead'
+        };
+        updatedTargetEvent = {
+          ...updatedTargetEvent,
+          pdfTemplates: [...(updatedTargetEvent.pdfTemplates || []), newTplObj]
+        };
+        newActiveId = newDocId;
+      }
+
+      const eventExists = currentEvents.some(e => e.id === activeEvent.id || e.title === activeEvent.title);
+      const updatedEvents = eventExists
+        ? currentEvents.map(e => (e.id === activeEvent.id || e.title === activeEvent.title) ? updatedTargetEvent : e)
+        : [...currentEvents, updatedTargetEvent];
+
+      const updatedC = { ...C, events: updatedEvents };
+      if (setC) setC(updatedC);
+      await fbSave(updatedC, auth?.idToken);
+      if (typeof onConnected === 'function') {
+        onConnected(newActiveId);
+      }
+      onClose();
+      alert('✅ "' + cleanName + '" successfully connected to "' + (activeEvent.title || 'Workspace') + '"! You can now preview and issue passes.');
+    } catch (e) {
+      alert("Error connecting template: " + e.message);
+    }
+  };
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:100010,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onClose}>
+      <div style={{background:'white',borderRadius:16,maxWidth:820,width:'100%',maxHeight:'88vh',display:'flex',flexDirection:'column',boxShadow:'0 25px 60px rgba(0,0,0,0.35)',overflow:'hidden'}} onClick={e=>e.stopPropagation()}>
+        <div style={{background:'linear-gradient(135deg, #0F766E, #047857)',color:'white',padding:'14px 20px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <div>
+            <h3 style={{margin:0,fontSize:'1.1rem',fontWeight:800,display:'flex',alignItems:'center',gap:8}}>
+              <span>🔗</span> Connect Existing PDF Template to "{activeEvent.title}"
+            </h3>
+            <div style={{fontSize:'.74rem',opacity:0.9,marginTop:2}}>
+              Choose any pre-built template from another workspace or letterhead from Central Media Library. Zero duplicate storage!
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:'rgba(255,255,255,0.2)',border:'none',borderRadius:'50%',width:32,height:32,color:'white',cursor:'pointer',fontWeight:800,fontSize:'1rem'}}>✕</button>
+        </div>
+
+        <div style={{flex:1,overflowY:'auto',padding:18,display:'flex',flexDirection:'column',gap:12,background:'#F8FAFC'}}>
+          {candidates.length === 0 ? (
+            <div style={{padding:32,textAlign:'center',background:'white',borderRadius:10,border:'1px dashed #CBD5E1'}}>
+              <div style={{fontSize:'2rem',marginBottom:8}}>📁</div>
+              <div style={{fontSize:'.9rem',fontWeight:800,color:'#334155'}}>No other PDF templates found yet</div>
+              <div style={{fontSize:'.76rem',color:'#64748B',marginTop:4}}>
+                You can configure this template directly by clicking <strong>"⚙️ Configure"</strong> on the tab above, or upload letterheads to the Central Media Library.
+              </div>
+            </div>
+          ) : (
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))',gap:14}}>
+              {candidates.map((cand, idx) => (
+                <div 
+                  key={cand.id + '_' + idx}
+                  style={{
+                    background:'white',
+                    borderRadius:10,
+                    border:'1.5px solid #E2E8F0',
+                    padding:12,
+                    display:'flex',
+                    flexDirection:'column',
+                    justifyContent:'space-between',
+                    gap:10,
+                    boxShadow:'0 2px 6px rgba(0,0,0,0.04)',
+                    transition:'transform 0.15s, box-shadow 0.15s'
+                  }}
+                >
+                  <div>
+                    <div style={{width:'100%',height:110,background:'#F1F5F9',borderRadius:6,overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center',border:'1px solid #CBD5E1',position:'relative'}}>
+                      {cand.bgUrl ? (
+                        <img 
+                          src={resolveMediaUrl(cand.bgUrl, C)} 
+                          alt={cand.name}
+                          style={{width:'100%',height:'100%',objectFit:'cover'}}
+                        />
+                      ) : (
+                        <div style={{fontSize:'1.8rem'}}>📄</div>
+                      )}
+                      <span style={{position:'absolute',top:4,right:4,fontSize:'.62rem',fontWeight:800,background:'rgba(0,0,0,0.65)',color:'white',padding:'1px 6px',borderRadius:4}}>
+                        {cand.orientation === 'landscape' ? '📜 Landscape' : '📄 Portrait'}
+                      </span>
+                    </div>
+                    <div style={{marginTop:8}}>
+                      <strong style={{fontSize:'.84rem',color:'#0F172A',display:'block',lineHeight:1.3}}>
+                        {cand.name}
+                      </strong>
+                      <div style={{fontSize:'.68rem',color:'#059669',fontWeight:700,marginTop:2}}>
+                        📍 Source: {cand.source}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleApplyConnect(cand)}
+                    style={{
+                      padding:'7px 12px',
+                      background:'#15803D',
+                      color:'white',
+                      border:'none',
+                      borderRadius:6,
+                      fontSize:'.76rem',
+                      fontWeight:800,
+                      cursor:'pointer',
+                      display:'flex',
+                      alignItems:'center',
+                      justifyContent:'center',
+                      gap:6,
+                      boxShadow:'0 1px 4px rgba(21,128,61,0.2)'
+                    }}
+                  >
+                    <span>🔗</span>
+                    <span>Connect to this Workspace</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{padding:'12px 20px',borderTop:'1px solid #E2E8F0',background:'white',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <span style={{fontSize:'.74rem',color:'#64748B'}}>
+            Connecting a template re-uses its design, dimensions, and letterhead without creating duplicate storage.
+          </span>
+          <button 
+            type="button" 
+            onClick={onClose}
+            style={{padding:'6px 14px',borderRadius:6,background:'#F1F5F9',color:'#475569',border:'1px solid #CBD5E1',fontSize:'.78rem',fontWeight:700,cursor:'pointer'}}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdminCertificates({ mob, C, setC, auth }) {
   const [regs, setRegs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22506,6 +29990,7 @@ function AdminCertificates({ mob, C, setC, auth }) {
   const [selectedWhatsAppReg, setSelectedWhatsAppReg] = useState(null);
   const [showBulkWhatsAppModal, setShowBulkWhatsAppModal] = useState(false);
   const [showWorkspaceTplModal, setShowWorkspaceTplModal] = useState(false);
+  const [showConnectTplModal, setShowConnectTplModal] = useState(false);
   const [historyModalReg, setHistoryModalReg] = useState(null);
 
   const handleBulkDownload = () => {
@@ -22553,6 +30038,10 @@ function AdminCertificates({ mob, C, setC, auth }) {
     try {
       const d = await fbFetchRegistrations(auth?.idToken);
       setRegs(d || []);
+      if (typeof window !== 'undefined' && Array.isArray(d)) {
+        window.__MMP_REGS_CACHE__ = d;
+        window.__MMP_ALL_REGS_RAW__ = d;
+      }
     } catch(e) {
       console.error(e);
     }
@@ -22700,6 +30189,7 @@ function AdminCertificates({ mob, C, setC, auth }) {
     );
   }
 
+
   return (
     <div style={{display:"flex",width:"100%"}}>
       <div style={{flex: previewCertUrl ? 2 : 1, padding:mob?"16px":"32px",width:"100%",boxSizing:"border-box",overflowX:"hidden"}}>
@@ -22715,6 +30205,29 @@ function AdminCertificates({ mob, C, setC, auth }) {
             <p style={{fontSize:".85rem",color:"var(--mu)",marginTop:4}}>Manage and release certificates for: <strong>{activeEvent.title}</strong></p>
           </div>
           <div style={{display:"flex",gap:10,width:mob?"100%":"auto",flexWrap:"wrap"}}>
+            <button 
+              type="button"
+              onClick={() => setShowTemplatesManagerModal(true)} 
+              style={{
+                padding:"8px 16px",
+                borderRadius:8,
+                fontSize:".85rem",
+                fontWeight:800,
+                display:"flex",
+                alignItems:"center",
+                gap:6,
+                background:"#EFF6FF",
+                border:"1.5px solid #3B82F6",
+                color:"#1D4ED8",
+                cursor:"pointer",
+                boxShadow:"0 2px 8px rgba(59,130,246,0.18)",
+                whiteSpace:"nowrap"
+              }}
+              title="Manage, create, upload, and configure all PDF templates & passes for this event"
+            >
+              <span>📑</span> PDF Templates & Passes ({((activeEvent?.pdfTemplates || []).length) + (activeEvent?.inviteBgUrl ? 1 : 0) + (activeEvent?.certBgUrl ? 1 : 0)})
+            </button>
+
             <button onClick={() => setShowWorkspaceTplModal(true)} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:700,display:"flex",alignItems:"center",gap:6,background:"#F0FDF4",border:"1px solid #86EFAC",color:"#15803D",cursor:"pointer",boxShadow:"0 2px 8px rgba(21,128,61,0.15)",whiteSpace:"nowrap"}}>
               📝 Workspace WhatsApp Templates ({((activeEvent?.whatsAppTemplates && activeEvent.whatsAppTemplates.length > 0) ? activeEvent.whatsAppTemplates.length : 3)})
             </button>
@@ -22977,7 +30490,7 @@ function AdminCertificates({ mob, C, setC, auth }) {
                   return (
                     <tr 
                       key={i} 
-                      onClick={() => handlePreview(r, ev)}
+                      onClick={() => handlePreview(r, activeEvent || ev)}
                       style={{
                         borderBottom:"1px solid #eee",
                         cursor: "pointer",
@@ -23108,6 +30621,7 @@ function AdminCertificates({ mob, C, setC, auth }) {
         <BulkWhatsAppBroadcastModal
           event={activeEvent}
           recipients={selectedIds.length > 0 ? filteredRegs.filter(r => selectedIds.includes(r.id || r['Transaction ID'])) : filteredRegs}
+          allRegs={regs}
           C={C}
           auth={auth}
           onLogSent={async (r, msgType) => {
@@ -23134,14 +30648,272 @@ function AdminCertificates({ mob, C, setC, auth }) {
         />
       )}
 
+      {/* Visual PDF Template Configuration & Variable Mapper Modal */}
+      {configModal && (
+        <CertificateConfigModal
+          ev={configModal.ev || activeEvent}
+          auth={auth}
+          forms={C.forms}
+          type={configModal.type || 'cert'}
+          customTpl={configModal.customTpl}
+          onClose={() => setConfigModal(null)}
+          onSave={handleSaveTemplateConfig}
+        />
+      )}
+
+      {/* PDF Templates & Passes Manager Modal (Directly in Workspace) */}
+      {showTemplatesManagerModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100005,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowTemplatesManagerModal(false)}>
+          <div style={{background:"white",borderRadius:16,maxWidth:780,width:"100%",maxHeight:"90vh",overflowY:"auto",padding:24,boxShadow:"0 20px 45px rgba(0,0,0,0.35)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,borderBottom:"1px solid #E2E8F0",paddingBottom:12}}>
+              <div>
+                <h3 style={{fontSize:"1.15rem",fontWeight:800,color:"#0D4B5E",margin:0,display:"flex",alignItems:"center",gap:8}}>
+                  <span>📑</span> PDF Templates & Passes Manager
+                </h3>
+                <div style={{fontSize:".8rem",color:"#64748B",marginTop:3}}>
+                  Manage, upload backgrounds, map variables, and release PDF passes for: <strong>{activeEvent.title}</strong>
+                </div>
+              </div>
+              <button onClick={()=>setShowTemplatesManagerModal(false)} style={{background:"#F1F5F9",border:"none",borderRadius:"50%",width:32,height:32,cursor:"pointer",fontWeight:800,fontSize:"1rem"}}>✕</button>
+            </div>
+
+            {/* Standard Built-in Templates Section */}
+            <div style={{marginBottom:16,background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:14}}>
+              <div style={{fontSize:".82rem",fontWeight:800,color:"#1E293B",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+                <span>📜</span> Primary Event Documents
+              </div>
+
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {/* Official Invite Letter */}
+                <div style={{background:"white",padding:"10px 14px",borderRadius:8,border:"1px solid #CBD5E1",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:"1.2rem"}}>💌</span>
+                    <div>
+                      <strong style={{fontSize:".85rem",color:"#0F172A"}}>Official Invite Letter</strong>
+                      <div style={{fontSize:".7rem",color:"#64748B"}}>Primary invitation letter & entry pass</div>
+                    </div>
+                    {activeEvent.inviteBgUrl ? (
+                      <span style={{fontSize:".68rem",background:"#DCFCE7",color:"#15803D",padding:"2px 6px",borderRadius:4,fontWeight:800}}>✓ Configured</span>
+                    ) : (
+                      <span style={{fontSize:".68rem",background:"#FEF3C7",color:"#B45309",padding:"2px 6px",borderRadius:4,fontWeight:800}}>⚠️ Needs Background Image</span>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTemplatesManagerModal(false);
+                      setConfigModal({ ev: activeEvent, type: 'invite' });
+                    }}
+                    style={{padding:"6px 14px",borderRadius:6,fontSize:".76rem",fontWeight:800,background:"#0D4B5E",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                  >
+                    ⚙️ Configure Template
+                  </button>
+                </div>
+
+                {/* Certificate Pass */}
+                {(activeEvent.issueCertificates || activeEvent.certBgUrl) && (
+                  <div style={{background:"white",padding:"10px 14px",borderRadius:8,border:"1px solid #CBD5E1",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:"1.2rem"}}>🎓</span>
+                      <div>
+                        <strong style={{fontSize:".85rem",color:"#0F172A"}}>Certificate Pass</strong>
+                        <div style={{fontSize:".7rem",color:"#64748B"}}>Award felicitation & certificate of honor</div>
+                      </div>
+                      {activeEvent.certBgUrl ? (
+                        <span style={{fontSize:".68rem",background:"#DCFCE7",color:"#15803D",padding:"2px 6px",borderRadius:4,fontWeight:800}}>✓ Configured</span>
+                      ) : (
+                        <span style={{fontSize:".68rem",background:"#FEF3C7",color:"#B45309",padding:"2px 6px",borderRadius:4,fontWeight:800}}>⚠️ Needs Background Image</span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowTemplatesManagerModal(false);
+                        setConfigModal({ ev: activeEvent, type: 'cert' });
+                      }}
+                      style={{padding:"6px 14px",borderRadius:6,fontSize:".76rem",fontWeight:800,background:"#0D4B5E",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                    >
+                      ⚙️ Configure Template
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Additional Custom PDF Templates & Passes Section */}
+            <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:12,padding:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:8}}>
+                <div>
+                  <div style={{fontSize:".88rem",fontWeight:800,color:"#166534",display:"flex",alignItems:"center",gap:6}}>
+                    <span>📑</span> Additional Custom PDF Templates & Passes ({(activeEvent.pdfTemplates || []).length})
+                  </div>
+                  <div style={{fontSize:".72rem",color:"#15803D",marginTop:2}}>
+                    Create unlimited extra PDF passes (e.g. Food Coupons, Gate Passes, ID Cards, Parent Passes) with direct WhatsApp URL links.
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = prompt("Enter Name for new PDF Template (e.g. Food Coupon & Dinner Pass, Token Number, Gate Pass):");
+                    if (name && name.trim()) {
+                      const cleanName = name.trim();
+                      const tplId = "doc_" + Date.now();
+                      const newTpl = {
+                        id: tplId,
+                        name: cleanName,
+                        targetSection: "invites",
+                        targetAudience: "assigned",
+                        bgUrl: "",
+                        map: {},
+                        fontSize: 30,
+                        fontColor: "#000000"
+                      };
+                      const updatedTpls = [...(activeEvent.pdfTemplates || []), newTpl];
+                      const currentEvents = C.events || [];
+                      const eventExists = currentEvents.some(e => e.id === activeEvent.id || e.title === activeEvent.title);
+                      const updatedTargetEvent = { ...activeEvent, pdfTemplates: updatedTpls };
+                      const updatedEvents = eventExists 
+                        ? currentEvents.map(e => (e.id === activeEvent.id || e.title === activeEvent.title) ? updatedTargetEvent : e)
+                        : [...currentEvents, updatedTargetEvent];
+                      const updatedC = { ...C, events: updatedEvents };
+                      if (setC) setC(updatedC);
+                      fbSave(updatedC, auth?.idToken);
+                      setActiveDocType(tplId);
+                      setShowTemplatesManagerModal(false);
+                      setSelectedPdfTplId(tplId);
+                      setTplModalMode("pdf");
+                      setShowWorkspaceTplModal(true);
+                    }
+                  }}
+                  style={{padding:"8px 14px",borderRadius:8,fontSize:".78rem",fontWeight:800,background:"#15803D",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:5,boxShadow:"0 2px 6px rgba(21,128,61,0.25)"}}
+                >
+                  <span>➕</span> Add New PDF Template
+                </button>
+              </div>
+
+              {/* Template Items */}
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:12}}>
+                {(activeEvent.pdfTemplates || []).map((tpl, tplIdx) => {
+                  const directUrl = `https://www.mmp-cwc.com/?doc=${tpl.id}&pass={TXN_ID}`;
+                  return (
+                    <div key={tpl.id} style={{background:"white",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",display:"flex",flexDirection:"column",gap:8,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:"1.2rem"}}>📄</span>
+                          <strong style={{fontSize:".88rem",color:"#0F172A"}}>{tpl.name}</strong>
+                          {tpl.bgUrl ? (
+                            <span style={{fontSize:".68rem",background:"#DCFCE7",color:"#15803D",padding:"2px 6px",borderRadius:4,fontWeight:800}}>
+                              ✓ Configured
+                            </span>
+                          ) : (
+                            <span style={{fontSize:".68rem",background:"#FEF3C7",color:"#B45309",padding:"2px 6px",borderRadius:4,fontWeight:800}}>
+                              ⚠️ Needs Background Image
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{display:"flex",gap:6}}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveDocType(tpl.id);
+                              setSelectedPdfTplId(tpl.id);
+                              setTplModalMode("pdf");
+                              setShowTemplatesManagerModal(false);
+                              setShowWorkspaceTplModal(true);
+                            }}
+                            style={{padding:"6px 12px",borderRadius:6,fontSize:".75rem",fontWeight:800,background:"#0D4B5E",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                          >
+                            ⚙️ Configure Template
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!window.confirm(`Delete PDF template "${tpl.name}"?`)) return;
+                              const updatedTpls = (activeEvent.pdfTemplates || []).filter((_, k) => k !== tplIdx);
+                              const currentEvents = C.events || [];
+                              const updatedTargetEvent = { ...activeEvent, pdfTemplates: updatedTpls };
+                              const updatedEvents = currentEvents.map(e => (e.id === activeEvent.id || e.title === activeEvent.title) ? updatedTargetEvent : e);
+                              const updatedC = { ...C, events: updatedEvents };
+                              if (setC) setC(updatedC);
+                              await fbSave(updatedC, auth?.idToken);
+                              if (activeDocType === tpl.id) setActiveDocType('invite');
+                            }}
+                            style={{padding:"6px 10px",borderRadius:6,fontSize:".75rem",fontWeight:800,background:"#FEE2E2",color:"#DC2626",border:"1px solid #FCA5A5",cursor:"pointer"}}
+                          >
+                            🗑️ Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* URL Box */}
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:"#F8FAFC",padding:"6px 10px",borderRadius:6,border:"1px dashed #CBD5E1"}}>
+                        <span style={{fontSize:".72rem",color:"#475569",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          🔗 <strong>URL:</strong> {directUrl}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(directUrl);
+                            alert(`Copied direct URL for "${tpl.name}"!`);
+                          }}
+                          style={{padding:"3px 10px",background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #BFDBFE",borderRadius:4,fontSize:".72rem",fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}
+                        >
+                          📋 Copy URL
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {(!activeEvent.pdfTemplates || activeEvent.pdfTemplates.length === 0) && (
+                  <div style={{fontSize:".78rem",color:"#64748B",fontStyle:"italic",textAlign:"center",padding:"14px 0"}}>
+                    No custom PDF templates added yet. Click "+ Add New PDF Template" above to create Food Passes, Gate Passes, etc.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
+              <button onClick={()=>setShowTemplatesManagerModal(false)} style={{padding:"8px 20px",borderRadius:8,background:"#F1F5F9",color:"#334155",border:"1px solid #CBD5E1",fontSize:".85rem",cursor:"pointer",fontWeight:700}}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Workspace Multi-Template Modal */}
+      {showConnectTplModal && (
+        <ConnectExistingTemplateModal
+          isOpen={showConnectTplModal}
+          onClose={() => setShowConnectTplModal(false)}
+          activeEvent={activeEvent}
+          C={C}
+          setC={setC}
+          auth={auth}
+          currentDocTpl={{ id: 'cert', name: 'Certificate Pass' }}
+          onConnected={() => {}}
+        />
+      )}
+
       {showWorkspaceTplModal && (
         <WorkspaceWhatsAppTemplateModal
           event={activeEvent}
           C={C}
           setC={setC}
           auth={auth}
-          onClose={() => setShowWorkspaceTplModal(false)}
+          allRegs={regs || []}
+          initialTab={tplModalMode || "whatsapp"}
+          initialPdfTplId={selectedPdfTplId || null}
+          onClose={() => {
+            setShowWorkspaceTplModal(false);
+            setTplModalMode("whatsapp");
+            setSelectedPdfTplId(null);
+          }}
         />
       )}
 
@@ -23152,7 +30924,9 @@ function AdminCertificates({ mob, C, setC, auth }) {
           onClose={() => setSelectedWhatsAppReg(null)}
           C={C}
           auth={auth}
-          allRegs={filteredRegs}
+          allRegs={regs}
+          recipientList={filteredRegs}
+          recipientList={filteredRegs}
           onSelectReg={(nextR) => setSelectedWhatsAppReg(nextR)}
           onLogSent={async (r, msgType) => {
             const updatedBy = auth?.email || "Admin";
@@ -23258,12 +31032,156 @@ const getContactGroups = (contact) => {
 };
 
 function AdminInviteLetters({ mob, C, setC, auth }) {
-  const [regs, setRegs] = useState([]);
+  const [regs, setRegs] = useState(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem("mmp_cached_registrations") || "[]");
+      if (Array.isArray(cached) && cached.length > 0) return cached;
+    } catch(e) {}
+    return [];
+  });
+
+  const handleDownloadSubworkspaceAuditFile = (ev, docTpl, contactsList) => {
+    const wsTitle = ev?.title || "Workspace";
+    const subWsName = docTpl?.name || "Invite Pass";
+    const subAuditKey = `mmp_wa_audit_${ev?.id || ev?.title || 'default'}_${docTpl?.id || 'invite'}`;
+    let loggedEntries = [];
+    try {
+      loggedEntries = JSON.parse(localStorage.getItem(subAuditKey) || "[]");
+    } catch(e) {}
+
+    const now = new Date();
+    const exportTime = now.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+
+    // Filter to ONLY contacts who have actually received a delivered/dispatched WhatsApp message
+    const deliveredContacts = (contactsList || []).filter(c => {
+      const txn = c['Transaction ID'] || c.transactionId || c.id;
+      const mob = String(c['Mobile Number'] || c.phone || c.mobile || '').replace(/\D/g, '').slice(-10);
+      const hasEntry = loggedEntries.some(l => l.recipientTxnId === txn || (mob && l.recipientMobile === mob));
+      const hasMsgContent = Boolean((c.lastWhatsAppContent && c.lastWhatsAppContent.trim()) || (Array.isArray(c.logHistory) && c.logHistory.some(l => l.messageContent)));
+      return hasEntry || (hasMsgContent && (c.whatsAppCount > 0 || c.lastWhatsAppAt));
+    });
+
+    const totalContacts = (contactsList || []).length;
+    let seenCount = 0;
+    (contactsList || []).forEach(c => {
+      const openCount = parseInt(c.passOpenCount || 0, 10);
+      if (openCount > 0) seenCount++;
+    });
+
+    let lines = [];
+    lines.push("=".repeat(80));
+    lines.push("🏛️  MUMBAI MEGHWAL PANCHAYAT (CENTRAL WORKING COMMITTEE)");
+    lines.push("OFFICIAL SUB-WORKSPACE WHATSAPP DISPATCH & VERIFICATION AUDIT TRAIL");
+    lines.push("=".repeat(80));
+    lines.push(`📁 WORKSPACE: ${wsTitle}`);
+    lines.push(`🎟️ SUB-WORKSPACE / TEMPLATE: ${subWsName}`);
+    lines.push(`👥 TARGET AUDIENCE: ${docTpl?.customTpl?.targetAudience || 'Assigned / Group'}`);
+    lines.push(`📅 REPORT GENERATED: ${exportTime}`);
+    lines.push(`👤 GENERATED BY: ${auth?.email || 'Super Admin'}`);
+    lines.push(`📊 TOTAL CONTACTS IN SUB-WORKSPACE: ${totalContacts}`);
+    lines.push(`📤 DELIVERED WHATSAPP MESSAGES: ${deliveredContacts.length} of ${totalContacts}`);
+    lines.push(`⏳ QUEUED / NOT DISPATCHED YET: ${totalContacts - deliveredContacts.length} of ${totalContacts}`);
+    lines.push(`👁️ RECIPIENTS WHO VIEWED / OPENED PASS: ${seenCount} of ${totalContacts}`);
+    lines.push("=".repeat(80));
+    lines.push("");
+
+    if (deliveredContacts.length === 0) {
+      lines.push("ℹ️ No WhatsApp messages have been dispatched yet for this sub-workspace.");
+      lines.push("Messages will be automatically recorded and appended here in real time as soon as you click 'Send to WhatsApp' or 'Send & Next Student'.");
+      lines.push("");
+    } else {
+      deliveredContacts.forEach((c, idx) => {
+        const name = c['Full Name'] || c.name || 'Invitee';
+        const designation = c.Designation || c.designation || 'Member / Invitee';
+        const mobile = c['Mobile Number'] || c.phone || c.mobile || 'N/A';
+        const txnId = c['Transaction ID'] || c.transactionId || c.id || 'N/A';
+        const vibhag = (typeof resolveGuestVibhag === 'function' ? resolveGuestVibhag(c) : (c.vibhag || c.Vibhag)) || 'General';
+        const openCount = parseInt(c.passOpenCount || 0, 10);
+        const lastOpenedAt = c.lastPassOpenedAt 
+          ? new Date(c.lastPassOpenedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) 
+          : "Not opened yet";
+
+        const entry = loggedEntries.find(l => l.recipientTxnId === txnId || (mobile && l.recipientMobile === String(mobile).replace(/\D/g, '').slice(-10)));
+        const logHistMsg = (Array.isArray(c.logHistory) ? c.logHistory.slice().reverse().find(l => l.messageContent && (l.type === 'whatsapp' || String(l.action).includes('WhatsApp')))?.messageContent : null);
+        
+        let deliveredMessageText = (entry?.messageContent && entry.messageContent.trim()) || 
+          (c.lastWhatsAppContent && c.lastWhatsAppContent.trim()) || 
+          (logHistMsg && logHistMsg.trim());
+
+        if (!deliveredMessageText) {
+          const wsTpls = activeEvent?.whatsAppTemplates || activeEvent?.whatsappTemplates || [];
+          const defaultWsTpl = wsTpls.find(t => t.isDefault) || wsTpls[0];
+          const templateStringToUse = docTpl?.customTpl?.whatsAppTemplateBody || 
+            docTpl?.customTpl?.templateText || 
+            defaultWsTpl?.body || 
+            defaultWsTpl?.text || 
+            activeEvent?.whatsAppTemplate || "";
+          deliveredMessageText = typeof formatWhatsAppTemplateForContact === 'function' ? formatWhatsAppTemplateForContact({
+            tplString: templateStringToUse,
+            reg: { 
+              ...c, 
+              customDocId: (docTpl?.id !== 'invite' && docTpl?.id !== 'cert') ? docTpl?.id : null,
+              vibhagScope: docTpl?.customTpl?.vibhagScope || "auto"
+            },
+            allRegs: regs,
+            C: C
+          }) : "";
+        }
+
+        const openStatus = openCount > 0 
+          ? `🟢 SEEN & OPENED BY INVITEE (${openCount} time(s) • Last Seen: ${lastOpenedAt})`
+          : `🟡 SENT TO WHATSAPP • PASS LINK NOT YET OPENED BY INVITEE`;
+
+        const sentDate = entry?.timeFormatted || (c.lastWhatsAppAt ? new Date(c.lastWhatsAppAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : exportTime);
+        const sender = entry?.sender || (auth?.email || "Admin");
+
+        lines.push("-".repeat(80));
+        lines.push(`[DELIVERED #${idx + 1}] ${name.toUpperCase()} (${txnId})`);
+        lines.push("-".repeat(80));
+        lines.push(`• Participant Name: ${name}`);
+        lines.push(`• Designation: ${designation}`);
+        lines.push(`• Mobile Number: +91 ${String(mobile).replace(/\D/g, '').slice(-10)}`);
+        lines.push(`• Pass ID / Txn ID: ${txnId}`);
+        lines.push(`• Vibhag / Group: ${vibhag}`);
+        lines.push(`• WhatsApp Sent Date & Time: ${sentDate}`);
+        lines.push(`• Dispatched By: ${sender}`);
+        lines.push(`• View / Receipt Status: ${openStatus}`);
+        lines.push("");
+        lines.push("📜 EXACT WHATSAPP MESSAGE CONTENT DISPATCHED:");
+        lines.push("─".repeat(76));
+        lines.push((deliveredMessageText || "Message dispatched via WhatsApp.").trim());
+        lines.push("─".repeat(76));
+        lines.push("");
+      });
+    }
+
+    lines.push("=".repeat(80));
+    lines.push("END OF AUDIT LOG • MUMBAI MEGHWAL PANCHAYAT");
+    lines.push("=".repeat(80));
+
+    const finalReport = lines.join("\n");
+    const cleanFileName = `WhatsApp_Audit_Log_${wsTitle.replace(/[^a-zA-Z0-9]/g, '_')}_${subWsName.replace(/[^a-zA-Z0-9]/g, '_')}_${now.toISOString().slice(0, 10)}.txt`;
+
+    const blob = new Blob([finalReport], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = cleanFileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [activeDocType, setActiveDocType] = useState("invite");
+  const [configModal, setConfigModal] = useState(null);
+  const [showTemplatesManagerModal, setShowTemplatesManagerModal] = useState(false);
+  const [tplModalMode, setTplModalMode] = useState("whatsapp");
+  const [selectedPdfTplId, setSelectedPdfTplId] = useState(null);
+  const [showConnectTplModal, setShowConnectTplModal] = useState(false);
 
   // Global guest modals
   const [showGlobalGuestsModal, setShowGlobalGuestsModal] = useState(false);
@@ -23271,10 +31189,21 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   const [showImportGuestModal, setShowImportGuestModal] = useState(false);
   const [guestForm, setGuestForm] = useState({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member", groups: ["CWC Member"] });
   const [editingGuest, setEditingGuest] = useState(null);
+  const [selectedDirectoryGuestIds, setSelectedDirectoryGuestIds] = useState([]);
+  const [bulkGroupToAdd, setBulkGroupToAdd] = useState("");
+  const [applyingBulkGroup, setApplyingBulkGroup] = useState(false);
+  const [customBulkGroupInput, setCustomBulkGroupInput] = useState("");
   const [directoryGroupFilter, setDirectoryGroupFilter] = useState("All");
   const [directorySearch, setDirectorySearch] = useState("");
   const [expandedCardGroups, setExpandedCardGroups] = useState({});
   const [showImportContactGroupModal, setShowImportContactGroupModal] = useState(false);
+  const [showImportEventRegsModal, setShowImportEventRegsModal] = useState(false);
+  const [showImportDonorsModal, setShowImportDonorsModal] = useState(false);
+  const [donorImportSearch, setDonorImportSearch] = useState("");
+  const [selectedDonorIds, setSelectedDonorIds] = useState([]);
+  const [allDonationsList, setAllDonationsList] = useState([]);
+  const [loadingDonations, setLoadingDonations] = useState(false);
+  const [importingDonors, setImportingDonors] = useState(false);
   const [selectedContactGroup, setSelectedContactGroup] = useState("All");
   const [selectedGroupsToImport, setSelectedGroupsToImport] = useState([]);
   const [importingContactGroups, setImportingContactGroups] = useState(false);
@@ -23304,18 +31233,262 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   const [inviteOpenPillFilter, setInviteOpenPillFilter] = useState(null);
   const [inviteReleasePillFilter, setInviteReleasePillFilter] = useState(null);
 
-  const globalGuests = regs.filter(r => r.isGlobalGuest === true);
+  // Comprehensive Directory of all contacts, guests, and committee members
+  const globalGuests = useMemo(() => {
+    const map = new Map();
 
-  const inviteEvents = C.events || [];
+    const getPersonKey = (r) => {
+      const mob = String(r['Mobile Number'] || r.mobile || r.Mobile || r.phone || '').replace(/\D/g, '').slice(-10);
+      const name = String(r['Full Name'] || r['Participant Name'] || r['Name'] || r.name || '').trim().toLowerCase();
+      if (mob && mob.length === 10) return `mob_${mob}`;
+      if (name) return `name_${name}`;
+      return `id_${r.id || Math.random()}`;
+    };
+
+    const isDirectoryContact = (r) => {
+      if (!r || typeof r !== 'object') return false;
+      if (r.deleted === true || r.deleted === "true" || r.isDeleted === true || r.isTrash === true || r.inTrash === true || r.status === "Deleted" || r.Status === "Deleted" || r.deletedGuest === true) return false;
+      
+      // Explicit directory guest flags
+      if (r.isGlobalGuest === true || r.formId === "global_guest_directory" || r.formId === "global_guest_directory_import") return true;
+
+      // Special guests & workspace invitees
+      if (r.isSpecialGuest === true || r.isInviteGuest === true || Boolean(r.globalGuestId)) return true;
+
+      // Has transaction ID starting with GST, GUEST or VIP
+      const txn = String(r['Transaction ID'] || r.transactionId || r.id || '').toUpperCase();
+      if (txn.startsWith('GST-') || txn.startsWith('GUEST-') || txn.startsWith('VIP-')) return true;
+
+      // Has assigned groups, category, or designation
+      const hasGroups = (Array.isArray(r.groups) && r.groups.length > 0) || (Array.isArray(r.Groups) && r.Groups.length > 0) || Boolean(r.group || r.Group || r.Category || r.category);
+      if (hasGroups) return true;
+
+      const hasDesignation = Boolean(r.Designation || r.designation || r['Designation / Role'] || r.Role || r.role);
+      if (hasDesignation) return true;
+
+      // If registered under committee event or imported
+      const evName = String(r.eventName || r.eventTitle || r.eventId || '').toLowerCase();
+      if (evName.includes('committee') || evName.includes('cwc') || evName.includes('trustee') || evName.includes('guest') || evName.includes('special')) return true;
+
+      return false;
+    };
+
+    // First pass: Explicit directory contacts
+    (regs || []).forEach(r => {
+      if (r && (r.isGlobalGuest === true || r.formId === "global_guest_directory")) {
+        const key = getPersonKey(r);
+        map.set(key, { ...r, isGlobalGuest: true });
+      }
+    });
+
+    // Second pass: Any other contacts, invitees or committee members from workspaces
+    (regs || []).forEach(r => {
+      if (isDirectoryContact(r)) {
+        const key = getPersonKey(r);
+        if (map.has(key)) {
+          const existing = map.get(key);
+          const existingGroups = typeof getContactGroups === 'function' ? getContactGroups(existing) : (existing.groups || []);
+          const rGroups = typeof getContactGroups === 'function' ? getContactGroups(r) : (r.groups || []);
+          const combinedGroups = Array.from(new Set([...existingGroups, ...rGroups])).filter(Boolean);
+          
+          map.set(key, {
+            ...r,
+            ...existing,
+            isGlobalGuest: true,
+            groups: combinedGroups.length > 0 ? combinedGroups : existingGroups,
+            Designation: existing.Designation || existing.designation || r.Designation || r.designation || "",
+            Mobile: existing.Mobile || existing.mobile || r['Mobile Number'] || r.Mobile || r.mobile || "",
+            Vibhag: existing.Vibhag || existing.vibhag || r['Vibhag New'] || r.Vibhag || r.vibhag || ""
+          });
+        } else {
+          const rGroups = typeof getContactGroups === 'function' ? getContactGroups(r) : (r.groups || []);
+          map.set(key, {
+            ...r,
+            isGlobalGuest: true,
+            'Full Name': r['Full Name'] || r['Participant Name'] || r.name || 'Invitee',
+            Designation: r.Designation || r.designation || r['Designation / Role'] || "",
+            Mobile: r['Mobile Number'] || r.Mobile || r.mobile || r.phone || "",
+            Vibhag: r['Vibhag New'] || r.Vibhag || r.vibhag || "",
+            groups: rGroups.length > 0 ? rGroups : (r.group ? [r.group] : ["General Committee"])
+          });
+        }
+      }
+    });
+
+    return Array.from(map.values());
+  }, [regs]);
+
+  const getResolvedContactGroups = (contact) => {
+    if (!contact) return ["General Committee"];
+    let masterGroups = [];
+    if (contact.globalGuestId && Array.isArray(globalGuests) && globalGuests.length > 0) {
+      const masterG = globalGuests.find(g => g.id === contact.globalGuestId);
+      if (masterG) {
+        if (Array.isArray(masterG.groups) && masterG.groups.length > 0) masterGroups = masterG.groups;
+        else if (Array.isArray(masterG.Groups) && masterG.Groups.length > 0) masterGroups = masterG.Groups;
+        else if (masterG.Group || masterG.Category) {
+          masterGroups = String(masterG.Group || masterG.Category).split(/[,/|;]+/).map(s => s.trim()).filter(Boolean);
+        }
+      }
+    }
+    let ownGroups = [];
+    if (Array.isArray(contact.groups) && contact.groups.length > 0) ownGroups = contact.groups.map(s => String(s).trim()).filter(Boolean);
+    else if (Array.isArray(contact.Groups) && contact.Groups.length > 0) ownGroups = contact.Groups.map(s => String(s).trim()).filter(Boolean);
+    else {
+      const raw = contact.Group || contact.group || contact.Category || contact.category || contact.Team || contact.team || contact.Vibhag || "";
+      if (raw && typeof raw === 'string') {
+        ownGroups = raw.split(/[,/|;]+/).map(s => s.trim()).filter(Boolean);
+      }
+    }
+    const combined = Array.from(new Set([...ownGroups, ...masterGroups])).filter(Boolean);
+    return combined.length > 0 ? combined : ["General Committee"];
+  };
+
+  const customEvents = C.events || [];
+  const defaultDonorWorkspace = {
+    id: "ev_donor_data",
+    title: "💰 Donor Data",
+    isInternalOnly: true,
+    isDonorWorkspace: true,
+    hideFromPublicWebsite: true,
+    issueInviteLetters: true,
+    date: "Ongoing",
+    month: "2026",
+    location: "Trust Central Office",
+    tag: "Donation Records",
+    color: "#F0FDF4",
+    targetProgram: "Donor Data"
+  };
+  const hasDonorWs = customEvents.some(e => e.isDonorWorkspace);
+  const inviteEvents = hasDonorWs ? customEvents : [...customEvents, defaultDonorWorkspace];
 
   const activeEvent = inviteEvents.find(e => e.id === selectedEventId) || {};
+  if (typeof window !== 'undefined') {
+    window.__MMP_ACTIVE_EVENT__ = activeEvent;
+    if (C) {
+      window.__MMP_TRUST_CONFIG__ = C;
+      if (Array.isArray(C.mediaLibrary)) {
+        window.__MMP_MEDIA_LIBRARY__ = C.mediaLibrary;
+      }
+    }
+  }
 
+  const isDonorWs = Boolean(activeEvent?.isDonorWorkspace || String(activeEvent?.title || "").toLowerCase().includes("donor"));
   const availableDocTemplates = [
-    { id: 'invite', name: 'Official Invite Letter', icon: '💌', bgUrl: activeEvent?.inviteBgUrl, targetSection: 'invites', isDefault: true },
-    ...(activeEvent?.issueCertificates ? [{ id: 'cert', name: 'Certificate Pass', icon: '🎓', bgUrl: activeEvent?.certBgUrl, targetSection: 'awards' }] : []),
-    ...(activeEvent?.pdfTemplates || []).map(t => ({ id: t.id, name: t.name, icon: '🎟️', bgUrl: t.bgUrl, targetSection: t.targetSection || 'invites', customTpl: t }))
+    { 
+      id: 'invite', 
+      name: isDonorWs ? 'Official Thank You Letter' : 'Official Invite Letter', 
+      icon: isDonorWs ? '💌' : '💌', 
+      bgUrl: activeEvent?.inviteBgUrl, 
+      targetSection: 'invites', 
+      isDefault: true 
+    },
+    ...(isDonorWs ? [
+      { id: 'cert', name: 'Official 80G Receipt PDF', icon: '🧾', bgUrl: activeEvent?.certBgUrl, targetSection: 'invites' }
+    ] : (activeEvent?.issueCertificates ? [
+      { id: 'cert', name: 'Certificate Pass', icon: '🎓', bgUrl: activeEvent?.certBgUrl, targetSection: 'awards' }
+    ] : [])),
+    ...(activeEvent?.pdfTemplates || []).map(t => ({ 
+      id: t.id, 
+      name: t.name, 
+      icon: t.name?.toLowerCase().includes('certificate') ? '🎖️' : t.name?.toLowerCase().includes('receipt') ? '🧾' : '🎟️', 
+      bgUrl: t.bgUrl, 
+      targetSection: t.targetSection || 'invites', 
+      customTpl: t 
+    }))
   ];
   const currentDocTpl = availableDocTemplates.find(d => d.id === activeDocType) || availableDocTemplates[0];
+  const currentDocName = currentDocTpl?.name || "this sub-workspace";
+
+  const handleSaveTemplateConfig = async (conf) => {
+    if (!configModal) return;
+    try {
+      const currentEvents = C.events || [];
+      const evIndex = currentEvents.findIndex(e => e.id === activeEvent.id || e.title === activeEvent.title);
+      if (evIndex === -1) return;
+
+      const targetEvent = { ...currentEvents[evIndex] };
+      if (configModal.type === 'invite') {
+        targetEvent.inviteBgUrl = conf.bgUrl;
+        targetEvent.inviteMap = conf.map;
+        targetEvent.inviteFontSize = conf.fontSize;
+        targetEvent.inviteFontColor = conf.fontColor;
+      } else if (configModal.type === 'custom') {
+        const currentPdfTemplates = [...(targetEvent.pdfTemplates || [])];
+        const tplIdx = currentPdfTemplates.findIndex(t => t.id === configModal.customTpl?.id);
+        if (tplIdx >= 0) {
+          currentPdfTemplates[tplIdx] = {
+            ...currentPdfTemplates[tplIdx],
+            bgUrl: conf.bgUrl,
+            map: conf.map,
+            fontSize: conf.fontSize,
+            fontColor: conf.fontColor
+          };
+        } else if (configModal.customTpl) {
+          currentPdfTemplates.push({
+            ...configModal.customTpl,
+            bgUrl: conf.bgUrl,
+            map: conf.map,
+            fontSize: conf.fontSize,
+            fontColor: conf.fontColor
+          });
+        }
+        targetEvent.pdfTemplates = currentPdfTemplates;
+      } else {
+        targetEvent.certBgUrl = conf.bgUrl;
+        targetEvent.certMap = conf.map;
+        targetEvent.certFontSize = conf.fontSize;
+        targetEvent.certFontColor = conf.fontColor;
+      }
+
+      const updatedEvents = [...currentEvents];
+      updatedEvents[evIndex] = targetEvent;
+      const updatedC = { ...C, events: updatedEvents };
+      if (setC) setC(updatedC);
+      await fbSave(updatedC, auth?.idToken);
+      setConfigModal(null);
+      alert("✅ Template configuration saved and applied directly to workspace!");
+    } catch(err) {
+      alert("Failed to save template: " + err.message);
+    }
+  };
+
+  const resolveGuestVibhag = (r) => {
+    if (!r) return "";
+    const cleanDirect = String(r.vibhag || r['Vibhag'] || r['Vibhag New'] || '').trim();
+    const isNonGeo = ['cwc member', 'committee', 'trustee', 'general committee', 'unspecified', 'cwc', '-', 'blank'].includes(cleanDirect.toLowerCase());
+    if (cleanDirect && !isNonGeo) {
+      return cleanDirect;
+    }
+    const globalList = regs.filter(x => x.isGlobalGuest);
+    if (r.globalGuestId) {
+      const g = globalList.find(x => x.id === r.globalGuestId);
+      const gV = String(g?.vibhag || g?.['Vibhag'] || g?.['Vibhag New'] || '').trim();
+      if (gV && !['cwc member', 'committee', 'trustee', 'general committee', 'unspecified', 'cwc', '-', 'blank'].includes(gV.toLowerCase())) {
+        return gV;
+      }
+    }
+    const rName = String(r['Full Name'] || r['Participant Name'] || r.name || '').trim().toLowerCase();
+    const gByName = globalList.find(x => {
+      const gName = String(x['Full Name'] || x.Name || '').trim().toLowerCase();
+      return gName && (gName === rName || gName.includes(rName) || rName.includes(gName));
+    });
+    if (gByName) {
+      const gV = String(gByName.vibhag || gByName['Vibhag'] || gByName['Vibhag New'] || '').trim();
+      if (gV && !['cwc member', 'committee', 'trustee', 'general committee', 'unspecified', 'cwc', '-', 'blank'].includes(gV.toLowerCase())) {
+        return gV;
+      }
+    }
+
+    const bio = `${r.Address || ''} ${r.address || ''} ${r.Designation || ''} ${r.designation || ''}`.toLowerCase();
+    const knownVibhags = getStandardVibhagsList(C);
+    for (const kv of knownVibhags) {
+      const kvClean = kv.replace(/^\d+[\s_-]*/, '').trim().toLowerCase();
+      if (kvClean.length >= 4 && bio.includes(kvClean)) return kv;
+    }
+
+    return cleanDirect && !isNonGeo ? cleanDirect : "";
+  };
 
   const getDocReleaseStatus = (r, docId) => {
     if (!r) return { isReleased: false, isHeld: false };
@@ -23338,17 +31511,154 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
 
   const inviteRegs = regs.filter(r => {
     if (!selectedEventId) return false;
-    // Only Approved registrations or special/committee guests
-    if (r.Status !== "Approved" && r.status !== "Approved" && !r.isSpecialGuest) return false;
-    // Exclude the raw global directory pool entry itself
-    if (r.isGlobalGuest) return false;
     const ev = inviteEvents.find(e => e.id === selectedEventId);
     if (!ev) return false;
+
+    // For Donor Workspaces, include verified donors or imported donor entries
+    if (ev.isDonorWorkspace) {
+      if (r.isDonor) return r.eventId === ev.id || r.eventName === ev.title || !r.eventId;
+      if (r.Status === "Approved" || r.status === "Approved") {
+        let evName = r.eventName || r.eventTitle || r.eventId;
+        return r.eventId === ev.id || evName === ev.title || evName === ev.titleGu;
+      }
+      return false;
+    }
+
+    // Exclude standalone directory-only records that have no workspace assigned
+    if (r.formId === "global_guest_directory" && !r.eventId && !r.eventName && !r.targetTemplateId && (!Array.isArray(r.assignedDocTypes) || r.assignedDocTypes.length === 0)) {
+      return false;
+    }
+
+    // Check workspace membership
     let evName = r.eventName || r.eventTitle || r.eventId;
-    return r.eventId === ev.id || evName === ev.title || evName === ev.titleGu;
+    const activeDocId = currentDocTpl?.id || "invite";
+    const activeTplObj = currentDocTpl?.customTpl;
+    const targetEventScope = activeTplObj?.targetEventId;
+
+    // Helper: Normalize and match registration against target event scope
+    const isEventMatchingScope = (record, scope) => {
+      if (!scope || scope === 'current') return false;
+      if (scope === 'all') return true;
+      const cleanScope = String(scope).toLowerCase().trim();
+      const rEvId = String(record.eventId || '').toLowerCase().trim();
+      const rEvName = String(record.eventName || record.eventTitle || '').toLowerCase().trim();
+      const rFormId = String(record.formId || '').toLowerCase().trim();
+
+      if (rEvId === cleanScope || rEvName === cleanScope || rFormId === cleanScope) return true;
+      if (cleanScope.includes('education') && (rEvId.includes('education') || rEvName.includes('education') || rEvId.includes('1785425112515'))) return true;
+      if (cleanScope.includes('1785425112515') && (rEvId.includes('1785425112515') || rEvName.includes('education'))) return true;
+
+      const matchedCEvent = (C.events || []).find(e => 
+        String(e.id || '').toLowerCase().trim() === cleanScope || 
+        String(e.title || '').toLowerCase().trim() === cleanScope
+      );
+      if (matchedCEvent) {
+        const mId = String(matchedCEvent.id || '').toLowerCase().trim();
+        const mTitle = String(matchedCEvent.title || '').toLowerCase().trim();
+        if (mId && (rEvId === mId || rEvName === mId)) return true;
+        if (mTitle && (rEvId === mTitle || rEvName === mTitle)) return true;
+      }
+      return false;
+    };
+
+    // Check if this subworkspace is configured to pull from a specific target event (e.g. Education 2026)
+    const matchesTargetEvent = Boolean(
+      targetEventScope && targetEventScope !== 'current' && isEventMatchingScope(r, targetEventScope)
+    );
+
+    const isExplicitlyAssigned = (r.targetTemplateId === currentDocTpl?.id) || (Array.isArray(r.assignedDocTypes) && r.assignedDocTypes.includes(currentDocTpl?.id));
+    const isAssignedToWorkspace = (Array.isArray(r.assignedWorkspaceIds) && r.assignedWorkspaceIds.includes(ev.id)) || r.workspaceId === ev.id;
+    const matchesEvent = matchesTargetEvent || r.eventId === ev.id || evName === ev.title || evName === ev.titleGu || isExplicitlyAssigned || isAssignedToWorkspace;
+    if (!matchesEvent) return false;
+
+    // ── Template / Sub-Workspace Contact Isolation ──
+    // If viewing a custom template (e.g. Education 2026 Student Invite, new vibhag, etc.)
+    if (activeDocId !== "invite" && activeDocId !== "cert") {
+      // Direct streaming: When an event is selected in the Subworkspace Card, its registrations stream immediately
+      if (matchesTargetEvent) return true;
+
+      const targetAudienceMode = activeTplObj?.targetAudience || "assigned"; // "assigned" | "event" | "group" | "all"
+      if (targetAudienceMode === "all" || targetAudienceMode === "event") return true;
+      
+      // Check if contact was explicitly imported/assigned to this sub-workspace
+      const isAssigned = r.targetTemplateId === activeDocId || (Array.isArray(r.assignedDocTypes) && r.assignedDocTypes.includes(activeDocId));
+      if (isAssigned) return true;
+
+      // If in group mode, also include any contact whose groups match template name or targetGroup
+      const targetGroupName = activeTplObj?.targetGroup || activeTplObj?.name || currentDocTpl?.name || "";
+      const rGroups = typeof getResolvedContactGroups === 'function' ? getResolvedContactGroups(r) : getContactGroups(r);
+      if (targetAudienceMode === "group" && targetGroupName) {
+        if (rGroups.some(g => String(g).trim().toLowerCase() === String(targetGroupName).trim().toLowerCase())) return true;
+      }
+      return false;
+    }
+
+    // If viewing default "Official Invite Letter", show entries assigned to default or not specifically isolated to other custom templates
+    if (activeDocId === "invite") {
+      if (r.targetTemplateId && r.targetTemplateId !== "invite" && r.targetTemplateId !== "cert") {
+        if (!Array.isArray(r.assignedDocTypes) || !r.assignedDocTypes.includes("invite")) {
+          return false;
+        }
+      }
+    }
+
+    // If viewing default "Official Invite Letter", show entries assigned to default or not specifically isolated to other custom templates
+    if (activeDocId === "invite") {
+      if (r.targetTemplateId && r.targetTemplateId !== "invite" && r.targetTemplateId !== "cert") {
+        if (!Array.isArray(r.assignedDocTypes) || !r.assignedDocTypes.includes("invite")) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   });
 
-  const filteredRegs = inviteRegs.filter(r => {
+  // Deduplicate sub-workspace recipients so no person or pass appears twice
+  const uniqueInviteRegs = useMemo(() => {
+    const map = new Map();
+
+    inviteRegs.forEach(r => {
+      const txn = String(r['Transaction ID'] || r.transactionId || '').trim();
+      const mob = String(r['Mobile Number'] || r.phone || r.mobile || '').replace(/\D/g, '').slice(-10);
+      const name = String(r['Full Name'] || r['Participant Name'] || r.name || '').trim().toLowerCase();
+
+      // Stable person identifier: Txn ID > 10-digit mobile > Full Name
+      const dedupeKey = txn || (mob && mob.length === 10 ? `mob_${mob}` : (name ? `name_${name}` : r.id));
+
+      if (map.has(dedupeKey)) {
+        const existing = map.get(dedupeKey);
+        // Prefer the record that is more recently updated or has whatsApp activity
+        const existingScore = (existing.targetTemplateId === currentDocTpl?.id ? 10 : 0) + 
+          (existing.whatsAppCount || 0) + 
+          (existing._submittedAt || 0);
+
+        const currentScore = (r.targetTemplateId === currentDocTpl?.id ? 10 : 0) + 
+          (r.whatsAppCount || 0) + 
+          (r._submittedAt || 0);
+
+        const existingGroups = typeof getResolvedContactGroups === 'function' ? getResolvedContactGroups(existing) : (existing.groups || []);
+        const rGroups = typeof getResolvedContactGroups === 'function' ? getResolvedContactGroups(r) : (r.groups || []);
+        const combinedGroups = Array.from(new Set([...existingGroups, ...rGroups])).filter(Boolean);
+
+        const winner = currentScore >= existingScore ? r : existing;
+        map.set(dedupeKey, {
+          ...existing,
+          ...r,
+          ...winner,
+          groups: combinedGroups,
+          Groups: combinedGroups,
+          Group: combinedGroups.join(", ")
+        });
+      } else {
+        map.set(dedupeKey, r);
+      }
+    });
+
+    return Array.from(map.values());
+  }, [inviteRegs, currentDocTpl]);
+
+  const filteredRegs = uniqueInviteRegs.filter(r => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       if (!Object.values(r).some(v => String(v).toLowerCase().includes(q))) return false;
@@ -23382,7 +31692,16 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
   const fetchRegs = async () => {
     try {
       const d = await fbFetchRegistrations(auth?.idToken);
-      setRegs(d || []);
+      const list = d || [];
+      setRegs(list);
+      if (typeof window !== 'undefined') {
+        window.__MMP_INVITE_REGS__ = list;
+        window.__MMP_ALL_REGS_RAW__ = list;
+        window.__MMP_REGS_CACHE__ = list;
+      }
+      try {
+        localStorage.setItem("mmp_cached_registrations", JSON.stringify(list));
+      } catch(e) {}
     } catch(e) {
       console.error(e);
     }
@@ -23425,7 +31744,9 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
           "Organization": guestForm.designation?.trim() || "",
           "Group": groupStr,
           "Category": groupStr,
-          "Vibhag": assignedGroups[0] || "General Committee",
+          "Vibhag": guestForm.vibhag || editingGuest.vibhag || editingGuest['Vibhag'] || assignedGroups[0] || "General Committee",
+          "Vibhag New": guestForm.vibhag || editingGuest.vibhag || editingGuest['Vibhag'] || assignedGroups[0] || "General Committee",
+          vibhag: guestForm.vibhag || editingGuest.vibhag || editingGuest['Vibhag'] || assignedGroups[0] || "General Committee",
           groups: assignedGroups,
           Groups: assignedGroups
         };
@@ -23433,9 +31754,40 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
         delete cleanCopy.id;
         delete cleanCopy._submittedAt;
         await fbUpdateRegistration(editingGuest.id, cleanCopy, auth?.idToken);
-        alert("✅ Contact details and groups updated successfully!");
+
+        // Sync across any linked event workspace records for this person
+        const targetPhone = (guestForm.mobile?.trim() || editingGuest.Mobile || editingGuest['Mobile Number'] || '').replace(/\D/g, '').slice(-10);
+        const oldName = String(editingGuest['Full Name'] || editingGuest.name || '').trim().toLowerCase();
+        
+        for (const otherR of (regs || [])) {
+          if (otherR.id !== editingGuest.id) {
+            const otherPhone = String(otherR['Mobile Number'] || otherR.mobile || '').replace(/\D/g, '').slice(-10);
+            const otherName = String(otherR['Full Name'] || otherR.name || '').trim().toLowerCase();
+            if ((targetPhone && targetPhone === otherPhone) || (oldName && oldName === otherName)) {
+              const otherAssignedGroups = Array.from(new Set([...(otherR.groups || []), ...assignedGroups]));
+              const updatedOther = {
+                ...otherR,
+                "Full Name": guestForm.fullName.trim(),
+                "Participant Name": guestForm.fullName.trim(),
+                "Name": guestForm.fullName.trim(),
+                Designation: guestForm.designation?.trim() || otherR.Designation,
+                Mobile: guestForm.mobile?.trim() || otherR.Mobile,
+                "Mobile Number": guestForm.mobile?.trim() || otherR['Mobile Number'],
+                groups: otherAssignedGroups,
+                Groups: otherAssignedGroups,
+                Group: otherAssignedGroups.join(", ")
+              };
+              delete updatedOther.id; delete updatedOther._submittedAt;
+              try {
+                await fbUpdateRegistration(otherR.id, updatedOther, auth?.idToken);
+              } catch(e) {}
+            }
+          }
+        }
+
+        alert("✅ Contact details and groups updated successfully across directory & workspaces!");
         setEditingGuest(null);
-        setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member", groups: ["CWC Member"] });
+        setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", vibhag: "", group: "CWC Member", groups: ["CWC Member"] });
         fetchRegs();
       } else {
         // Create new contact
@@ -23452,7 +31804,9 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
           "Organization": guestForm.designation?.trim() || "",
           "Group": groupStr,
           "Category": groupStr,
-          "Vibhag": assignedGroups[0] || "General Committee",
+          "Vibhag": guestForm.vibhag || assignedGroups[0] || "General Committee",
+          "Vibhag New": guestForm.vibhag || assignedGroups[0] || "General Committee",
+          vibhag: guestForm.vibhag || assignedGroups[0] || "General Committee",
           groups: assignedGroups,
           Groups: assignedGroups,
           isGlobalGuest: true,
@@ -23462,7 +31816,7 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
 
         await fbSubmitRegistration(newGlobalGuest, auth?.idToken);
         alert("✅ Global guest added to directory with assigned groups!");
-        setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member", groups: ["CWC Member"] });
+        setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", vibhag: "", group: "CWC Member", groups: ["CWC Member"] });
         fetchRegs();
       }
     } catch (err) {
@@ -23483,6 +31837,7 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
           "Full Name": "Harish Makwana",
           "Designation": "Trustee",
           "Mobile Number": "9819728011",
+          "Vibhag": "10 MAHALAXMI",
           "Group": "Trustee, CWC Member",
           "Email": "harish@example.com",
           "Address": "Mahim, Mumbai"
@@ -23491,34 +31846,56 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
           "Full Name": "Pradeep Parmar",
           "Designation": "CWC Member & Lead",
           "Mobile Number": "9819984437",
+          "Vibhag": "10 MAHALAXMI",
           "Group": "CWC Member, Education Committee",
           "Email": "pradeep@example.com",
           "Address": "Mahalaxmi, Mumbai"
         },
         {
-          "Full Name": "Ramesh Solanki",
-          "Designation": "Education Committee Convener",
-          "Mobile Number": "9820123456",
-          "Group": "Education Committee",
-          "Email": "ramesh@example.com",
-          "Address": "Dadar, Mumbai"
+          "Full Name": "Vinod Makwana",
+          "Designation": "General Secretary",
+          "Mobile Number": "9820582546",
+          "Vibhag": "15 RAMDEV NAGAR",
+          "Group": "CWC Member, Education Committee, Core Committee",
+          "Email": "vinod@example.com",
+          "Address": "Ramdev Nagar, Mumbai"
         },
         {
-          "Full Name": "Pooja Vaghela",
-          "Designation": "Volunteer Head",
-          "Mobile Number": "9833456789",
-          "Group": "Volunteer, Kalyan Team",
-          "Email": "pooja@example.com",
-          "Address": "Kalyan, Mumbai"
+          "Full Name": "Devshi Malji Koli",
+          "Designation": "Member / Invitee",
+          "Mobile Number": "9819266669",
+          "Vibhag": "35 CHEMBUR",
+          "Group": "CWC Member, Education Committee",
+          "Email": "devshi@example.com",
+          "Address": "Chembur, Mumbai"
+        },
+        {
+          "Full Name": "Premji kundhdiya",
+          "Designation": "Trustee",
+          "Mobile Number": "9819068663",
+          "Vibhag": "55 BHAYANDER",
+          "Group": "CWC Member, Trustee, Education Committee",
+          "Email": "premji@example.com",
+          "Address": "Bhayander, Mumbai"
+        },
+        {
+          "Full Name": "Kamla Kataria",
+          "Designation": "Member",
+          "Mobile Number": "9224398791",
+          "Vibhag": "9 TULSIWADI",
+          "Group": "CWC Member, Education Committee",
+          "Email": "kamla@example.com",
+          "Address": "Tulsiwadi, Mumbai"
         }
       ];
 
       const ws = XLSX.utils.json_to_sheet(sampleData);
       ws['!cols'] = [
-        { wch: 22 },
+        { wch: 24 },
         { wch: 28 },
         { wch: 16 },
-        { wch: 34 },
+        { wch: 24 },
+        { wch: 38 },
         { wch: 24 },
         { wch: 24 }
       ];
@@ -23532,11 +31909,13 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
 
   const handleDownloadSampleCsv = () => {
     try {
-      const csvContent = "Full Name,Designation,Mobile Number,Group,Email,Address\n" +
-        '"Harish Makwana","Trustee","9819728011","Trustee, CWC Member","harish@example.com","Mahim, Mumbai"\n' +
-        '"Pradeep Parmar","CWC Member & Lead","9819984437","CWC Member, Education Committee","pradeep@example.com","Mahalaxmi, Mumbai"\n' +
-        '"Ramesh Solanki","Education Committee Convener","9820123456","Education Committee","ramesh@example.com","Dadar, Mumbai"\n' +
-        '"Pooja Vaghela","Volunteer Head","9833456789","Volunteer, Kalyan Team","pooja@example.com","Kalyan, Mumbai"\n';
+      const csvContent = "Full Name,Designation,Mobile Number,Vibhag,Group,Email,Address\n" +
+        '"Harish Makwana","Trustee","9819728011","10 MAHALAXMI","Trustee, CWC Member","harish@example.com","Mahim, Mumbai"\n' +
+        '"Pradeep Parmar","CWC Member & Lead","9819984437","10 MAHALAXMI","CWC Member, Education Committee","pradeep@example.com","Mahalaxmi, Mumbai"\n' +
+        '"Vinod Makwana","General Secretary","9820582546","15 RAMDEV NAGAR","CWC Member, Education Committee","vinod@example.com","Ramdev Nagar, Mumbai"\n' +
+        '"Devshi Malji Koli","Member / Invitee","9819266669","35 CHEMBUR","CWC Member, Education Committee","devshi@example.com","Chembur, Mumbai"\n' +
+        '"Premji kundhdiya","Trustee","9819068663","55 BHAYANDER","CWC Member, Trustee","premji@example.com","Bhayander, Mumbai"\n' +
+        '"Kamla Kataria","Member","9224398791","9 TULSIWADI","CWC Member, Education Committee","kamla@example.com","Tulsiwadi, Mumbai"\n';
 
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const link = document.createElement("a");
@@ -23547,6 +31926,72 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       document.body.removeChild(link);
     } catch(err) {
       alert("Error downloading CSV: " + err.message);
+    }
+  };
+
+  // Export all or filtered directory contacts
+  const handleExportDirectoryContacts = (onlyFiltered = false) => {
+    try {
+      // Calculate filtered list
+      const allGlobal = regs.filter(r => r.isGlobalGuest || r.formId === "global_guest_directory" || r.formId === "global_guest_directory_import");
+      const exportList = onlyFiltered 
+        ? allGlobal.filter(g => {
+            const q = (directorySearch || '').toLowerCase().trim();
+            const grpFilter = directoryGroupFilter || 'All';
+            const grps = getContactGroups(g);
+            if (grpFilter !== 'All' && !grps.includes(grpFilter)) return false;
+            if (!q) return true;
+            const name = String(g['Full Name'] || g.Name || g.name || '').toLowerCase();
+            const mob = String(g.Mobile || g['Mobile Number'] || g.mobile || g.phone || '').toLowerCase();
+            const desig = String(g.Designation || g.designation || '').toLowerCase();
+            const vib = String(g.Vibhag || g.vibhag || g['Vibhag New'] || '').toLowerCase();
+            return name.includes(q) || mob.includes(q) || desig.includes(q) || vib.includes(q) || grps.some(x => x.toLowerCase().includes(q));
+          })
+        : allGlobal;
+
+      if (exportList.length === 0) {
+        alert("No contacts available to export.");
+        return;
+      }
+
+      const exportRows = exportList.map((g, idx) => {
+        const cGroups = getContactGroups(g);
+        const resolvedV = (typeof resolveGuestVibhag === 'function' ? resolveGuestVibhag(g) : (g.vibhag || g['Vibhag'] || g['Vibhag New'])) || 'General';
+        const dateStr = g._submittedAt ? new Date(g._submittedAt).toLocaleDateString("en-IN") : "";
+        return {
+          "Sr No": idx + 1,
+          "Pass ID": g['Transaction ID'] || g.transactionId || g.id || "",
+          "Full Name": g['Full Name'] || g.Name || g.name || "",
+          "Designation": g.Designation || g.designation || "",
+          "Mobile Number": g.Mobile || g['Mobile Number'] || g.mobile || g.phone || "",
+          "Assigned Vibhag": resolvedV,
+          "Contact Groups": cGroups.join(", "),
+          "Email Address": g.Email || g.email || "",
+          "Address / Location": g.Address || g.address || "",
+          "Date Added": dateStr
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(exportRows);
+      ws['!cols'] = [
+        { wch: 8 },
+        { wch: 16 },
+        { wch: 28 },
+        { wch: 26 },
+        { wch: 18 },
+        { wch: 26 },
+        { wch: 40 },
+        { wch: 26 },
+        { wch: 30 },
+        { wch: 14 }
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Contacts_Directory");
+      const fileName = `MMP_Contacts_Directory_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch(err) {
+      alert("Error exporting contacts: " + err.message);
     }
   };
 
@@ -23562,16 +32007,45 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       const rows = XLSX.utils.sheet_to_json(firstSheet);
       
       let successCount = 0;
+      const allOfficialVibhags = typeof getStandardVibhagsList === 'function' ? getStandardVibhagsList(C) : OFFICIAL_VIBHAGS;
+
       for (const row of rows) {
         const fullName = row["Full Name"] || row["Name"] || row["Participant Name"] || "";
         if (!fullName || !String(fullName).trim()) continue;
 
         const mobile = row["Mobile"] || row["Mobile Number"] || row["Phone"] || "";
         const email = row["Email"] || row["Email Address"] || "";
-        const designation = row["Designation"] || row["Organization"] || row["Company"] || "";
+        const designation = row["Designation"] || row["Organization"] || row["Company"] || row["Role"] || "";
         const address = row["Address"] || row["Location"] || "";
 
-        const rawGroup = row.Group || row.group || row.Groups || row.groups || row["Contact Group"] || row.Category || row.category || row.Team || row.team || row.Vibhag || "General Committee";
+        // Parse and match Vibhag
+        const rawVibhag = String(row["Vibhag"] || row["Vibhag New"] || row["vibhag"] || row["Assigned Vibhag"] || "").trim();
+        let matchedVibhag = "";
+        if (rawVibhag) {
+          // Exact match
+          const exact = allOfficialVibhags.find(v => v.toLowerCase() === rawVibhag.toLowerCase());
+          if (exact) {
+            matchedVibhag = exact;
+          } else {
+            // Number match
+            const rowNum = (rawVibhag.match(/^\d+/) || [])[0];
+            if (rowNum) {
+              const numMatch = allOfficialVibhags.find(v => (v.match(/^\d+/) || [])[0] === rowNum);
+              if (numMatch) matchedVibhag = numMatch;
+            }
+            // Name substring match
+            if (!matchedVibhag) {
+              const cleanRowV = rawVibhag.replace(/^\d+[\s_-]*/, '').trim().toLowerCase();
+              if (cleanRowV.length >= 3) {
+                const nameMatch = allOfficialVibhags.find(v => v.toLowerCase().includes(cleanRowV));
+                if (nameMatch) matchedVibhag = nameMatch;
+              }
+            }
+          }
+        }
+        const finalVibhag = matchedVibhag || rawVibhag || "General";
+
+        const rawGroup = row.Group || row.group || row.Groups || row.groups || row["Contact Group"] || row.Category || row.category || row.Team || row.team || "CWC Member";
         const assignedGroups = getContactGroups({ group: String(rawGroup) });
         const groupStr = assignedGroups.join(", ");
 
@@ -23588,23 +32062,28 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
           "Organization": designation ? String(designation).trim() : "",
           "Group": groupStr,
           "Category": groupStr,
-          "Vibhag": assignedGroups[0] || "General Committee",
+          "Vibhag": finalVibhag,
+          "Vibhag New": finalVibhag,
+          vibhag: finalVibhag,
           groups: assignedGroups,
           Groups: assignedGroups,
           isGlobalGuest: true,
-          _submittedAt: Date.now(),
+          _submittedAt: Date.now() + successCount,
           formId: "global_guest_directory_import"
         };
+
         await fbSubmitRegistration(newGlobalGuest, auth?.idToken);
         successCount++;
       }
-      alert(`✅ Successfully imported ${successCount} contacts into directory!`);
+
+      alert(`✅ Successfully imported ${successCount} contact(s) with assigned Vibhag into Directory!`);
       fetchRegs();
     } catch (err) {
       alert("Error reading file: " + err.message);
+    } finally {
+      setUploadingExcel(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
-    setUploadingExcel(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleImportMultipleContactGroups = async (targetGroups) => {
@@ -23616,9 +32095,12 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       return alert("Please select at least one contact group to import.");
     }
 
+    const currentActiveDoc = activeDocType || "invite";
+    const currentDocName = currentDocTpl?.name || "this sub-workspace";
+
     const matchedGuestsMap = new Map();
     globalGuests.forEach(g => {
-      const gGroups = getContactGroups(g);
+      const gGroups = getResolvedContactGroups ? getResolvedContactGroups(g) : getContactGroups(g);
       const isMatched = groupsList.some(grp => gGroups.includes(grp));
       if (isMatched && !matchedGuestsMap.has(g.id)) {
         matchedGuestsMap.set(g.id, g);
@@ -23630,45 +32112,101 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       return alert("No contacts found in the selected group(s).");
     }
 
-    const unimported = allMatchedGuests.filter(g => !regs.some(r => r.globalGuestId === g.id && r.eventId === ev.id));
-    if (unimported.length === 0) {
-      return alert("All " + allMatchedGuests.length + " contacts from the selected group(s) are already imported into this workspace!");
-    }
-
     const groupNamesStr = groupsList.length === 1 ? groupsList[0] : (groupsList.length + " groups (" + groupsList.slice(0, 3).join(", ") + (groupsList.length > 3 ? "..." : "") + ")");
-    if (!window.confirm("Import " + unimported.length + " contact(s) from " + groupNamesStr + " into " + ev.title + "?")) return;
+    if (!window.confirm("Attach / Import " + allMatchedGuests.length + " contact(s) from " + groupNamesStr + " into \"" + currentDocName + "\" (" + ev.title + ")?")) return;
 
     setImportingContactGroups(true);
     let successCount = 0;
-    for (const g of unimported) {
-      const newEventGuest = {
-        ...g,
-        eventId: ev.id,
-        eventName: ev.title || "Unknown Event",
-        eventTitle: ev.title || "Unknown Event",
-        Status: "Approved",
-        isSpecialGuest: true,
-        globalGuestId: g.id,
-        _submittedAt: Date.now()
-      };
-      if (ev.guestMapping) {
-        if (ev.guestMapping.fullName) newEventGuest[ev.guestMapping.fullName] = g["Full Name"];
-        if (ev.guestMapping.designation) newEventGuest[ev.guestMapping.designation] = g.Designation;
-        if (ev.guestMapping.mobile) newEventGuest[ev.guestMapping.mobile] = g.Mobile;
-        if (ev.guestMapping.email) newEventGuest[ev.guestMapping.email] = g.Email;
-        if (ev.guestMapping.address) newEventGuest[ev.guestMapping.address] = g.Address;
-      }
-      delete newEventGuest.isGlobalGuest;
-      delete newEventGuest.id;
-      try {
-        await fbSubmitRegistration(newEventGuest, auth?.idToken);
-        successCount++;
-      } catch(e) {
-        console.error("Error importing contact:", e);
+    const newlyAddedOrUpdatedRegs = [];
+
+    for (const g of allMatchedGuests) {
+      const existingReg = regs.find(r => (r.globalGuestId === g.id || r["Full Name"] === g["Full Name"] || r.name === g["Full Name"]) && r.eventId === ev.id);
+      if (existingReg) {
+        const curAssigned = Array.isArray(existingReg.assignedDocTypes) ? existingReg.assignedDocTypes : [existingReg.targetTemplateId || "invite"];
+        const updatedAssigned = Array.from(new Set([...curAssigned, currentActiveDoc]));
+        const resolvedG = getResolvedContactGroups ? getResolvedContactGroups(g) : getContactGroups(g);
+        const updatedGroups = Array.from(new Set([...(existingReg.groups || []), ...resolvedG]));
+        const gVibhag = g.vibhag || g['Vibhag'] || g['Vibhag New'] || "";
+        const updatedReg = {
+          ...existingReg,
+          eventId: ev.id,
+          eventName: ev.title || "Unknown Event",
+          eventTitle: ev.title || "Unknown Event",
+          Status: "Approved",
+          status: "Approved",
+          isSpecialGuest: true,
+          assignedDocTypes: updatedAssigned,
+          targetTemplateId: currentActiveDoc,
+          vibhag: gVibhag || existingReg.vibhag || existingReg['Vibhag'],
+          Vibhag: gVibhag || existingReg['Vibhag'] || existingReg.vibhag,
+          "Vibhag New": gVibhag || existingReg['Vibhag New'] || existingReg.vibhag,
+          groups: updatedGroups,
+          Groups: updatedGroups,
+          Group: updatedGroups.join(", ")
+        };
+        const cleanCopy = { ...updatedReg };
+        delete cleanCopy.id;
+        delete cleanCopy._submittedAt;
+        try {
+          await fbUpdateRegistration(existingReg.id, cleanCopy, auth?.idToken);
+          newlyAddedOrUpdatedRegs.push(updatedReg);
+          successCount++;
+        } catch(e) {
+          console.error("Error updating template assignment:", e);
+        }
+      } else {
+        const newEventGuest = {
+          ...g,
+          id: g.id || ("reg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5)),
+          eventId: ev.id,
+          eventName: ev.title || "Unknown Event",
+          eventTitle: ev.title || "Unknown Event",
+          Status: "Approved",
+          status: "Approved",
+          isSpecialGuest: true,
+          globalGuestId: g.id,
+          targetTemplateId: currentActiveDoc,
+          assignedDocTypes: [currentActiveDoc],
+          _submittedAt: Date.now()
+        };
+        if (ev.guestMapping) {
+          if (ev.guestMapping.fullName) newEventGuest[ev.guestMapping.fullName] = g["Full Name"];
+          if (ev.guestMapping.designation) newEventGuest[ev.guestMapping.designation] = g.Designation;
+          if (ev.guestMapping.mobile) newEventGuest[ev.guestMapping.mobile] = g.Mobile;
+          if (ev.guestMapping.email) newEventGuest[ev.guestMapping.email] = g.Email;
+          if (ev.guestMapping.address) newEventGuest[ev.guestMapping.address] = g.Address;
+        }
+        const submitPayload = { ...newEventGuest };
+        delete submitPayload.isGlobalGuest;
+        delete submitPayload.id;
+        try {
+          const res = await fbSubmitRegistration(submitPayload, auth?.idToken);
+          if (res?.name) {
+            newEventGuest.id = res.name.split("/").pop();
+          }
+          newlyAddedOrUpdatedRegs.push(newEventGuest);
+          successCount++;
+        } catch(e) {
+          console.error("Error importing contact:", e);
+        }
       }
     }
+
+    setRegs(prev => {
+      let merged = [...prev];
+      newlyAddedOrUpdatedRegs.forEach(item => {
+        const idx = merged.findIndex(r => r.id === item.id || (r.globalGuestId === item.globalGuestId && r.eventId === item.eventId));
+        if (idx >= 0) {
+          merged[idx] = { ...merged[idx], ...item };
+        } else {
+          merged = [item, ...merged];
+        }
+      });
+      return merged;
+    });
+
     setImportingContactGroups(false);
-    alert("✅ Successfully imported " + successCount + " contacts into " + ev.title + "!");
+    alert("✅ Successfully attached / imported " + successCount + " contact(s) into \"" + currentDocName + "\"!");
     setShowImportContactGroupModal(false);
     setSelectedGroupsToImport([]);
     fetchRegs();
@@ -23894,9 +32432,34 @@ This cannot be undone.`)) return;
   const handlePreview = async (r, ev) => {
     const fieldsData = {...r};
     const sName = fieldsData["Full Name"] || fieldsData["Name"] || fieldsData["Participant Name"] || "Student";
+    
+    // Always prioritize the active workspace the user is currently managing
+    const targetEv = activeEvent?.id ? activeEvent : (ev || activeEvent);
+    
+    // Extract background from currentDocTpl, activeEvent, or pdfTemplates
+    const targetBgUrl = currentDocTpl?.bgUrl 
+      || (currentDocTpl?.id === 'cert' ? activeEvent?.certBgUrl : activeEvent?.inviteBgUrl)
+      || (activeEvent?.pdfTemplates || []).find(t => t.id === currentDocTpl?.id || t.name === currentDocTpl?.name)?.bgUrl
+      || (targetEv?.pdfTemplates || []).find(t => t.id === currentDocTpl?.id || t.name === currentDocTpl?.name)?.bgUrl
+      || targetEv?.inviteBgUrl
+      || targetEv?.certBgUrl
+      || (typeof window !== 'undefined' && window.__MMP_ACTIVE_EVENT__?.inviteBgUrl)
+      || "";
+
+    const resolvedDocTpl = {
+      id: currentDocTpl?.id || 'invite',
+      name: currentDocTpl?.name || (currentDocTpl?.id === 'cert' ? 'Certificate' : 'Official Invite Letter'),
+      bgUrl: targetBgUrl,
+      map: currentDocTpl?.customTpl?.map || (currentDocTpl?.id === 'cert' ? targetEv?.certMap : targetEv?.inviteMap) || {},
+      orientation: currentDocTpl?.customTpl?.orientation || (currentDocTpl?.id === 'cert' ? targetEv?.certOrientation : targetEv?.inviteOrientation) || 'portrait',
+      bgFit: currentDocTpl?.customTpl?.bgFit || (currentDocTpl?.id === 'cert' ? targetEv?.certBgFit : targetEv?.inviteBgFit) || 'letterhead',
+      fontSize: currentDocTpl?.customTpl?.fontSize || (currentDocTpl?.id === 'cert' ? targetEv?.certFontSize : targetEv?.inviteFontSize) || 16,
+      fontColor: currentDocTpl?.customTpl?.fontColor || (currentDocTpl?.id === 'cert' ? targetEv?.certFontColor : targetEv?.inviteFontColor) || '#000000',
+      fields: currentDocTpl?.customTpl?.fields || []
+    };
+
     try {
-      const targetDoc = currentDocTpl?.customTpl || currentDocTpl?.id || 'invite';
-      const url = await generateCertificatePDF(ev, fieldsData, sName, targetDoc, 'url');
+      const url = await generateCertificatePDF(targetEv, fieldsData, sName, resolvedDocTpl, 'url');
       setPreviewCertUrl(url);
       setPreviewCertRegId(r.id);
     } catch (e) {
@@ -23966,14 +32529,32 @@ This cannot be undone.`)) return;
       const ev = inviteEvents.find(e => e.id === selectedEventId);
       if (!ev) throw new Error("Active event not found.");
       
-      const targetDoc = currentDocTpl?.customTpl || currentDocTpl?.id || 'invite';
+      const targetEv = activeEvent?.id ? activeEvent : (ev || activeEvent);
+      const targetBgUrl = currentDocTpl?.bgUrl 
+        || (currentDocTpl?.id === 'cert' ? targetEv?.certBgUrl : targetEv?.inviteBgUrl)
+        || (targetEv?.pdfTemplates || []).find(t => t.id === currentDocTpl?.id || t.name === currentDocTpl?.name)?.bgUrl
+        || targetEv?.inviteBgUrl
+        || "";
+
+      const resolvedDocTpl = {
+        id: currentDocTpl?.id || 'invite',
+        name: currentDocTpl?.name || (currentDocTpl?.id === 'cert' ? 'Certificate' : 'Official Invite Letter'),
+        bgUrl: targetBgUrl,
+        map: currentDocTpl?.customTpl?.map || (currentDocTpl?.id === 'cert' ? targetEv?.certMap : targetEv?.inviteMap) || {},
+        orientation: currentDocTpl?.customTpl?.orientation || (currentDocTpl?.id === 'cert' ? targetEv?.certOrientation : targetEv?.inviteOrientation) || 'portrait',
+        bgFit: currentDocTpl?.customTpl?.bgFit || (currentDocTpl?.id === 'cert' ? targetEv?.certBgFit : targetEv?.inviteBgFit) || 'letterhead',
+        fontSize: currentDocTpl?.customTpl?.fontSize || (currentDocTpl?.id === 'cert' ? targetEv?.certFontSize : targetEv?.inviteFontSize) || 16,
+        fontColor: currentDocTpl?.customTpl?.fontColor || (currentDocTpl?.id === 'cert' ? targetEv?.certFontColor : targetEv?.inviteFontColor) || '#000000',
+        fields: currentDocTpl?.customTpl?.fields || []
+      };
+
       const docPrefix = (currentDocTpl?.name || "Document").replace(/[^a-zA-Z0-9]/g, '_');
 
       for (const r of targetList) {
         const fieldsData = {...r};
         const sName = fieldsData["Full Name"] || fieldsData["Name"] || fieldsData["Participant Name"] || "Student";
         
-        const pdfBlob = await generateCertificatePDF(ev, fieldsData, sName, targetDoc, "blob");
+        const pdfBlob = await generateCertificatePDF(targetEv, fieldsData, sName, resolvedDocTpl, "blob");
         if (pdfBlob) {
           const safeName = sName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
           zip.file(`${docPrefix}_${safeName}_${r.id.substring(0,5)}.pdf`, pdfBlob);
@@ -23994,6 +32575,104 @@ This cannot be undone.`)) return;
     setDownloadingBulk(false);
   };
 
+  
+  const handleQuickAddGroupToContact = async (guest, groupName) => {
+    if (!guest || !groupName || !groupName.trim()) return;
+    const cleanGroup = groupName.trim();
+    const curGroups = getContactGroups(guest);
+    if (curGroups.includes(cleanGroup)) return;
+
+    const updatedGroups = [...curGroups, cleanGroup];
+    const groupStr = updatedGroups.join(", ");
+    const updatedData = {
+      ...guest,
+      Group: groupStr,
+      Category: groupStr,
+      groups: updatedGroups,
+      Groups: updatedGroups
+    };
+    const cleanCopy = { ...updatedData };
+    delete cleanCopy.id;
+    delete cleanCopy._submittedAt;
+
+    try {
+      await fbUpdateRegistration(guest.id, cleanCopy, auth?.idToken);
+      setRegs(prev => prev.map(r => r.id === guest.id ? { ...r, ...updatedData } : r));
+    } catch(err) {
+      alert("Failed to update group: " + err.message);
+    }
+  };
+
+  const handleQuickRemoveGroupFromContact = async (guest, groupToRemove) => {
+    if (!guest || !groupToRemove) return;
+    const curGroups = getContactGroups(guest);
+    const updatedGroups = curGroups.filter(g => g !== groupToRemove);
+    const finalGroups = updatedGroups.length > 0 ? updatedGroups : ["General Committee"];
+    const groupStr = finalGroups.join(", ");
+    const updatedData = {
+      ...guest,
+      Group: groupStr,
+      Category: groupStr,
+      groups: finalGroups,
+      Groups: finalGroups
+    };
+    const cleanCopy = { ...updatedData };
+    delete cleanCopy.id;
+    delete cleanCopy._submittedAt;
+
+    try {
+      await fbUpdateRegistration(guest.id, cleanCopy, auth?.idToken);
+      setRegs(prev => prev.map(r => r.id === guest.id ? { ...r, ...updatedData } : r));
+    } catch(err) {
+      alert("Failed to remove group: " + err.message);
+    }
+  };
+
+  const handleApplyBulkGroupToSelected = async (targetGroup) => {
+    const cleanGroup = (targetGroup || bulkGroupToAdd || customBulkGroupInput || "").trim();
+    if (!cleanGroup) return alert("Please select or type a group name to assign.");
+    if (selectedDirectoryGuestIds.length === 0) return alert("Please select at least one contact.");
+
+    const targetGuests = globalGuests.filter(g => selectedDirectoryGuestIds.includes(g.id));
+    if (targetGuests.length === 0) return;
+
+    if (!window.confirm(`Assign group "${cleanGroup}" to ${targetGuests.length} selected contact(s)?`)) return;
+
+    setApplyingBulkGroup(true);
+    let successCount = 0;
+    try {
+      for (const g of targetGuests) {
+        const curGroups = getContactGroups(g);
+        if (curGroups.includes(cleanGroup)) continue;
+
+        const updatedGroups = [...curGroups, cleanGroup];
+        const groupStr = updatedGroups.join(", ");
+        const updatedData = {
+          ...g,
+          Group: groupStr,
+          Category: groupStr,
+          groups: updatedGroups,
+          Groups: updatedGroups
+        };
+        const cleanCopy = { ...updatedData };
+        delete cleanCopy.id;
+        delete cleanCopy._submittedAt;
+
+        await fbUpdateRegistration(g.id, cleanCopy, auth?.idToken);
+        setRegs(prev => prev.map(r => r.id === g.id ? { ...r, ...updatedData } : r));
+        successCount++;
+      }
+      alert(`✅ Successfully added group "${cleanGroup}" to ${successCount} contact(s)!`);
+      setSelectedDirectoryGuestIds([]);
+      setBulkGroupToAdd("");
+      setCustomBulkGroupInput("");
+    } catch(err) {
+      alert("Bulk group assignment error: " + err.message);
+    } finally {
+      setApplyingBulkGroup(false);
+    }
+  };
+
   const renderGlobalGuestsModal = () => {
     // Extract unique groups across all global guests for the filter bar
     const allGroupsSet = new Set();
@@ -24002,204 +32681,328 @@ This cannot be undone.`)) return;
     });
     const uniqueGroups = Array.from(allGroupsSet).sort();
 
-    // Filter guests based on directoryGroupFilter
-    const filteredDirectoryGuests = directoryGroupFilter === "All"
+    // Filter guests based on directoryGroupFilter and search query
+    const filteredDirectoryGuests = (directoryGroupFilter === "All"
       ? globalGuests
-      : globalGuests.filter(g => getContactGroups(g).includes(directoryGroupFilter));
+      : globalGuests.filter(g => getContactGroups(g).includes(directoryGroupFilter))
+    ).filter(g => {
+      if (!directorySearch.trim()) return true;
+      const q = directorySearch.toLowerCase().trim();
+      const name = String(g['Full Name'] || g['Participant Name'] || g.name || '').toLowerCase();
+      const mob = String(g.Mobile || g['Mobile Number'] || g.mobile || g.phone || '').toLowerCase();
+      const desig = String(g.Designation || g.designation || g['Designation / Role'] || '').toLowerCase();
+      const vib = String(g.Vibhag || g.vibhag || g['Vibhag New'] || '').toLowerCase();
+      const grps = (typeof getContactGroups === 'function' ? getContactGroups(g) : (g.groups || [])).join(' ').toLowerCase();
+      return name.includes(q) || mob.includes(q) || desig.includes(q) || vib.includes(q) || grps.includes(q);
+    });
 
     return (
-      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-        <div style={{background:"white",borderRadius:16,padding:mob?16:28,width:"100%",maxWidth:950,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 25px 50px rgba(0,0,0,0.3)"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,borderBottom:"1.5px solid #E2E8F0",paddingBottom:12}}>
-             <div>
-               <h2 style={{fontFamily:"'Playfair Display',serif",color:"var(--dt)",margin:0,fontSize:"1.3rem",display:"flex",alignItems:"center",gap:8}}>
-                 <span>👥</span> Special Guests & Committee Directory
-               </h2>
-               <p style={{fontSize:".82rem",color:"var(--mu)",margin:"4px 0 0 0"}}>
-                 Add contacts once, assign them to multiple groups, and import them seamlessly into any workspace.
-               </p>
-             </div>
-             <button 
-               onClick={()=>{
-                 setShowGlobalGuestsModal(false); 
-                 setShowDirectoryModal(false);
-                 setEditingGuest(null);
-                 setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member", groups: ["CWC Member"] });
-               }} 
-               style={{background:"#F1F5F9",border:"none",borderRadius:"50%",width:34,height:34,cursor:"pointer",fontWeight:800,fontSize:"1.1rem",color:"#475569"}}
-             >
-               ✕
-             </button>
+      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(15, 23, 42, 0.65)",backdropFilter:"blur(4px)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+        <div style={{background:"#FFFFFF",borderRadius:20,width:"100%",maxWidth:1120,maxHeight:"92vh",display:"flex",flexDirection:"column",boxShadow:"0 25px 50px -12px rgba(0, 0, 0, 0.35)",overflow:"hidden",border:"1px solid #E2E8F0"}}>
+          
+          {/* Modal Top Header */}
+          <div style={{padding:"18px 24px",background:"linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #334155"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg, #2563EB, #1D4ED8)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.3rem",boxShadow:"0 4px 10px rgba(37,99,235,0.3)"}}>
+                👥
+              </div>
+              <div>
+                <h2 style={{margin:0,fontSize:"1.22rem",fontWeight:800,letterSpacing:"-0.01em",color:"#FFFFFF",display:"flex",alignItems:"center",gap:8}}>
+                  Special Guests & Committee Directory
+                  <span style={{background:"rgba(255,255,255,0.15)",color:"#93C5FD",fontSize:".74rem",padding:"2px 8px",borderRadius:20,fontWeight:700}}>
+                    {globalGuests.length} Total Contacts
+                  </span>
+                </h2>
+                <p style={{margin:"3px 0 0 0",fontSize:".8rem",color:"#94A3B8"}}>
+                  Central address book: assign multiple committee groups, link official Vibhags, and import effortlessly into any workspace.
+                </p>
+              </div>
+            </div>
+
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <button
+                type="button"
+                onClick={() => handleExportDirectoryContacts(false)}
+                style={{
+                  padding:"7px 14px",
+                  borderRadius:8,
+                  background:"#10B981",
+                  color:"white",
+                  border:"none",
+                  fontWeight:800,
+                  fontSize:".8rem",
+                  cursor:"pointer",
+                  display:"flex",
+                  alignItems:"center",
+                  gap:6,
+                  boxShadow:"0 2px 6px rgba(16,185,129,0.3)"
+                }}
+                title="Export all directory contacts to Excel"
+              >
+                <span>📤</span> Export All ({globalGuests.length})
+              </button>
+
+              <button 
+                onClick={()=>{
+                  setShowGlobalGuestsModal(false); 
+                  setShowDirectoryModal(false);
+                  setEditingGuest(null);
+                  setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", vibhag: "", group: "CWC Member", groups: ["CWC Member"] });
+                }} 
+                style={{background:"rgba(255,255,255,0.1)",border:"none",borderRadius:8,width:34,height:34,cursor:"pointer",fontWeight:800,fontSize:"1.1rem",color:"#CBD5E1",display:"flex",alignItems:"center",justifyContent:"center"}}
+                title="Close Modal"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
-          <div style={{display:"flex",gap:24,flexDirection:mob?"column":"row"}}>
-            {/* Left Side Form: Add / Edit Contact */}
-            <div style={{flex:1.1}}>
-              <form onSubmit={handleAddGlobalGuest} style={{display:"flex",flexDirection:"column",gap:12}}>
-                {editingGuest && (
-                  <div style={{background:"#EFF6FF",border:"1.5px solid #93C5FD",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span style={{fontSize:".82rem",color:"#1E40AF",fontWeight:800}}>✏️ Editing Contact: {editingGuest["Full Name"]}</span>
-                    <button type="button" onClick={() => {
-                      setEditingGuest(null);
-                      setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", group: "CWC Member", groups: ["CWC Member"] });
-                    }} style={{background:"none",border:"none",color:"#EF4444",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}>Cancel Edit</button>
+          {/* Modal Body Container */}
+          <div style={{display:"flex",gap:20,flexDirection:mob?"column":"row",padding:20,overflowY:"auto",flex:1,background:"#F8FAFC"}}>
+            
+            {/* Left Column: Modern Card for Add / Edit Contact + Import Hub */}
+            <div style={{flex:1.05,display:"flex",flexDirection:"column",gap:16}}>
+              
+              {/* Form Card */}
+              <div style={{background:"#FFFFFF",borderRadius:14,border:"1px solid #E2E8F0",padding:18,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,paddingBottom:10,borderBottom:"1.5px solid #F1F5F9"}}>
+                  <div style={{fontSize:".92rem",fontWeight:800,color:"#0F172A",display:"flex",alignItems:"center",gap:6}}>
+                    <span>{editingGuest ? "✏️" : "➕"}</span>
+                    <span>{editingGuest ? `Edit: ${editingGuest["Full Name"] || editingGuest.Name}` : "Add New Contact"}</span>
                   </div>
-                )}
-
-                <div>
-                  <label style={{display:"block",fontSize:".82rem",fontWeight:700,marginBottom:4}}>Full Name (Required) *</label>
-                  <input type="text" required placeholder="e.g. Harish Makwana" value={guestForm.fullName} onChange={e=>setGuestForm({...guestForm, fullName: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".88rem"}} />
+                  {editingGuest && (
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setEditingGuest(null);
+                        setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", vibhag: "", group: "CWC Member", groups: ["CWC Member"] });
+                      }} 
+                      style={{background:"#FEE2E2",border:"none",color:"#DC2626",fontSize:".74rem",fontWeight:800,cursor:"pointer",padding:"3px 8px",borderRadius:6}}
+                    >
+                      Cancel Edit
+                    </button>
+                  )}
                 </div>
 
-                <div style={{display:"flex",gap:12}}>
-                  <div style={{flex:1}}>
-                    <label style={{display:"block",fontSize:".82rem",fontWeight:700,marginBottom:4}}>Designation / Role</label>
-                    <input type="text" placeholder="e.g. Trustee, CWC Member" value={guestForm.designation} onChange={e=>setGuestForm({...guestForm, designation: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".85rem"}} />
-                  </div>
-                  <div style={{flex:1}}>
-                    <label style={{display:"block",fontSize:".82rem",fontWeight:700,marginBottom:4}}>Mobile Number</label>
-                    <input type="text" placeholder="e.g. 9819728011" value={guestForm.mobile} onChange={e=>setGuestForm({...guestForm, mobile: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".85rem"}} />
-                  </div>
-                </div>
-
-                {/* Multi-Group Selector */}
-                <div style={{background:"#F8FAFC",padding:"12px",borderRadius:10,border:"1.5px solid #CBD5E1"}}>
-                  <label style={{display:"block",fontSize:".82rem",fontWeight:800,color:"#0F172A",marginBottom:4}}>
-                    🏷️ Assign Multiple Contact Groups:
-                  </label>
-                  <div style={{fontSize:".72rem",color:"#64748B",marginBottom:8}}>
-                    Click to add/remove groups. One person can belong to multiple committees.
-                  </div>
-                  
-                  {/* Active Group Badges */}
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
-                    {(guestForm.groups || []).map((grp, gIdx) => (
-                      <span key={gIdx} style={{background:"#DBEAFE",color:"#1E40AF",border:"1px solid #93C5FD",padding:"3px 8px",borderRadius:12,fontSize:".74rem",fontWeight:700,display:"inline-flex",alignItems:"center",gap:5}}>
-                        <span>👥 {grp}</span>
-                        <button 
-                          type="button" 
-                          onClick={() => {
-                            const updated = (guestForm.groups || []).filter((_, k) => k !== gIdx);
-                            setGuestForm({ ...guestForm, groups: updated, group: updated.join(", ") });
-                          }}
-                          style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer",padding:0,fontWeight:800,fontSize:".8rem"}}
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
-                    {(guestForm.groups || []).length === 0 && (
-                      <span style={{fontSize:".75rem",color:"#94A3B8",fontStyle:"italic"}}>No groups assigned yet. Click a group below.</span>
-                    )}
-                  </div>
-
-                  {/* Quick Add Suggested Groups */}
-                  <div style={{display:"flex",flexWrap:"wrap",gap:5,alignItems:"center",marginBottom:8}}>
-                    <span style={{fontSize:".7rem",color:"#475569",fontWeight:700}}>Quick Add:</span>
-                    {["CWC Member", "Trustee", "Education Committee", "Core Committee", "Volunteer", "Kalyan Team", "Special Guest of Honor"].map(quickG => {
-                      const isSelected = (guestForm.groups || []).includes(quickG);
-                      return (
-                        <button
-                          key={quickG}
-                          type="button"
-                          onClick={() => {
-                            const cur = guestForm.groups || [];
-                            const updated = isSelected ? cur.filter(x => x !== quickG) : [...cur, quickG];
-                            setGuestForm({ ...guestForm, groups: updated, group: updated.join(", ") });
-                          }}
-                          style={{
-                            padding:"3px 7px",
-                            borderRadius:6,
-                            fontSize:".7rem",
-                            fontWeight:700,
-                            cursor:"pointer",
-                            background: isSelected ? "#2563EB" : "white",
-                            color: isSelected ? "white" : "#334155",
-                            border: isSelected ? "1px solid #1D4ED8" : "1px solid #CBD5E1"
-                          }}
-                        >
-                          {isSelected ? ("✓ " + quickG) : ("+ " + quickG)}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Custom Group Name Input */}
-                  <div style={{display:"flex",gap:6}}>
+                <form onSubmit={handleAddGlobalGuest} style={{display:"flex",flexDirection:"column",gap:11}}>
+                  <div>
+                    <label style={{display:"block",fontSize:".78rem",fontWeight:800,color:"#334155",marginBottom:4}}>
+                      👤 Full Name (Required) *
+                    </label>
                     <input 
                       type="text" 
-                      placeholder="Type custom group (e.g. Audit Team)..." 
-                      id="custom_group_dir_inp"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          const val = e.target.value?.trim();
+                      required 
+                      placeholder="e.g. Harish Makwana" 
+                      value={guestForm.fullName} 
+                      onChange={e=>setGuestForm({...guestForm, fullName: e.target.value})} 
+                      style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".88rem",background:"#FAFAFA"}} 
+                    />
+                  </div>
+
+                  <div style={{display:"flex",gap:10}}>
+                    <div style={{flex:1}}>
+                      <label style={{display:"block",fontSize:".78rem",fontWeight:800,color:"#334155",marginBottom:4}}>
+                        🏷️ Designation / Role
+                      </label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. Trustee, CWC Member" 
+                        value={guestForm.designation} 
+                        onChange={e=>setGuestForm({...guestForm, designation: e.target.value})} 
+                        style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".85rem",background:"#FAFAFA"}} 
+                      />
+                    </div>
+                    <div style={{flex:1}}>
+                      <label style={{display:"block",fontSize:".78rem",fontWeight:800,color:"#334155",marginBottom:4}}>
+                        📱 Mobile Number
+                      </label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. 9819728011" 
+                        value={guestForm.mobile} 
+                        onChange={e=>setGuestForm({...guestForm, mobile: e.target.value})} 
+                        style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".85rem",background:"#FAFAFA"}} 
+                      />
+                    </div>
+                  </div>
+
+                  {/* Vibhag Selection from Official Standard Library (71 Vibhags) */}
+                  <div>
+                    <label style={{display:"block",fontSize:".78rem",fontWeight:800,color:"#15803D",marginBottom:4}}>
+                      📍 Assigned Vibhag (Select from Official 71 Vibhags)
+                    </label>
+                    <select
+                      value={guestForm.vibhag || ""}
+                      onChange={e => setGuestForm({ ...guestForm, vibhag: e.target.value })}
+                      style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #16A34A",background:"#F0FDF4",color:"#15803D",fontWeight:800,fontSize:".85rem",cursor:"pointer",boxSizing:"border-box"}}
+                    >
+                      <option value="">-- Select Assigned Vibhag (e.g. 15 RAMDEV NAGAR) --</option>
+                      {getStandardVibhagsList(C).map(v => (
+                        <option key={v} value={v}>📍 {v}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Multi-Group Selector */}
+                  <div style={{background:"#F8FAFC",padding:"10px 12px",borderRadius:10,border:"1.5px solid #E2E8F0"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <label style={{fontSize:".78rem",fontWeight:800,color:"#0F172A"}}>
+                        🏷️ Assign Multiple Contact Groups:
+                      </label>
+                      <span style={{fontSize:".7rem",color:"#64748B"}}>Multi-committee tagging</span>
+                    </div>
+
+                    {/* Active Group Badges */}
+                    <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8}}>
+                      {(guestForm.groups || []).map((grp, gIdx) => (
+                        <span key={gIdx} style={{background:"#DBEAFE",color:"#1E40AF",border:"1px solid #93C5FD",padding:"2px 8px",borderRadius:14,fontSize:".72rem",fontWeight:800,display:"inline-flex",alignItems:"center",gap:4}}>
+                          <span>👥 {grp}</span>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              const updated = (guestForm.groups || []).filter((_, k) => k !== gIdx);
+                              setGuestForm({ ...guestForm, groups: updated, group: updated.join(", ") });
+                            }}
+                            style={{background:"none",border:"none",color:"#DC2626",cursor:"pointer",padding:0,fontWeight:800,fontSize:".8rem",lineHeight:1}}
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))}
+                      {(guestForm.groups || []).length === 0 && (
+                        <span style={{fontSize:".72rem",color:"#94A3B8",fontStyle:"italic"}}>No groups assigned. Choose from below or add custom.</span>
+                      )}
+                    </div>
+
+                    {/* Quick Add Suggested Groups */}
+                    <div style={{display:"flex",flexWrap:"wrap",gap:4,alignItems:"center",marginBottom:8}}>
+                      <span style={{fontSize:".68rem",color:"#64748B",fontWeight:700}}>Quick Add:</span>
+                      {["CWC Member", "Trustee", "Education Committee", "Core Committee", "Volunteer", "Special Guest"].map(quickG => {
+                        const isSelected = (guestForm.groups || []).includes(quickG);
+                        return (
+                          <button
+                            key={quickG}
+                            type="button"
+                            onClick={() => {
+                              const cur = guestForm.groups || [];
+                              const updated = isSelected ? cur.filter(x => x !== quickG) : [...cur, quickG];
+                              setGuestForm({ ...guestForm, groups: updated, group: updated.join(", ") });
+                            }}
+                            style={{
+                              padding:"2px 6px",
+                              borderRadius:5,
+                              fontSize:".68rem",
+                              fontWeight:700,
+                              cursor:"pointer",
+                              background: isSelected ? "#2563EB" : "white",
+                              color: isSelected ? "white" : "#334155",
+                              border: isSelected ? "1px solid #1D4ED8" : "1px solid #CBD5E1"
+                            }}
+                          >
+                            {isSelected ? ("✓ " + quickG) : ("+ " + quickG)}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Custom Group Name Input */}
+                    <div style={{display:"flex",gap:6}}>
+                      <input 
+                        type="text" 
+                        placeholder="Type new group name (e.g. Audit Team)..." 
+                        id="custom_group_dir_inp"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const val = e.target.value?.trim();
+                            if (val) {
+                              const cur = guestForm.groups || [];
+                              if (!cur.includes(val)) {
+                                const updated = [...cur, val];
+                                setGuestForm({ ...guestForm, groups: updated, group: updated.join(", ") });
+                              }
+                              e.target.value = "";
+                            }
+                          }
+                        }}
+                        style={{flex:1,padding:"5px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".76rem",fontFamily:"inherit",background:"white"}} 
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const inp = document.getElementById("custom_group_dir_inp");
+                          const val = inp?.value?.trim();
                           if (val) {
                             const cur = guestForm.groups || [];
                             if (!cur.includes(val)) {
                               const updated = [...cur, val];
                               setGuestForm({ ...guestForm, groups: updated, group: updated.join(", ") });
                             }
-                            e.target.value = "";
+                            inp.value = "";
                           }
-                        }
-                      }}
-                      style={{flex:1,padding:"6px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".8rem",fontFamily:"inherit"}} 
-                    />
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        const inp = document.getElementById("custom_group_dir_inp");
-                        const val = inp?.value?.trim();
-                        if (val) {
-                          const cur = guestForm.groups || [];
-                          if (!cur.includes(val)) {
-                            const updated = [...cur, val];
-                            setGuestForm({ ...guestForm, groups: updated, group: updated.join(", ") });
-                          }
-                          inp.value = "";
-                        }
-                      }}
-                      style={{padding:"6px 12px",background:"#0D4B5E",color:"white",border:"none",borderRadius:6,fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
-                    >
-                      + Add
-                    </button>
+                        }}
+                        style={{padding:"5px 10px",background:"#0D4B5E",color:"white",border:"none",borderRadius:6,fontSize:".74rem",fontWeight:800,cursor:"pointer"}}
+                      >
+                        + Add
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                <div style={{display:"flex",gap:12}}>
-                  <div style={{flex:1}}>
-                    <label style={{display:"block",fontSize:".82rem",fontWeight:700,marginBottom:4}}>Email</label>
-                    <input type="email" placeholder="Optional" value={guestForm.email} onChange={e=>setGuestForm({...guestForm, email: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".85rem"}} />
+                  <div style={{display:"flex",gap:10}}>
+                    <div style={{flex:1}}>
+                      <label style={{display:"block",fontSize:".78rem",fontWeight:800,color:"#334155",marginBottom:4}}>✉️ Email</label>
+                      <input type="email" placeholder="Optional" value={guestForm.email} onChange={e=>setGuestForm({...guestForm, email: e.target.value})} style={{width:"100%",padding:"7px 10px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".82rem",background:"#FAFAFA"}} />
+                    </div>
+                    <div style={{flex:1}}>
+                      <label style={{display:"block",fontSize:".78rem",fontWeight:800,color:"#334155",marginBottom:4}}>🏠 Address / Location</label>
+                      <input type="text" placeholder="e.g. Mahim, Mumbai" value={guestForm.address} onChange={e=>setGuestForm({...guestForm, address: e.target.value})} style={{width:"100%",padding:"7px 10px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".82rem",background:"#FAFAFA"}} />
+                    </div>
                   </div>
-                  <div style={{flex:1}}>
-                    <label style={{display:"block",fontSize:".82rem",fontWeight:700,marginBottom:4}}>Address / Location</label>
-                    <input type="text" placeholder="e.g. Mahim, Mumbai" value={guestForm.address} onChange={e=>setGuestForm({...guestForm, address: e.target.value})} style={{width:"100%",padding:"8px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",boxSizing:"border-box",fontFamily:"inherit",fontSize:".85rem"}} />
-                  </div>
-                </div>
 
-                <button type="submit" disabled={addingGuest} style={{padding:"11px 20px",borderRadius:8,border:"none",background:editingGuest ? "linear-gradient(135deg, #15803D, #166534)" : "var(--dt)",color:"white",cursor:addingGuest?"wait":"pointer",fontWeight:800,fontSize:".9rem",marginTop:6,boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>
-                  {addingGuest ? "Saving..." : editingGuest ? "💾 Save Updated Contact" : "➕ Add to Directory"}
-                </button>
-              </form>
+                  <button 
+                    type="submit" 
+                    disabled={addingGuest} 
+                    style={{
+                      padding:"10px 16px",
+                      borderRadius:8,
+                      border:"none",
+                      background:editingGuest ? "linear-gradient(135deg, #15803D, #166534)" : "linear-gradient(135deg, #0D4B5E, #135D74)",
+                      color:"white",
+                      cursor:addingGuest?"wait":"pointer",
+                      fontWeight:800,
+                      fontSize:".88rem",
+                      marginTop:4,
+                      boxShadow:"0 2px 8px rgba(0,0,0,0.12)"
+                    }}
+                  >
+                    {addingGuest ? "Saving..." : editingGuest ? "💾 Save Updated Contact" : "➕ Add to Directory"}
+                  </button>
+                </form>
+              </div>
 
-              <div style={{marginTop:18,borderTop:"1.5px solid #E2E8F0",paddingTop:14,background:"#F8FAFC",padding:"12px 14px",borderRadius:10,border:"1px solid #E2E8F0"}}>
+              {/* Import & Templates Card */}
+              <div style={{background:"#FFFFFF",borderRadius:14,border:"1px solid #E2E8F0",padding:16,boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <label style={{fontSize:".82rem",fontWeight:800,color:"#0F172A"}}>📥 Bulk Import via Excel / CSV:</label>
+                  <span style={{fontSize:".85rem",fontWeight:800,color:"#0F172A",display:"flex",alignItems:"center",gap:6}}>
+                    <span>📥</span> Bulk Import via Excel / CSV (with Vibhag)
+                  </span>
                 </div>
+                <p style={{fontSize:".72rem",color:"#64748B",margin:"0 0 10px 0"}}>
+                  Download our ready template with the new <strong>Vibhag</strong> column pre-formatted:
+                </p>
 
                 <div style={{display:"flex",gap:8,marginBottom:10}}>
                   <button 
                     type="button" 
                     onClick={handleDownloadSampleExcel}
-                    style={{flex:1,padding:"7px 10px",borderRadius:6,background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #93C5FD",fontWeight:700,fontSize:".74rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}
+                    style={{flex:1,padding:"7px 10px",borderRadius:6,background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #BFDBFE",fontWeight:800,fontSize:".74rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}
                   >
                     <span>📊</span> Sample Excel (.xlsx)
                   </button>
                   <button 
                     type="button" 
                     onClick={handleDownloadSampleCsv}
-                    style={{flex:1,padding:"7px 10px",borderRadius:6,background:"#F0FDF4",color:"#15803D",border:"1px solid #86EFAC",fontWeight:700,fontSize:".74rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}
+                    style={{flex:1,padding:"7px 10px",borderRadius:6,background:"#F0FDF4",color:"#15803D",border:"1px solid #BBF7D0",fontWeight:800,fontSize:".74rem",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}
                   >
                     <span>📄</span> Sample CSV (.csv)
                   </button>
@@ -24210,63 +33013,106 @@ This cannot be undone.`)) return;
                   type="button"
                   onClick={() => fileInputRef.current?.click()} 
                   disabled={uploadingExcel} 
-                  style={{width:"100%",padding:"10px",borderRadius:8,background:"linear-gradient(135deg, #0D4B5E, #135D74)",color:"white",border:"none",fontWeight:800,cursor:uploadingExcel?"wait":"pointer",fontSize:".84rem",display:"flex",alignItems:"center",justifyContent:"center",gap:6,boxShadow:"0 2px 6px rgba(13,75,94,0.2)"}}
+                  style={{
+                    width:"100%",
+                    padding:"9px",
+                    borderRadius:8,
+                    background:"linear-gradient(135deg, #0284C7, #0369A1)",
+                    color:"white",
+                    border:"none",
+                    fontWeight:800,
+                    cursor:uploadingExcel?"wait":"pointer",
+                    fontSize:".82rem",
+                    display:"flex",
+                    alignItems:"center",
+                    justifyContent:"center",
+                    gap:6,
+                    boxShadow:"0 2px 6px rgba(2,132,199,0.25)"
+                  }}
                 >
                   <span>📂</span> {uploadingExcel ? "Importing Contacts..." : "Upload Completed Excel / CSV File"}
                 </button>
               </div>
             </div>
 
-            {/* Right Side: Sleek, Compact Directory List with Space-Efficient Filter Bar */}
-            <div style={{flex:1.4,borderLeft:mob?"none":"1.5px solid #E2E8F0",paddingLeft:mob?0:20}}>
-              {/* Header & Single-Row Search + Compact Filter Pills with +N More (No Scroll Needed) */}
-              <div style={{marginBottom:10}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                  <span style={{fontSize:".92rem",fontWeight:800,color:"#0F172A"}}>
-                    Contacts Directory ({filteredDirectoryGuests.length} / {globalGuests.length})
-                  </span>
-                  {directoryGroupFilter !== "All" && (
-                    <button 
-                      type="button" 
-                      onClick={() => setDirectoryGroupFilter("All")}
-                      style={{background:"none",border:"none",color:"#2563EB",fontSize:".74rem",fontWeight:700,cursor:"pointer"}}
+            {/* Right Column: Sleek Directory Contacts List with Category Pills & Search */}
+            <div style={{flex:1.45,display:"flex",flexDirection:"column",gap:10}}>
+              
+              {/* Directory Filter & Search Header Card */}
+              <div style={{background:"#FFFFFF",borderRadius:14,border:"1px solid #E2E8F0",padding:"12px 14px",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:".92rem",fontWeight:800,color:"#0F172A"}}>
+                      Contacts Directory
+                    </span>
+                    <span style={{fontSize:".74rem",background:"#E0F2FE",color:"#0369A1",fontWeight:800,padding:"2px 8px",borderRadius:12}}>
+                      {filteredDirectoryGuests.length} of {globalGuests.length}
+                    </span>
+                  </div>
+
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    {directoryGroupFilter !== "All" && (
+                      <button 
+                        type="button" 
+                        onClick={() => setDirectoryGroupFilter("All")}
+                        style={{background:"none",border:"none",color:"#2563EB",fontSize:".74rem",fontWeight:800,cursor:"pointer"}}
+                      >
+                        Reset Group
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleExportDirectoryContacts(true)}
+                      style={{
+                        padding:"4px 10px",
+                        borderRadius:6,
+                        background:"#F0FDF4",
+                        border:"1px solid #86EFAC",
+                        color:"#166534",
+                        fontSize:".74rem",
+                        fontWeight:800,
+                        cursor:"pointer",
+                        display:"flex",
+                        alignItems:"center",
+                        gap:4
+                      }}
+                      title="Export currently filtered contacts to Excel"
                     >
-                      Reset Filter (Show All)
+                      <span>📥</span> Export Filtered
                     </button>
-                  )}
+                  </div>
                 </div>
 
-                {/* Single Compact Row: Reduced Search Box + Quick Filter Pills + More Dropdown */}
-                <div style={{display:"flex",gap:6,alignItems:"center",background:"#F8FAFC",padding:"6px 8px",borderRadius:8,border:"1px solid #CBD5E1",flexWrap:"wrap"}}>
-                  {/* Reduced Search Box */}
-                  <div style={{width: 145, flexShrink: 0}}>
+                {/* Search Bar & Filter Pills */}
+                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                  <div style={{flex:1,minWidth:180}}>
                     <input 
                       type="text" 
-                      placeholder="🔍 Search..." 
+                      placeholder="🔍 Search name, mobile, vibhag, designation..." 
                       value={directorySearch}
                       onChange={e => setDirectorySearch(e.target.value)}
-                      style={{width:"100%",padding:"5px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".75rem",fontFamily:"inherit",boxSizing:"border-box",background:"white"}}
+                      style={{width:"100%",padding:"6px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".78rem",fontFamily:"inherit",boxSizing:"border-box",background:"#FAFAFA"}}
                     />
                   </div>
 
-                  {/* Quick Filter Pills (Top 2-3 + "+N more...") */}
-                  <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap",flex:1}}>
+                  <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
                     <button
                       type="button"
                       onClick={() => setDirectoryGroupFilter("All")}
                       style={{
-                        padding:"3px 7px",
+                        padding:"4px 8px",
                         borderRadius:6,
-                        fontSize:".69rem",
+                        fontSize:".7rem",
                         fontWeight:800,
                         cursor:"pointer",
-                        border: directoryGroupFilter === "All" ? "1px solid #0D4B5E" : "1px solid #CBD5E1",
-                        background: directoryGroupFilter === "All" ? "#0D4B5E" : "white",
+                        border: directoryGroupFilter === "All" ? "1px solid #0F172A" : "1px solid #CBD5E1",
+                        background: directoryGroupFilter === "All" ? "#0F172A" : "white",
                         color: directoryGroupFilter === "All" ? "white" : "#475569"
                       }}
                     >
                       All ({globalGuests.length})
                     </button>
+
                     {uniqueGroups.slice(0, 2).map(grp => {
                       const count = globalGuests.filter(g => getContactGroups(g).includes(grp)).length;
                       const isActive = directoryGroupFilter === grp;
@@ -24276,13 +33122,13 @@ This cannot be undone.`)) return;
                           type="button"
                           onClick={() => setDirectoryGroupFilter(grp)}
                           style={{
-                            padding:"3px 7px",
+                            padding:"4px 8px",
                             borderRadius:6,
-                            fontSize:".69rem",
+                            fontSize:".7rem",
                             fontWeight:700,
                             cursor:"pointer",
-                            border: isActive ? "1px solid #0D4B5E" : "1px solid #CBD5E1",
-                            background: isActive ? "#0D4B5E" : "#FFFFFF",
+                            border: isActive ? "1px solid #2563EB" : "1px solid #CBD5E1",
+                            background: isActive ? "#2563EB" : "white",
                             color: isActive ? "white" : "#334155"
                           }}
                         >
@@ -24291,21 +33137,20 @@ This cannot be undone.`)) return;
                       );
                     })}
 
-                    {/* Dropdown for All / Remaining Groups */}
+                    {/* Remaining Groups Dropdown */}
                     <select
                       value={directoryGroupFilter}
                       onChange={e => setDirectoryGroupFilter(e.target.value)}
                       style={{
-                        padding:"3px 6px",
+                        padding:"4px 8px",
                         borderRadius:6,
-                        border: uniqueGroups.slice(2).includes(directoryGroupFilter) ? "1px solid #0D4B5E" : "1px solid #CBD5E1",
-                        fontSize:".69rem",
+                        border: uniqueGroups.slice(2).includes(directoryGroupFilter) ? "1px solid #2563EB" : "1px solid #CBD5E1",
+                        fontSize:".7rem",
                         fontWeight:700,
-                        background: uniqueGroups.slice(2).includes(directoryGroupFilter) ? "#0D4B5E" : "white",
+                        background: uniqueGroups.slice(2).includes(directoryGroupFilter) ? "#2563EB" : "white",
                         color: uniqueGroups.slice(2).includes(directoryGroupFilter) ? "white" : "#0F172A",
                         cursor:"pointer",
-                        outline:"none",
-                        maxWidth: 150
+                        outline:"none"
                       }}
                     >
                       <option value="All">
@@ -24324,54 +33169,156 @@ This cannot be undone.`)) return;
                 </div>
               </div>
 
-              {/* Contact Cards List with Compact Group Badges */}
-              <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:450,overflowY:"auto",paddingRight:4}}>
-                {(() => {
-                  let list = filteredDirectoryGuests;
-                  if (directorySearch && directorySearch.trim()) {
-                    const q = directorySearch.trim().toLowerCase();
-                    list = list.filter(g => {
-                      const name = String(g["Full Name"] || g.Name || "").toLowerCase();
-                      const mobile = String(g.Mobile || g["Mobile Number"] || "").toLowerCase();
-                      const desig = String(g.Designation || "").toLowerCase();
-                      const grps = getContactGroups(g).join(" ").toLowerCase();
-                      return name.includes(q) || mobile.includes(q) || desig.includes(q) || grps.includes(q);
-                    });
-                  }
+              {/* Bulk Group Toolbar (when checkboxes selected) */}
+              {selectedDirectoryGuestIds.length > 0 && (
+                <div style={{background:"#EFF6FF",border:"1.5px solid #3B82F6",borderRadius:10,padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,boxShadow:"0 2px 8px rgba(59,130,246,0.15)"}}>
+                  <div style={{fontSize:".78rem",color:"#1E40AF",fontWeight:800,display:"flex",alignItems:"center",gap:6}}>
+                    <span>🏷️</span> Assign Group to Selected (<strong>{selectedDirectoryGuestIds.length}</strong> contacts):
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                    <select
+                      value={bulkGroupToAdd}
+                      onChange={e => { setBulkGroupToAdd(e.target.value); if (e.target.value !== '__custom__') setCustomBulkGroupInput(''); }}
+                      style={{padding:"4px 8px",borderRadius:6,border:"1px solid #93C5FD",fontSize:".74rem",fontWeight:700,background:"white",color:"#1E3A8A"}}
+                    >
+                      <option value="">-- Choose Group --</option>
+                      {uniqueGroups.map(grp => (
+                        <option key={grp} value={grp}>👥 {grp}</option>
+                      ))}
+                      <option value="__custom__">➕ + Type New Group...</option>
+                    </select>
+                    {bulkGroupToAdd === '__custom__' && (
+                      <input
+                        type="text"
+                        placeholder="Enter group name..."
+                        value={customBulkGroupInput}
+                        onChange={e => setCustomBulkGroupInput(e.target.value)}
+                        style={{padding:"4px 8px",borderRadius:6,border:"1.5px solid #2563EB",fontSize:".74rem",width:140}}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      disabled={applyingBulkGroup || (!bulkGroupToAdd && !customBulkGroupInput)}
+                      onClick={() => handleApplyBulkGroupToSelected()}
+                      style={{padding:"4px 10px",background:"#2563EB",color:"white",border:"none",borderRadius:6,fontSize:".74rem",fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                    >
+                      <span>✓</span> {applyingBulkGroup ? "Assigning..." : "Apply"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDirectoryGuestIds([])}
+                      style={{padding:"4px 8px",background:"white",color:"#64748B",border:"1px solid #CBD5E1",borderRadius:6,fontSize:".72rem",fontWeight:700,cursor:"pointer"}}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              )}
 
-                  if (list.length === 0) {
-                    return (
-                      <div style={{color:"var(--mu)",fontSize:".84rem",padding:16,textAlign:"center",background:"#F8FAFC",borderRadius:8,border:"1px dashed #CBD5E1"}}>
-                        No matching contacts found {directorySearch ? `for "${directorySearch}"` : `in "${directoryGroupFilter}"`}.
-                      </div>
-                    );
-                  }
+              {/* Select All Row */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"2px 6px"}}>
+                <label style={{display:"flex",alignItems:"center",gap:6,fontSize:".74rem",fontWeight:800,color:"#475569",cursor:"pointer"}}>
+                  <input
+                    type="checkbox"
+                    checked={filteredDirectoryGuests.length > 0 && filteredDirectoryGuests.every(g => selectedDirectoryGuestIds.includes(g.id))}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        const allIds = filteredDirectoryGuests.map(g => g.id);
+                        setSelectedDirectoryGuestIds(prev => Array.from(new Set([...prev, ...allIds])));
+                      } else {
+                        const curFilteredIds = new Set(filteredDirectoryGuests.map(g => g.id));
+                        setSelectedDirectoryGuestIds(prev => prev.filter(id => !curFilteredIds.has(id)));
+                      }
+                    }}
+                    style={{cursor:"pointer",accentColor:"#2563EB"}}
+                  />
+                  <span>Select All Filtered ({filteredDirectoryGuests.length})</span>
+                </label>
+                {selectedDirectoryGuestIds.length > 0 && (
+                  <span style={{fontSize:".72rem",color:"#2563EB",fontWeight:800}}>
+                    {selectedDirectoryGuestIds.length} Selected
+                  </span>
+                )}
+              </div>
 
-                  return list.map(g => {
+              {/* Contacts Directory Cards List */}
+              <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:440,overflowY:"auto",paddingRight:4}}>
+                {filteredDirectoryGuests.length === 0 ? (
+                  <div style={{color:"#64748B",fontSize:".84rem",padding:24,textAlign:"center",background:"#FFFFFF",borderRadius:12,border:"1px dashed #CBD5E1"}}>
+                    No matching contacts found {directorySearch ? `for "${directorySearch}"` : `in "${directoryGroupFilter}"`}.
+                  </div>
+                ) : (
+                  filteredDirectoryGuests.map(g => {
                     const cGroups = getContactGroups(g);
                     const isExpanded = !!expandedCardGroups[g.id];
                     const visibleGroups = isExpanded ? cGroups : cGroups.slice(0, 3);
                     const hiddenCount = cGroups.length - visibleGroups.length;
+                    const resolvedV = (typeof resolveGuestVibhag === 'function' ? resolveGuestVibhag(g) : (g.vibhag || g['Vibhag'] || g['Vibhag New'])) || '';
+                    const initials = (g["Full Name"] || g.Name || "M").split(" ").map(w=>w[0]).filter(Boolean).slice(0,2).join("").toUpperCase();
 
                     return (
-                      <div key={g.id} style={{padding:"9px 12px",border:"1px solid #E2E8F0",borderRadius:10,background:"#FAFAFA",display:"flex",flexDirection:"column",gap:4,transition:"all .15s"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                          <div>
-                            <div style={{fontWeight:800,color:"#0F172A",fontSize:".88rem",display:"flex",alignItems:"center",gap:6}}>
-                              <span>{g["Full Name"]}</span>
-                              {g.Designation && (
-                                <span style={{fontSize:".72rem",fontWeight:600,color:"#0D4B5E",background:"#E0F2FE",padding:"1px 6px",borderRadius:4}}>
-                                  {g.Designation}
-                                </span>
-                              )}
+                      <div 
+                        key={g.id} 
+                        style={{
+                          padding:"10px 14px",
+                          border: selectedDirectoryGuestIds.includes(g.id) ? "1.5px solid #3B82F6" : "1px solid #E2E8F0",
+                          borderLeft: resolvedV ? "4px solid #16A34A" : "4px solid #94A3B8",
+                          borderRadius:12,
+                          background: selectedDirectoryGuestIds.includes(g.id) ? "#EFF6FF" : "#FFFFFF",
+                          display:"flex",
+                          flexDirection:"column",
+                          gap:6,
+                          boxShadow:"0 1px 3px rgba(0,0,0,0.03)"
+                        }}
+                      >
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+                          <div style={{display:"flex",alignItems:"flex-start",gap:10,minWidth:0}}>
+                            <input
+                              type="checkbox"
+                              checked={selectedDirectoryGuestIds.includes(g.id)}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                setSelectedDirectoryGuestIds(prev => 
+                                  prev.includes(g.id) ? prev.filter(x => x !== g.id) : [...prev, g.id]
+                                );
+                              }}
+                              style={{marginTop:4,width:16,height:16,cursor:"pointer",accentColor:"#2563EB",flexShrink:0}}
+                            />
+
+                            {/* Initials Avatar */}
+                            <div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg, #0D4B5E, #135D74)",color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:".74rem",fontWeight:800,flexShrink:0}}>
+                              {initials}
                             </div>
-                            <div style={{fontSize:".76rem",color:"#64748B",marginTop:2}}>
-                              {g.Mobile ? ("📱 " + g.Mobile) : "No Mobile"} {g.Address ? (" • 📍 " + g.Address) : ""}
+
+                            <div style={{minWidth:0}}>
+                              <div style={{fontWeight:800,color:"#0F172A",fontSize:".88rem",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                                <span>{g["Full Name"] || g.Name}</span>
+                                {g.Designation && (
+                                  <span style={{fontSize:".7rem",fontWeight:700,color:"#0369A1",background:"#E0F2FE",padding:"1px 6px",borderRadius:4}}>
+                                    {g.Designation}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{fontSize:".74rem",color:"#64748B",marginTop:2,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                                <span style={{fontWeight:600,color:"#334155"}}>📱 {g.Mobile || g['Mobile Number'] || "No Mobile"}</span>
+                                {resolvedV ? (
+                                  <span style={{background:"#F0FDF4",color:"#15803D",border:"1px solid #BBF7D0",padding:"1px 6px",borderRadius:4,fontSize:".68rem",fontWeight:800}}>
+                                    📍 {resolvedV}
+                                  </span>
+                                ) : (
+                                  <span style={{background:"#FFFBEB",color:"#B45309",border:"1px solid #FDE68A",padding:"1px 5px",borderRadius:4,fontSize:".65rem",fontWeight:700}}>
+                                    📍 No Vibhag
+                                  </span>
+                                )}
+                                {g.Address ? <span style={{color:"#94A3B8"}}>• 🏠 {g.Address}</span> : null}
+                              </div>
                             </div>
                           </div>
-                          <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+
+                          {/* Actions */}
+                          <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
                             <button 
-                              type="button"
+                              type="button" 
                               onClick={() => {
                                 setEditingGuest(g);
                                 setGuestForm({
@@ -24380,40 +33327,47 @@ This cannot be undone.`)) return;
                                   email: g.Email || "",
                                   address: g.Address || "",
                                   designation: g.Designation || "",
+                                  vibhag: resolvedV || g.vibhag || g['Vibhag'] || g['Vibhag New'] || "",
                                   group: cGroups.join(", "),
                                   groups: cGroups
                                 });
                               }} 
-                              style={{background:"#EFF6FF",border:"1px solid #BFDBFE",color:"#1D4ED8",fontSize:".74rem",fontWeight:800,cursor:"pointer",padding:"3px 8px",borderRadius:6}}
+                              style={{background:"#EFF6FF",border:"1px solid #BFDBFE",color:"#1D4ED8",fontSize:".72rem",fontWeight:800,cursor:"pointer",padding:"3px 8px",borderRadius:6}}
                             >
                               ✏️ Edit
                             </button>
                             <button 
-                              type="button"
+                              type="button" 
                               onClick={()=>handleDeleteGlobalGuest(g)} 
-                              style={{background:"none",border:"none",color:"#DC2626",fontSize:".74rem",cursor:"pointer",textDecoration:"underline"}}
+                              style={{background:"#FEF2F2",border:"1px solid #FECACA",color:"#DC2626",fontSize:".72rem",fontWeight:700,cursor:"pointer",padding:"3px 7px",borderRadius:6}}
+                              title="Delete from directory"
                             >
-                              Remove
+                              🗑️
                             </button>
                           </div>
                         </div>
 
-                        {/* Compact Multi-Group Badges with +N More Pill */}
+                        {/* Multi-Group Badges */}
                         <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:2,alignItems:"center"}}>
                           {visibleGroups.map((grp, k) => (
                             <span 
                               key={k} 
-                              onClick={() => setDirectoryGroupFilter(grp)}
-                              style={{background:"#DCFCE7",color:"#15803D",padding:"2px 6px",borderRadius:6,fontSize:".67rem",fontWeight:700,border:"1px solid #86EFAC",cursor:"pointer"}}
-                              title={"Filter by " + grp}
+                              style={{background:"#DCFCE7",color:"#15803D",padding:"2px 6px",borderRadius:6,fontSize:".66rem",fontWeight:700,border:"1px solid #86EFAC",display:"inline-flex",alignItems:"center",gap:3}}
                             >
-                              👥 {grp}
+                              <span onClick={() => setDirectoryGroupFilter(grp)} style={{cursor:"pointer"}} title={"Filter by " + grp}>👥 {grp}</span>
+                              <span 
+                                onClick={(e) => { e.stopPropagation(); handleQuickRemoveGroupFromContact(g, grp); }} 
+                                style={{cursor:"pointer",color:"#DC2626",fontWeight:800,fontSize:".65rem",marginLeft:2}} 
+                                title={"Remove " + grp + " from this contact"}
+                              >
+                                ✕
+                              </span>
                             </span>
                           ))}
                           {hiddenCount > 0 && (
                             <span 
                               onClick={() => setExpandedCardGroups(prev => ({ ...prev, [g.id]: true }))}
-                              style={{background:"#FEF3C7",color:"#92400E",border:"1px solid #FDE68A",padding:"2px 6px",borderRadius:6,fontSize:".67rem",fontWeight:800,cursor:"pointer"}}
+                              style={{background:"#FEF3C7",color:"#92400E",border:"1px solid #FDE68A",padding:"2px 6px",borderRadius:6,fontSize:".66rem",fontWeight:800,cursor:"pointer"}}
                               title="Click to view all groups"
                             >
                               +{hiddenCount} more...
@@ -24422,16 +33376,38 @@ This cannot be undone.`)) return;
                           {isExpanded && cGroups.length > 3 && (
                             <span 
                               onClick={() => setExpandedCardGroups(prev => ({ ...prev, [g.id]: false }))}
-                              style={{background:"#F1F5F9",color:"#64748B",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:6,fontSize:".67rem",fontWeight:700,cursor:"pointer"}}
+                              style={{background:"#F1F5F9",color:"#64748B",border:"1px solid #CBD5E1",padding:"2px 6px",borderRadius:6,fontSize:".66rem",fontWeight:700,cursor:"pointer"}}
                             >
                               Collapse ▴
                             </span>
                           )}
+
+                          {/* Inline Tag Group Dropdown */}
+                          <select
+                            value=""
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === '__new__') {
+                                const customName = prompt("Enter new contact group name (e.g. Vibhag Pramukh, Core Committee):");
+                                if (customName && customName.trim()) handleQuickAddGroupToContact(g, customName.trim());
+                              } else if (val) {
+                                handleQuickAddGroupToContact(g, val);
+                              }
+                            }}
+                            style={{fontSize:".65rem",fontWeight:700,padding:"1px 4px",borderRadius:4,border:"1px dashed #93C5FD",background:"#F0F9FF",color:"#0369A1",cursor:"pointer"}}
+                            title="Quick tag this contact with a group"
+                          >
+                            <option value="">➕ Tag Group...</option>
+                            {uniqueGroups.filter(grp => !cGroups.includes(grp)).map(grp => (
+                              <option key={grp} value={grp}>+ {grp}</option>
+                            ))}
+                            <option value="__new__">➕ + New Group...</option>
+                          </select>
                         </div>
                       </div>
                     );
-                  });
-                })()}
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -24440,7 +33416,7 @@ This cannot be undone.`)) return;
     );
   };
 
-  let availableFields = [];
+    let availableFields = [];
   if (selectedEventId) {
     const ev = inviteEvents.find(e => e.id === selectedEventId);
     const keys = new Set(Object.keys(ev?.inviteMap || {}));
@@ -24567,6 +33543,45 @@ This cannot be undone.`)) return;
         />
       )}
 
+      {/* Import Event & Section Registrations Modal */}
+      {showImportEventRegsModal && (
+        <ImportEventRegistrationsModal
+          isOpen={showImportEventRegsModal}
+          onClose={() => setShowImportEventRegsModal(false)}
+          activeEvent={activeEvent}
+          allEvents={C.events || []}
+          allRegs={regs || []}
+          currentDocTpl={currentDocTpl}
+          availableDocTemplates={availableDocTemplates}
+          auth={auth}
+          C={C}
+          onImportSuccess={(newRegs) => {
+            if (Array.isArray(newRegs) && newRegs.length > 0) {
+              setRegs(prev => {
+                const map = new Map(prev.map(r => [r.id, r]));
+                newRegs.forEach(nr => map.set(nr.id, { ...(map.get(nr.id) || {}), ...nr }));
+                return Array.from(map.values());
+              });
+            }
+            fetchRegs();
+          }}
+        />
+      )}
+
+      {/* Connect Existing Template Modal */}
+      {showConnectTplModal && (
+        <ConnectExistingTemplateModal
+          isOpen={showConnectTplModal}
+          onClose={() => setShowConnectTplModal(false)}
+          activeEvent={activeEvent}
+          C={C}
+          setC={setC}
+          auth={auth}
+          currentDocTpl={currentDocTpl}
+          onConnected={(newId) => setActiveDocType(newId)}
+        />
+      )}
+
       {/* Workspace Multi-Template Modal */}
       {showWorkspaceTplModal && (
         <WorkspaceWhatsAppTemplateModal
@@ -24574,10 +33589,255 @@ This cannot be undone.`)) return;
           C={C}
           setC={setC}
           auth={auth}
-          onClose={() => setShowWorkspaceTplModal(false)}
+          allRegs={regs || []}
+          initialTab={tplModalMode || "whatsapp"}
+          initialPdfTplId={selectedPdfTplId || null}
+          onClose={() => {
+            setShowWorkspaceTplModal(false);
+            setTplModalMode("whatsapp");
+            setSelectedPdfTplId(null);
+          }}
         />
       )}
-      {/* WhatsApp Invite Letter Template Modal */}
+            {/* Visual PDF Template Configuration & Variable Mapper Modal */}
+      {configModal && (
+        <CertificateConfigModal
+          ev={configModal.ev || activeEvent}
+          auth={auth}
+          forms={C.forms}
+          type={configModal.type || 'cert'}
+          customTpl={configModal.customTpl}
+          onClose={() => setConfigModal(null)}
+          onSave={handleSaveTemplateConfig}
+        />
+      )}
+
+      {/* PDF Templates & Passes Manager Modal (Directly in Workspace) */}
+      {showTemplatesManagerModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100005,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowTemplatesManagerModal(false)}>
+          <div style={{background:"white",borderRadius:16,maxWidth:780,width:"100%",maxHeight:"90vh",overflowY:"auto",padding:24,boxShadow:"0 20px 45px rgba(0,0,0,0.35)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,borderBottom:"1px solid #E2E8F0",paddingBottom:12}}>
+              <div>
+                <h3 style={{fontSize:"1.15rem",fontWeight:800,color:"#0D4B5E",margin:0,display:"flex",alignItems:"center",gap:8}}>
+                  <span>📑</span> PDF Templates & Passes Manager
+                </h3>
+                <div style={{fontSize:".8rem",color:"#64748B",marginTop:3}}>
+                  Manage, upload backgrounds, map variables, and release PDF passes for: <strong>{activeEvent.title}</strong>
+                </div>
+              </div>
+              <button onClick={()=>setShowTemplatesManagerModal(false)} style={{background:"#F1F5F9",border:"none",borderRadius:"50%",width:32,height:32,cursor:"pointer",fontWeight:800,fontSize:"1rem"}}>✕</button>
+            </div>
+
+            {/* Standard Built-in Templates Section */}
+            <div style={{marginBottom:16,background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:14}}>
+              <div style={{fontSize:".82rem",fontWeight:800,color:"#1E293B",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+                <span>📜</span> Primary Event Documents
+              </div>
+
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {/* Official Invite Letter */}
+                <div style={{background:"white",padding:"10px 14px",borderRadius:8,border:"1px solid #CBD5E1",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:"1.2rem"}}>💌</span>
+                    <div>
+                      <strong style={{fontSize:".85rem",color:"#0F172A"}}>Official Invite Letter</strong>
+                      <div style={{fontSize:".7rem",color:"#64748B"}}>Primary invitation letter & entry pass</div>
+                    </div>
+                    {activeEvent.inviteBgUrl ? (
+                      <span style={{fontSize:".68rem",background:"#DCFCE7",color:"#15803D",padding:"2px 6px",borderRadius:4,fontWeight:800}}>✓ Configured</span>
+                    ) : (
+                      <span style={{fontSize:".68rem",background:"#FEF3C7",color:"#B45309",padding:"2px 6px",borderRadius:4,fontWeight:800}}>⚠️ Needs Background Image</span>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTemplatesManagerModal(false);
+                      setConfigModal({ ev: activeEvent, type: 'invite' });
+                    }}
+                    style={{padding:"6px 14px",borderRadius:6,fontSize:".76rem",fontWeight:800,background:"#0D4B5E",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                  >
+                    ⚙️ Configure Template
+                  </button>
+                </div>
+
+                {/* Certificate Pass */}
+                {(activeEvent.issueCertificates || activeEvent.certBgUrl) && (
+                  <div style={{background:"white",padding:"10px 14px",borderRadius:8,border:"1px solid #CBD5E1",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:"1.2rem"}}>🎓</span>
+                      <div>
+                        <strong style={{fontSize:".85rem",color:"#0F172A"}}>Certificate Pass</strong>
+                        <div style={{fontSize:".7rem",color:"#64748B"}}>Award felicitation & certificate of honor</div>
+                      </div>
+                      {activeEvent.certBgUrl ? (
+                        <span style={{fontSize:".68rem",background:"#DCFCE7",color:"#15803D",padding:"2px 6px",borderRadius:4,fontWeight:800}}>✓ Configured</span>
+                      ) : (
+                        <span style={{fontSize:".68rem",background:"#FEF3C7",color:"#B45309",padding:"2px 6px",borderRadius:4,fontWeight:800}}>⚠️ Needs Background Image</span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowTemplatesManagerModal(false);
+                        setConfigModal({ ev: activeEvent, type: 'cert' });
+                      }}
+                      style={{padding:"6px 14px",borderRadius:6,fontSize:".76rem",fontWeight:800,background:"#0D4B5E",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                    >
+                      ⚙️ Configure Template
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Additional Custom PDF Templates & Passes Section */}
+            <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:12,padding:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:8}}>
+                <div>
+                  <div style={{fontSize:".88rem",fontWeight:800,color:"#166534",display:"flex",alignItems:"center",gap:6}}>
+                    <span>📑</span> Additional Custom PDF Templates & Passes ({(activeEvent.pdfTemplates || []).length})
+                  </div>
+                  <div style={{fontSize:".72rem",color:"#15803D",marginTop:2}}>
+                    Create unlimited extra PDF passes (e.g. Food Coupons, Gate Passes, ID Cards, Parent Passes) with direct WhatsApp URL links.
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = prompt("Enter Name for new PDF Template (e.g. Food Coupon & Dinner Pass, Token Number, Gate Pass):");
+                    if (name && name.trim()) {
+                      const cleanName = name.trim();
+                      const tplId = "doc_" + Date.now();
+                      const newTpl = {
+                        id: tplId,
+                        name: cleanName,
+                        targetSection: "invites",
+                        targetAudience: "assigned",
+                        bgUrl: "",
+                        map: {},
+                        fontSize: 30,
+                        fontColor: "#000000"
+                      };
+                      const updatedTpls = [...(activeEvent.pdfTemplates || []), newTpl];
+                      const currentEvents = C.events || [];
+                      const eventExists = currentEvents.some(e => e.id === activeEvent.id || e.title === activeEvent.title);
+                      const updatedTargetEvent = { ...activeEvent, pdfTemplates: updatedTpls };
+                      const updatedEvents = eventExists 
+                        ? currentEvents.map(e => (e.id === activeEvent.id || e.title === activeEvent.title) ? updatedTargetEvent : e)
+                        : [...currentEvents, updatedTargetEvent];
+                      const updatedC = { ...C, events: updatedEvents };
+                      if (setC) setC(updatedC);
+                      fbSave(updatedC, auth?.idToken);
+                      setActiveDocType(tplId);
+                      setShowTemplatesManagerModal(false);
+                      setConfigModal({
+                        ev: updatedTargetEvent,
+                        type: 'custom',
+                        customTpl: newTpl
+                      });
+                    }
+                  }}
+                  style={{padding:"8px 14px",borderRadius:8,fontSize:".78rem",fontWeight:800,background:"#15803D",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:5,boxShadow:"0 2px 6px rgba(21,128,61,0.25)"}}
+                >
+                  <span>➕</span> Add New PDF Template
+                </button>
+              </div>
+
+              {/* Template Items */}
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:12}}>
+                {(activeEvent.pdfTemplates || []).map((tpl, tplIdx) => {
+                  const directUrl = `https://www.mmp-cwc.com/?doc=${tpl.id}&pass={TXN_ID}`;
+                  return (
+                    <div key={tpl.id} style={{background:"white",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",display:"flex",flexDirection:"column",gap:8,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:"1.2rem"}}>📄</span>
+                          <strong style={{fontSize:".88rem",color:"#0F172A"}}>{tpl.name}</strong>
+                          {tpl.bgUrl ? (
+                            <span style={{fontSize:".68rem",background:"#DCFCE7",color:"#15803D",padding:"2px 6px",borderRadius:4,fontWeight:800}}>
+                              ✓ Configured
+                            </span>
+                          ) : (
+                            <span style={{fontSize:".68rem",background:"#FEF3C7",color:"#B45309",padding:"2px 6px",borderRadius:4,fontWeight:800}}>
+                              ⚠️ Needs Background Image
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{display:"flex",gap:6}}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveDocType(tpl.id);
+                              setShowTemplatesManagerModal(false);
+                              setConfigModal({ ev: activeEvent, type: 'custom', customTpl: tpl });
+                            }}
+                            style={{padding:"6px 12px",borderRadius:6,fontSize:".75rem",fontWeight:800,background:"#0D4B5E",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                          >
+                            ⚙️ Configure Template
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!window.confirm(`Delete PDF template "${tpl.name}"?`)) return;
+                              const updatedTpls = (activeEvent.pdfTemplates || []).filter((_, k) => k !== tplIdx);
+                              const currentEvents = C.events || [];
+                              const updatedTargetEvent = { ...activeEvent, pdfTemplates: updatedTpls };
+                              const updatedEvents = currentEvents.map(e => (e.id === activeEvent.id || e.title === activeEvent.title) ? updatedTargetEvent : e);
+                              const updatedC = { ...C, events: updatedEvents };
+                              if (setC) setC(updatedC);
+                              await fbSave(updatedC, auth?.idToken);
+                              if (activeDocType === tpl.id) setActiveDocType('invite');
+                            }}
+                            style={{padding:"6px 10px",borderRadius:6,fontSize:".75rem",fontWeight:800,background:"#FEE2E2",color:"#DC2626",border:"1px solid #FCA5A5",cursor:"pointer"}}
+                          >
+                            🗑️ Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* URL Box */}
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:"#F8FAFC",padding:"6px 10px",borderRadius:6,border:"1px dashed #CBD5E1"}}>
+                        <span style={{fontSize:".72rem",color:"#475569",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          🔗 <strong>URL:</strong> {directUrl}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(directUrl);
+                            alert(`Copied direct URL for "${tpl.name}"!`);
+                          }}
+                          style={{padding:"3px 10px",background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #BFDBFE",borderRadius:4,fontSize:".72rem",fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}
+                        >
+                          📋 Copy URL
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {(!activeEvent.pdfTemplates || activeEvent.pdfTemplates.length === 0) && (
+                  <div style={{fontSize:".78rem",color:"#64748B",fontStyle:"italic",textAlign:"center",padding:"14px 0"}}>
+                    No custom PDF templates added yet. Click "+ Add New PDF Template" above to create Food Passes, Gate Passes, etc.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
+              <button onClick={()=>setShowTemplatesManagerModal(false)} style={{padding:"8px 20px",borderRadius:8,background:"#F1F5F9",color:"#334155",border:"1px solid #CBD5E1",fontSize:".85rem",cursor:"pointer",fontWeight:700}}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+         {/* WhatsApp Invite Letter Template Modal */}
          {showInviteTplModal && (
            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:100002,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowInviteTplModal(false)}>
              <div style={{background:"white",borderRadius:16,maxWidth:700,width:"100%",maxHeight:"90vh",overflowY:"auto",padding:24,boxShadow:"0 20px 40px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
@@ -24685,6 +33945,40 @@ This cannot be undone.`)) return;
             </button>
             <button onClick={() => setShowWorkspaceTplModal(true)} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:700,display:"flex",alignItems:"center",gap:6,background:"#F0FDF4",border:"1px solid #86EFAC",color:"#15803D",cursor:"pointer",boxShadow:"0 2px 8px rgba(21,128,61,0.15)",whiteSpace:"nowrap"}}>
               📝 Workspace WhatsApp Templates ({((activeEvent?.whatsAppTemplates && activeEvent.whatsAppTemplates.length > 0) ? activeEvent.whatsAppTemplates.length : 3)})
+            </button>
+
+            <button 
+              onClick={async () => {
+                setLoadingDonations(true);
+                setShowImportDonorsModal(true);
+                try {
+                  const token = auth?.idToken || localStorage.getItem("trustPublicAuthToken") || "";
+                  const dons = await fbFetchDonations(token);
+                  setAllDonationsList(dons || []);
+                } catch(e) {
+                  console.error(e);
+                } finally {
+                  setLoadingDonations(false);
+                }
+              }} 
+              style={{
+                padding:"8px 16px",
+                borderRadius:8,
+                fontSize:".85rem",
+                fontWeight:800,
+                display:"flex",
+                alignItems:"center",
+                gap:6,
+                background:"linear-gradient(135deg, #15803D, #166534)",
+                color:"white",
+                border:"none",
+                cursor:"pointer",
+                boxShadow:"0 2px 8px rgba(22,101,52,0.2)",
+                whiteSpace:"nowrap"
+              }}
+              title="Import verified donors from Donations database"
+            >
+              <span>💰</span> Import Donors ({activeEvent?.isDonorWorkspace ? "Live Sync" : "From DB"})
             </button>
             <button onClick={() => setShowImportContactGroupModal(true)} style={{padding:"8px 16px",borderRadius:8,fontSize:".85rem",fontWeight:800,display:"flex",alignItems:"center",gap:6,background:"linear-gradient(135deg, #0D4B5E, #135D74)",color:"white",border:"none",cursor:"pointer",boxShadow:"0 2px 8px rgba(13,75,94,0.2)",whiteSpace:"nowrap"}}>
               <span>👥</span> Import Contact Group ({Array.from(new Set(globalGuests.map(g => g.Group || g.Category || g.Vibhag || "General Committee"))).length})
@@ -24951,19 +34245,81 @@ This cannot be undone.`)) return;
                     <span style={{fontSize:"1.1rem"}}>{tab.icon || '📄'}</span>
                     <strong style={{fontSize:".86rem",color: isActive ? "#15803D" : "#0F172A"}}>{tab.name}</strong>
                   </div>
-                  {tab.bgUrl ? (
-                    <span style={{fontSize:".65rem",background:"#DCFCE7",color:"#15803D",padding:"1px 5px",borderRadius:4,fontWeight:800}}>
-                      ✓ Configured
-                    </span>
-                  ) : (
-                    <span style={{fontSize:".65rem",background:"#FEF3C7",color:"#B45309",padding:"1px 5px",borderRadius:4,fontWeight:800}}>
-                      ⚠️ Needs Image
-                    </span>
-                  )}
+                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                    {tab.bgUrl ? (
+                      <span style={{fontSize:".65rem",background:"#DCFCE7",color:"#15803D",padding:"1px 5px",borderRadius:4,fontWeight:800}}>
+                        ✓ Configured
+                      </span>
+                    ) : (
+                      <span style={{fontSize:".65rem",background:"#FEF3C7",color:"#B45309",padding:"1px 5px",borderRadius:4,fontWeight:800}}>
+                        ⚠️ Needs Image
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveDocType(tab.id);
+                        setSelectedPdfTplId(tab.id);
+                        setTplModalMode("pdf");
+                        setShowWorkspaceTplModal(true);
+                      }}
+                      style={{
+                        background: "#0D4B5E",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 4,
+                        padding: "2px 7px",
+                        fontSize: ".68rem",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 2
+                      }}
+                      title={`Upload background & configure drag/drop fields for "${tab.name}"`}
+                    >
+                      ⚙️ Configure
+                    </button>
+                    {tab.customTpl && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!window.confirm(`Are you sure you want to permanently delete sub-workspace / template "${tab.name}"?`)) return;
+                          const updatedTpls = (activeEvent.pdfTemplates || []).filter(t => t.id !== tab.id);
+                          const updatedEvents = (C.events || []).map(ev => (ev.id === activeEvent.id || ev.title === activeEvent.title) ? { ...ev, pdfTemplates: updatedTpls } : ev);
+                          const updatedC = { ...C, events: updatedEvents };
+                          if (setC) setC(updatedC);
+                          fbSave(updatedC, auth?.idToken);
+                          if (activeDocType === tab.id) {
+                            setActiveDocType('invite');
+                          }
+                          alert(`✅ Sub-workspace / template "${tab.name}" deleted successfully.`);
+                        }}
+                        style={{
+                          background: "#FEE2E2",
+                          border: "1px solid #FECACA",
+                          color: "#DC2626",
+                          borderRadius: 4,
+                          padding: "2px 6px",
+                          fontSize: ".68rem",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 2
+                        }}
+                        title={`Delete sub-workspace "${tab.name}"`}
+                      >
+                        ✕ Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Inline Placement Dropdown / Tag directly inside each tab */}
-                <div style={{marginTop: 2}} onClick={e => e.stopPropagation()}>
+                <div style={{marginTop: 2}}>
                   {tab.id === 'invite' ? (
                     <span style={{fontSize:".68rem",fontWeight:700,color:"#D2691E",background:"#FFF7ED",padding:"2px 6px",borderRadius:4,border:"1px solid #FFEDD5",display:"inline-block"}}>
                       📍 Portal: 💌 Special Invites
@@ -24973,33 +34329,169 @@ This cannot be undone.`)) return;
                       📍 Portal: 🎓 Education Awards
                     </span>
                   ) : (
-                    <div style={{display:"flex",alignItems:"center",gap:4}}>
-                      <span style={{fontSize:".68rem",fontWeight:800,color:"#475569"}}>📍 Portal:</span>
-                      <select
-                        value={tab.customTpl?.targetSection || "invites"}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          const newSection = e.target.value;
-                          const updatedTpls = (activeEvent.pdfTemplates || []).map(t => t.id === tab.id ? { ...t, targetSection: newSection } : t);
-                          const updatedEvents = (C.events || []).map(ev => (ev.id === activeEvent.id || ev.title === activeEvent.title) ? { ...ev, pdfTemplates: updatedTpls } : ev);
-                          const updatedC = { ...C, events: updatedEvents };
-                          if (setC) setC(updatedC);
-                          fbSave(updatedC, auth?.idToken);
-                        }}
-                        style={{
-                          fontSize: ".7rem",
-                          fontWeight: 800,
-                          padding: "2px 6px",
-                          borderRadius: 4,
-                          border: "1.5px solid #2563EB",
-                          background: (tab.customTpl?.targetSection === 'awards') ? "#F0FDF4" : "#FFF7ED",
-                          color: (tab.customTpl?.targetSection === 'awards') ? "#15803D" : "#D2691E",
-                          cursor: "pointer"
-                        }}
-                      >
-                        <option value="invites">💌 Special Invites</option>
-                        <option value="awards">🎓 Education Awards</option>
-                      </select>
+                    <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <span style={{fontSize:".68rem",fontWeight:800,color:"#475569"}}>📍 Portal:</span>
+                        <select
+                          value={tab.customTpl?.targetSection || "invites"}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            const newSection = e.target.value;
+                            const updatedTpls = (activeEvent.pdfTemplates || []).map(t => t.id === tab.id ? { ...t, targetSection: newSection } : t);
+                            const updatedEvents = (C.events || []).map(ev => (ev.id === activeEvent.id || ev.title === activeEvent.title) ? { ...ev, pdfTemplates: updatedTpls } : ev);
+                            const updatedC = { ...C, events: updatedEvents };
+                            if (setC) setC(updatedC);
+                            fbSave(updatedC, auth?.idToken);
+                          }}
+                          style={{
+                            fontSize: ".7rem",
+                            fontWeight: 800,
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                            border: "1.5px solid #2563EB",
+                            background: (tab.customTpl?.targetSection === 'awards') ? "#F0FDF4" : "#FFF7ED",
+                            color: (tab.customTpl?.targetSection === 'awards') ? "#15803D" : "#D2691E",
+                            cursor: "pointer"
+                          }}
+                        >
+                          <option value="invites">💌 Special Invites</option>
+                          <option value="awards">🎓 Education Awards</option>
+                        </select>
+                      </div>
+
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <span style={{fontSize:".68rem",fontWeight:800,color:"#1E293B"}}>👥 Audience:</span>
+                        <select
+                          value={tab.customTpl?.targetAudience || "assigned"}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            const newAudience = e.target.value;
+                            const updatedTpls = (activeEvent.pdfTemplates || []).map(t => t.id === tab.id ? { ...t, targetAudience: newAudience } : t);
+                            const updatedEvents = (C.events || []).map(ev => (ev.id === activeEvent.id || ev.title === activeEvent.title) ? { ...ev, pdfTemplates: updatedTpls } : ev);
+                            const updatedC = { ...C, events: updatedEvents };
+                            if (setC) setC(updatedC);
+                            fbSave(updatedC, auth?.idToken);
+                          }}
+                          style={{
+                            fontSize: ".68rem",
+                            fontWeight: 800,
+                            padding: "2px 4px",
+                            borderRadius: 4,
+                            border: "1px solid #CBD5E1",
+                            background: "white",
+                            color: (tab.customTpl?.targetAudience === 'all') ? "#2563EB" : "#15803D",
+                            cursor: "pointer"
+                          }}
+                        >
+                          <option value="assigned">🎯 Assigned / Imported Only</option>
+                          <option value="event">🎯 Selected Event Registrations</option>
+                          <option value="group">👥 Group ({tab.customTpl?.name || 'Named'})</option>
+                          <option value="all">🌐 All in Workspace</option>
+                        </select>
+                      </div>
+
+                      <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+                        <span style={{fontSize:".68rem",fontWeight:800,color:"#0D4B5E"}}>🎯 Event:</span>
+                        <select
+                          value={tab.customTpl?.targetEventId || "current"}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            setActiveDocType(tab.id);
+                            const newEvId = e.target.value;
+                            const newAud = (newEvId && newEvId !== 'current') ? 'event' : (tab.customTpl?.targetAudience || 'assigned');
+                            const updatedTpls = (activeEvent.pdfTemplates || []).map(t => t.id === tab.id ? { ...t, targetEventId: newEvId, targetAudience: newAud } : t);
+                            const updatedEvents = (C.events || []).map(ev => (ev.id === activeEvent.id || ev.title === activeEvent.title) ? { ...ev, pdfTemplates: updatedTpls } : ev);
+                            const updatedC = { ...C, events: updatedEvents };
+                            if (setC) setC(updatedC);
+                            fbSave(updatedC, auth?.idToken);
+                          }}
+                          style={{
+                            fontSize: ".68rem",
+                            fontWeight: 800,
+                            padding: "2px 4px",
+                            borderRadius: 4,
+                            border: "1px solid #0D4B5E",
+                            background: "#F0FDF4",
+                            color: "#166534",
+                            cursor: "pointer",
+                            maxWidth: 160
+                          }}
+                          title="Select specific event registrations data source for this template & WhatsApp reports"
+                        >
+                          <option value="current">🔄 Current Workspace Only</option>
+                          {(C.events || []).filter(e => e.id !== activeEvent.id && e.title !== activeEvent.title).map(evItem => {
+                            const isEdu = String(evItem.title || evItem.id || '').toLowerCase().includes('edu');
+                            return (
+                              <option key={evItem.id || evItem.title} value={evItem.id || evItem.title}>
+                                {isEdu ? '🎓' : '📌'} {evItem.title || evItem.id}
+                              </option>
+                            );
+                          })}
+                          <option value="all">🌐 All Events Combined</option>
+                        </select>
+                        {tab.id === activeDocType && (
+                          <span style={{fontSize:".64rem",fontWeight:800,color:"#15803D",background:"#DCFCE7",padding:"2px 6px",borderRadius:4,border:"1px solid #86EFAC",whiteSpace:"nowrap"}}>
+                            🟢 {uniqueInviteRegs.length} ready
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Vibhag Scope Toggle Button: "Specific Vibhag" | "All" */}
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:4,marginTop:2}}>
+                        <span style={{fontSize:".68rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>📍 Vibhag:</span>
+                        <div style={{display:"inline-flex",background:"#E2E8F0",borderRadius:5,padding:2,gap:2}}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveDocType(tab.id);
+                              const updatedTpls = (activeEvent.pdfTemplates || []).map(t => t.id === tab.id ? { ...t, vibhagScope: "auto" } : t);
+                              const updatedEvents = (C.events || []).map(ev => (ev.id === activeEvent.id || ev.title === activeEvent.title) ? { ...ev, pdfTemplates: updatedTpls } : ev);
+                              const updatedC = { ...C, events: updatedEvents };
+                              if (setC) setC(updatedC);
+                              fbSave(updatedC, auth?.idToken);
+                            }}
+                            style={{
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              fontSize: ".66rem",
+                              fontWeight: 800,
+                              border: "none",
+                              cursor: "pointer",
+                              background: (tab.customTpl?.vibhagScope !== "all") ? "#15803D" : "transparent",
+                              color: (tab.customTpl?.vibhagScope !== "all") ? "white" : "#475569"
+                            }}
+                            title="Auto-filter student report to recipient's associated Vibhag"
+                          >
+                            🎯 Specific Vibhag
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveDocType(tab.id);
+                              const updatedTpls = (activeEvent.pdfTemplates || []).map(t => t.id === tab.id ? { ...t, vibhagScope: "all" } : t);
+                              const updatedEvents = (C.events || []).map(ev => (ev.id === activeEvent.id || ev.title === activeEvent.title) ? { ...ev, pdfTemplates: updatedTpls } : ev);
+                              const updatedC = { ...C, events: updatedEvents };
+                              if (setC) setC(updatedC);
+                              fbSave(updatedC, auth?.idToken);
+                            }}
+                            style={{
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              fontSize: ".66rem",
+                              fontWeight: 800,
+                              border: "none",
+                              cursor: "pointer",
+                              background: (tab.customTpl?.vibhagScope === "all") ? "#2563EB" : "transparent",
+                              color: (tab.customTpl?.vibhagScope === "all") ? "white" : "#475569"
+                            }}
+                            title="Include all registrations across all Vibhags"
+                          >
+                            🌐 All
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -25019,22 +34511,32 @@ This cannot be undone.`)) return;
                   id: tplId,
                   name: cleanName,
                   targetSection: "invites",
+                  targetAudience: "assigned",
                   bgUrl: "",
                   map: {},
                   fontSize: 30,
                   fontColor: "#000000"
                 };
                 const updatedTpls = [...(activeEvent.pdfTemplates || []), newTpl];
-                const updatedEvents = (C.events || []).map(e => (e.id === activeEvent.id || e.title === activeEvent.title) ? { ...e, pdfTemplates: updatedTpls } : e);
+                const currentEvents = C.events || [];
+                const eventExists = currentEvents.some(e => e.id === activeEvent.id || e.title === activeEvent.title);
+                const updatedTargetEvent = { ...activeEvent, pdfTemplates: updatedTpls };
+                const updatedEvents = eventExists 
+                  ? currentEvents.map(e => (e.id === activeEvent.id || e.title === activeEvent.title) ? updatedTargetEvent : e)
+                  : [...currentEvents, updatedTargetEvent];
                 const updatedC = { ...C, events: updatedEvents };
                 if (setC) setC(updatedC);
                 fbSave(updatedC, auth?.idToken);
                 setActiveDocType(tplId);
-                alert(`Created "${cleanName}"! You can configure its background image in Content Editor -> Events.`);
+                setConfigModal({
+                  ev: updatedTargetEvent,
+                  type: 'custom',
+                  customTpl: newTpl
+                });
               }
             }}
             style={{
-              padding:"12px 16px",
+              padding:"10px 14px",
               borderRadius:10,
               fontSize:".8rem",
               fontWeight:800,
@@ -25051,7 +34553,309 @@ This cannot be undone.`)) return;
           >
             <span>➕</span> + Add New Template
           </button>
+
+          {/* Manage All Templates Panel Button */}
+          <button
+            type="button"
+            onClick={() => setShowTemplatesManagerModal(true)}
+            style={{
+              padding:"10px 14px",
+              borderRadius:10,
+              fontSize:".8rem",
+              fontWeight:800,
+              background:"#EFF6FF",
+              color:"#1D4ED8",
+              border:"1.5px solid #BFDBFE",
+              cursor:"pointer",
+              display:"flex",
+              alignItems:"center",
+              gap:6,
+              whiteSpace:"nowrap"
+            }}
+            title="Open comprehensive PDF templates and passes manager"
+          >
+            <span>📑</span> Manage All Templates
+          </button>
+
+          {/* Connect Existing Template Modal Trigger */}
+          <button
+            type="button"
+            onClick={() => setShowConnectTplModal(true)}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              fontSize: ".8rem",
+              fontWeight: 800,
+              background: "#0F766E",
+              color: "white",
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              boxShadow: "0 2px 8px rgba(15,118,110,0.25)",
+              whiteSpace: "nowrap"
+            }}
+            title="Connect an existing letterhead or template from any workspace without duplicate storage"
+          >
+            <span>🔗</span> Connect Existing Template
+          </button>
+
+          {/* Sub-Workspace WhatsApp Audit & Dispatch Proof Export */}
+          <button
+            type="button"
+            onClick={() => handleDownloadSubworkspaceAuditFile(activeEvent, currentDocTpl, filteredRegs)}
+            style={{
+              padding: "10px 16px",
+              borderRadius: 10,
+              fontSize: ".8rem",
+              fontWeight: 800,
+              background: "#F8FAFC",
+              border: "1.5px solid #0D4B5E",
+              color: "#0D4B5E",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+              whiteSpace: "nowrap"
+            }}
+            title="Download complete WhatsApp dispatch audit proof and delivery log for this sub-workspace"
+          >
+            <span>📜</span> Download Sub-Workspace Audit Log (.txt / .doc)
+          </button>
         </div>
+
+        {/* Attached PDF Template & Letterhead Status Banner */}
+        {(() => {
+          const currentAttachedBg = currentDocTpl?.bgUrl 
+            || (currentDocTpl?.id === 'cert' ? activeEvent?.certBgUrl : activeEvent?.inviteBgUrl)
+            || (activeEvent?.pdfTemplates || []).find(t => t.id === currentDocTpl?.id || t.name === currentDocTpl?.name)?.bgUrl 
+            || "";
+          const hasLetterheadAttached = Boolean(currentAttachedBg && currentAttachedBg.trim());
+          const resolvedAttachedBgDisplay = resolveMediaUrl(currentAttachedBg, C);
+          const currentOrientation = currentDocTpl?.customTpl?.orientation || (currentDocTpl?.id === 'cert' ? activeEvent?.certOrientation : activeEvent?.inviteOrientation) || 'portrait';
+          const currentMap = currentDocTpl?.customTpl?.map || (currentDocTpl?.id === 'cert' ? activeEvent?.certMap : activeEvent?.inviteMap) || {};
+          const mappedFieldCount = Object.keys(currentMap).length;
+
+          return (
+            <div style={{
+              marginBottom: 16,
+              background: hasLetterheadAttached ? "linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%)" : "linear-gradient(135deg, #FFFBEB 0%, #FFFFFF 100%)",
+              border: hasLetterheadAttached ? "1.5px solid #86EFAC" : "1.5px solid #FCD34D",
+              borderRadius: 12,
+              padding: "12px 18px",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 14
+            }}>
+              {/* Left Section: Icon, Letterhead Thumbnail & Status */}
+              <div style={{display: "flex", alignItems: "center", gap: 14, flex: 1, minWidth: 280}}>
+                {hasLetterheadAttached ? (
+                  <div style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 8,
+                    border: "1.5px solid #16A34A",
+                    overflow: "hidden",
+                    background: "#F8FAFC",
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.08)"
+                  }} title="Attached Letterhead Preview">
+                    <img 
+                      src={resolvedAttachedBgDisplay} 
+                      alt="Letterhead" 
+                      style={{width: "100%", height: "100%", objectFit: "contain"}}
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  </div>
+                ) : (
+                  <div style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 8,
+                    border: "1.5px dashed #F59E0B",
+                    background: "#FEF3C7",
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "1.5rem"
+                  }}>
+                    ⚠️
+                  </div>
+                )}
+
+                <div>
+                  <div style={{display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap"}}>
+                    <span style={{
+                      fontSize: ".68rem",
+                      fontWeight: 900,
+                      letterSpacing: "0.5px",
+                      textTransform: "uppercase",
+                      color: hasLetterheadAttached ? "#15803D" : "#B45309",
+                      background: hasLetterheadAttached ? "#DCFCE7" : "#FEF3C7",
+                      padding: "2px 8px",
+                      borderRadius: 20
+                    }}>
+                      📎 ATTACHED PDF TEMPLATE
+                    </span>
+                    <span style={{
+                      fontSize: ".7rem",
+                      fontWeight: 800,
+                      color: hasLetterheadAttached ? "#166534" : "#92400E"
+                    }}>
+                      {hasLetterheadAttached ? "✓ Letterhead Background Connected" : "⚠️ Letterhead Not Connected"}
+                    </span>
+                  </div>
+
+                  <div style={{marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap"}}>
+                    <strong style={{fontSize: "1.05rem", color: "#0F172A", display: "flex", alignItems: "center", gap: 6}}>
+                      <span>{currentDocTpl?.icon || '📄'}</span> {currentDocTpl?.name || 'Official Letter'}
+                    </strong>
+                    <span style={{fontSize: ".75rem", color: "#64748B", background: "#F1F5F9", padding: "1px 8px", borderRadius: 6, fontWeight: 600}}>
+                      📐 {currentOrientation === 'landscape' ? 'A4 Landscape' : 'A4 Portrait'}
+                    </span>
+                    <span style={{fontSize: ".75rem", color: "#64748B", background: "#F1F5F9", padding: "1px 8px", borderRadius: 6, fontWeight: 600}}>
+                      📍 {mappedFieldCount} Field{mappedFieldCount === 1 ? '' : 's'} Mapped
+                    </span>
+                    {currentDocTpl?.bgUrl?.startsWith("media://") && (
+                      <span style={{fontSize: ".7rem", color: "#0284C7", background: "#E0F2FE", padding: "1px 8px", borderRadius: 6, fontWeight: 700}}>
+                        📁 Linked via Media Library
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{fontSize: ".76rem", color: hasLetterheadAttached ? "#475569" : "#B45309", marginTop: 2}}>
+                    {hasLetterheadAttached ? (
+                      <span>Letterhead background is mapped and ready. Clicking preview on any record will generate this template.</span>
+                    ) : (
+                      <span>No letterhead image attached to this sub-workspace yet. Please click "Configure" or "Connect Different Template".</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Section: Action Buttons */}
+              <div style={{display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap"}}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (currentDocTpl.customTpl) {
+                      setConfigModal({ ev: activeEvent, type: 'custom', customTpl: currentDocTpl.customTpl });
+                    } else {
+                      setConfigModal({ ev: activeEvent, type: currentDocTpl.id });
+                    }
+                  }}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: 8,
+                    fontSize: ".78rem",
+                    fontWeight: 800,
+                    background: "#0D4B5E",
+                    color: "white",
+                    border: "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    boxShadow: "0 2px 6px rgba(13,75,94,0.25)"
+                  }}
+                  title="Open Canvas Editor to edit letterhead, adjust field positions or styles"
+                >
+                  <span>⚙️</span> Edit / Change Attached Letterhead
+                </button>
+
+                <div
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 8,
+                    fontSize: ".75rem",
+                    fontWeight: 800,
+                    background: currentDocTpl?.customTpl?.targetEventId && currentDocTpl.customTpl.targetEventId !== 'current' ? "#ECFDF5" : "#F8FAFC",
+                    color: currentDocTpl?.customTpl?.targetEventId && currentDocTpl.customTpl.targetEventId !== 'current' ? "#065F46" : "#475569",
+                    border: currentDocTpl?.customTpl?.targetEventId && currentDocTpl.customTpl.targetEventId !== 'current' ? "1.5px solid #86EFAC" : "1px solid #CBD5E1",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6
+                  }}
+                  title="Registrations are dynamically streamed directly via the 🎯 Event dropdown on the subworkspace card above"
+                >
+                  <span>📡</span>
+                  <span>
+                    Stream: {
+                      currentDocTpl?.customTpl?.targetEventId && currentDocTpl.customTpl.targetEventId !== 'current'
+                        ? (
+                          (C.events || []).find(e => e.id === currentDocTpl.customTpl.targetEventId || e.title === currentDocTpl.customTpl.targetEventId)?.title 
+                          || (currentDocTpl.customTpl.targetEventId === 'all' ? 'All Events Combined' : currentDocTpl.customTpl.targetEventId)
+                        )
+                        : (activeEvent?.title || 'Current Workspace')
+                    }
+                  </span>
+                  <span style={{
+                    background: currentDocTpl?.customTpl?.targetEventId && currentDocTpl.customTpl.targetEventId !== 'current' ? "#059669" : "#64748B",
+                    color: "white",
+                    borderRadius: 12,
+                    padding: "1px 7px",
+                    fontSize: ".7rem"
+                  }}>
+                    {uniqueInviteRegs.length}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowConnectTplModal(true)}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: 8,
+                    fontSize: ".78rem",
+                    fontWeight: 800,
+                    background: "#EFF6FF",
+                    color: "#1D4ED8",
+                    border: "1.5px solid #93C5FD",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6
+                  }}
+                  title="Link a pre-existing letterhead or template from any subworkspace"
+                >
+                  <span>🔗</span> Connect Different Template
+                </button>
+
+                {filteredRegs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => handlePreview(filteredRegs[0], activeEvent)}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: 8,
+                      fontSize: ".78rem",
+                      fontWeight: 800,
+                      background: "#15803D",
+                      color: "white",
+                      border: "none",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      boxShadow: "0 2px 6px rgba(21,128,61,0.25)"
+                    }}
+                    title="Preview letter with first contact in table"
+                  >
+                    <span>👁️</span> Test Preview Template
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {loading ? <p>Loading inviteLetters...</p> : (
           <div style={{borderRadius:12,boxShadow:"0 10px 30px rgba(0,0,0,0.06)",overflow:"hidden",border:"1px solid #E0E0E0",background:"white",overflowX:"auto"}}>
@@ -25083,7 +34887,7 @@ This cannot be undone.`)) return;
                   try { if(r._submittedAt) date = new Date(r._submittedAt).toLocaleString().split(',')[0]; } catch(e){}
                   let evName = r.eventName || r.eventTitle || r.eventId || "Unknown Event";
                   let pName = r["Full Name"] || r["Name"] || r["Participant Name"] || r.Email || "-";
-                  let ev = inviteEvents.find(e => e.id === r.eventId || e.title === evName || e.titleGu === evName);
+                  let ev = inviteEvents.find(e => e.id === r.eventId || e.title === evName || e.titleGu === evName) || activeEvent;
                   
                   let vDate = r.inviteViewDate ? new Date(r.inviteViewDate).toLocaleString() : "-";
                   let dDate = r.inviteDownloadDate ? new Date(r.inviteDownloadDate).toLocaleString() : "-";
@@ -25104,12 +34908,12 @@ This cannot be undone.`)) return;
                   const formattedMobile = cleanMobile ? `+91 ${cleanMobile.slice(0, 5)} ${cleanMobile.slice(5)}` : "-";
                   const cleanPName = String(pName).replace(/\|/g, " ").replace(/\s+/g, " ").trim();
                   const txnId = r["Transaction ID"] || r.transactionId || r.id || "";
-                  const vibhag = r["Vibhag"] || r.vibhag || "";
+                  const vibhag = getRecordVibhag(r);
 
                   return (
                     <tr 
                       key={i} 
-                      onClick={() => handlePreview(r, ev)}
+                      onClick={() => handlePreview(r, activeEvent)}
                       style={{
                         borderBottom: "1px solid #E2E8F0",
                         cursor: "pointer",
@@ -25136,14 +34940,23 @@ This cannot be undone.`)) return;
                         <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"center"}}>
                           <div style={{display:"flex",gap:4,alignItems:"center",justifyContent:"center",flexWrap:"wrap"}}>
                             <button 
-                              onClick={(e)=>{e.stopPropagation(); handlePreview(r, ev);}} 
+                              onClick={(e)=>{e.stopPropagation(); handlePreview(r, activeEvent);}} 
                               style={{padding:"4px 8px",borderRadius:6,fontSize:".74rem",background:"white",border:"1.5px solid #CBD5E1",color:"#334155",cursor:"pointer",fontWeight:700,display:"flex",alignItems:"center",gap:3}}
-                              title="Preview active PDF"
+                              title={`Preview ${currentDocTpl?.name || 'document'}`}
                             >
                               <span>👁️</span> Preview
                             </button>
                             <button 
-                              onClick={(e)=>{e.stopPropagation(); setSelectedWhatsAppReg(r);}} 
+                              onClick={(e)=>{
+                                e.stopPropagation(); 
+                                const resolvedV = resolveGuestVibhag(r);
+                                setSelectedWhatsAppReg({
+                                  ...r,
+                                  vibhag: resolvedV || r.vibhag,
+                                  Vibhag: resolvedV || r['Vibhag'],
+                                  "Vibhag New": resolvedV || r['Vibhag New']
+                                });
+                              }} 
                               style={{
                                 padding:"4px 9px",
                                 borderRadius:6,
@@ -25238,20 +35051,63 @@ This cannot be undone.`)) return;
                       {/* Participant & ID */}
                       <td style={{padding:"12px 10px"}}>
                         <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                          <span style={{fontSize:".88rem",fontWeight:800,color:"#0F172A",letterSpacing:"-0.01em"}}>
-                            {cleanPName}
-                          </span>
+                          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                            <span style={{fontSize:".88rem",fontWeight:800,color:"#0F172A",letterSpacing:"-0.01em"}}>
+                              {cleanPName}
+                            </span>
+                            {r.Designation && (
+                              <span style={{fontSize:".68rem",fontWeight:700,color:"#475569",background:"#F1F5F9",padding:"1px 6px",borderRadius:4,border:"1px solid #E2E8F0"}}>
+                                {r.Designation}
+                              </span>
+                            )}
+                          </div>
                           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                             {txnId && (
                               <span style={{fontSize:".7rem",fontFamily:"monospace",fontWeight:800,background:"#1E293B",color:"white",padding:"1px 6px",borderRadius:4}}>
                                 {txnId}
                               </span>
                             )}
-                            {vibhag && (
-                              <span style={{fontSize:".7rem",fontWeight:700,background:"#F1F5F9",color:"#475569",padding:"1px 6px",borderRadius:4,border:"1px solid #E2E8F0"}}>
-                                {vibhag}
-                              </span>
-                            )}
+
+                            {/* Inline Vibhag Selector / Badge */}
+                            <select
+                              value={resolveGuestVibhag(r) || ""}
+                              onClick={e => e.stopPropagation()}
+                              onChange={async (e) => {
+                                e.stopPropagation();
+                                const newV = e.target.value;
+                                const updatedReg = {
+                                  ...r,
+                                  vibhag: newV,
+                                  Vibhag: newV,
+                                  "Vibhag New": newV
+                                };
+                                setRegs(prev => prev.map(x => x.id === r.id ? updatedReg : x));
+                                const cleanCopy = { ...updatedReg };
+                                delete cleanCopy.id;
+                                delete cleanCopy._submittedAt;
+                                await fbUpdateRegistration(r.id, cleanCopy, auth?.idToken);
+                                if (r.globalGuestId) {
+                                  await fbUpdateRegistration(r.globalGuestId, { vibhag: newV, Vibhag: newV, "Vibhag New": newV }, auth?.idToken);
+                                }
+                              }}
+                              style={{
+                                fontSize: ".7rem",
+                                fontWeight: 800,
+                                padding: "1px 5px",
+                                borderRadius: 4,
+                                border: resolveGuestVibhag(r) ? "1.5px solid #86EFAC" : "1.5px dashed #F59E0B",
+                                background: resolveGuestVibhag(r) ? "#F0FDF4" : "#FFFBEB",
+                                color: resolveGuestVibhag(r) ? "#166534" : "#B45309",
+                                cursor: "pointer",
+                                maxWidth: 175
+                              }}
+                              title="Click to assign or change this contact's associated Vibhag"
+                            >
+                              <option value="">📍 Assign Vibhag...</option>
+                              {getStandardVibhagsList(C).map(v => (
+                                <option key={v} value={v}>📍 {v}</option>
+                              ))}
+                            </select>
                           </div>
                         </div>
                       </td>
@@ -25370,22 +35226,72 @@ This cannot be undone.`)) return;
           recipients={selectedIds.length > 0 ? filteredRegs.filter(r => selectedIds.includes(r.id || r['Transaction ID'])) : filteredRegs}
           C={C}
           auth={auth}
-          onLogSent={async (r, msgType) => {
+          onLogSent={async (r, msgType, actualMessage) => {
             const updatedBy = auth?.email || "Admin";
+            const now = new Date();
+            const nowIso = now.toISOString();
+            const nowFormatted = now.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
             const existingLogs = Array.isArray(r.logHistory) ? r.logHistory : [];
             const waLog = {
-              timestamp: new Date().toISOString(),
+              timestamp: nowIso,
+              timeFormatted: nowFormatted,
               actor: updatedBy,
               action: `WhatsApp Sent: ${msgType}`,
               type: "whatsapp",
               messageType: msgType,
+              subWorkspaceId: currentDocTpl?.id || "invite",
+              subWorkspaceName: `${activeEvent.title || 'Workspace'} > ${currentDocTpl?.name || 'Invite'}`,
+              content: actualMessage || "",
               remarks: `WhatsApp invitation pass (${msgType}) sent to applicant.`
             };
             const newLogs = [...existingLogs, waLog];
             const newCount = (r.whatsAppCount || 0) + 1;
-            setRegs(prev => prev.map(x => x.id === r.id ? { ...x, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp } : x));
+            const updatedRec = { 
+              ...r, 
+              logHistory: newLogs, 
+              whatsAppCount: newCount, 
+              lastWhatsAppType: msgType, 
+              lastWhatsAppAt: nowIso,
+              lastWhatsAppContent: actualMessage || r.lastWhatsAppContent || ""
+            };
+            setRegs(prev => {
+              const updatedList = prev.map(x => x.id === r.id ? updatedRec : x);
+              try {
+                localStorage.setItem("mmp_cached_registrations", JSON.stringify(updatedList));
+                if (typeof window !== 'undefined') {
+                  window.__MMP_INVITE_REGS__ = updatedList;
+                  window.__MMP_ALL_REGS_RAW__ = updatedList;
+                  window.__MMP_REGS_CACHE__ = updatedList;
+                }
+              } catch(e) {}
+              return updatedList;
+            });
+
+            // Record into subworkspace specific audit log store in localStorage
+            const subAuditKey = `mmp_wa_audit_${activeEvent.id || activeEvent.title || 'default'}_${currentDocTpl?.id || 'invite'}`;
             try {
-              const cleanData = { ...r, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp };
+              const currentSubLogs = JSON.parse(localStorage.getItem(subAuditKey) || "[]");
+              currentSubLogs.unshift({
+                id: "wa_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+                timestamp: nowIso,
+                timeFormatted: nowFormatted,
+                sender: updatedBy,
+                recipientName: r['Full Name'] || r.name || 'Invitee',
+                recipientMobile: r['Mobile Number'] || r.phone || r.mobile || '',
+                recipientTxnId: r['Transaction ID'] || r.transactionId || r.id || '',
+                recipientVibhag: typeof resolveGuestVibhag === 'function' ? (resolveGuestVibhag(r) || r.vibhag || '') : (r.vibhag || ''),
+                subWorkspaceId: currentDocTpl?.id || "invite",
+                subWorkspaceName: `${activeEvent.title || 'Workspace'} > ${currentDocTpl?.name || 'Invite'}`,
+                messageTitle: msgType,
+                messageContent: actualMessage || "",
+                passOpenCount: r.passOpenCount || 0,
+                lastPassOpenedAt: r.lastPassOpenedAt || null
+              });
+              localStorage.setItem(subAuditKey, JSON.stringify(currentSubLogs.slice(0, 500)));
+            } catch(e) {}
+
+            try {
+              const cleanData = { ...updatedRec };
               delete cleanData.id; delete cleanData._submittedAt;
               await fbUpdateRegistration(r.id, cleanData, auth?.idToken);
             } catch(e){}
@@ -25401,12 +35307,257 @@ This cannot be undone.`)) return;
           C={C}
           setC={setC}
           auth={auth}
-          onClose={() => setShowWorkspaceTplModal(false)}
+          allRegs={regs || []}
+          initialTab={tplModalMode || "whatsapp"}
+          initialPdfTplId={selectedPdfTplId || null}
+          onClose={() => {
+            setShowWorkspaceTplModal(false);
+            setTplModalMode("whatsapp");
+            setSelectedPdfTplId(null);
+          }}
         />
       )}
 
       {/* Global Guests Modal */}
       {showGlobalGuestsModal && renderGlobalGuestsModal()}
+
+            {/* Visual PDF Template Configuration & Variable Mapper Modal */}
+      {configModal && (
+        <CertificateConfigModal
+          ev={configModal.ev || activeEvent}
+          auth={auth}
+          forms={C.forms}
+          type={configModal.type || 'cert'}
+          customTpl={configModal.customTpl}
+          onClose={() => setConfigModal(null)}
+          onSave={handleSaveTemplateConfig}
+        />
+      )}
+
+      {/* PDF Templates & Passes Manager Modal (Directly in Workspace) */}
+      {showTemplatesManagerModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:100005,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowTemplatesManagerModal(false)}>
+          <div style={{background:"white",borderRadius:16,maxWidth:780,width:"100%",maxHeight:"90vh",overflowY:"auto",padding:24,boxShadow:"0 20px 45px rgba(0,0,0,0.35)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,borderBottom:"1px solid #E2E8F0",paddingBottom:12}}>
+              <div>
+                <h3 style={{fontSize:"1.15rem",fontWeight:800,color:"#0D4B5E",margin:0,display:"flex",alignItems:"center",gap:8}}>
+                  <span>📑</span> PDF Templates & Passes Manager
+                </h3>
+                <div style={{fontSize:".8rem",color:"#64748B",marginTop:3}}>
+                  Manage, upload backgrounds, map variables, and release PDF passes for: <strong>{activeEvent.title}</strong>
+                </div>
+              </div>
+              <button onClick={()=>setShowTemplatesManagerModal(false)} style={{background:"#F1F5F9",border:"none",borderRadius:"50%",width:32,height:32,cursor:"pointer",fontWeight:800,fontSize:"1rem"}}>✕</button>
+            </div>
+
+            {/* Standard Built-in Templates Section */}
+            <div style={{marginBottom:16,background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:14}}>
+              <div style={{fontSize:".82rem",fontWeight:800,color:"#1E293B",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+                <span>📜</span> Primary Event Documents
+              </div>
+
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {/* Official Invite Letter */}
+                <div style={{background:"white",padding:"10px 14px",borderRadius:8,border:"1px solid #CBD5E1",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:"1.2rem"}}>💌</span>
+                    <div>
+                      <strong style={{fontSize:".85rem",color:"#0F172A"}}>Official Invite Letter</strong>
+                      <div style={{fontSize:".7rem",color:"#64748B"}}>Primary invitation letter & entry pass</div>
+                    </div>
+                    {activeEvent.inviteBgUrl ? (
+                      <span style={{fontSize:".68rem",background:"#DCFCE7",color:"#15803D",padding:"2px 6px",borderRadius:4,fontWeight:800}}>✓ Configured</span>
+                    ) : (
+                      <span style={{fontSize:".68rem",background:"#FEF3C7",color:"#B45309",padding:"2px 6px",borderRadius:4,fontWeight:800}}>⚠️ Needs Background Image</span>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTemplatesManagerModal(false);
+                      setConfigModal({ ev: activeEvent, type: 'invite' });
+                    }}
+                    style={{padding:"6px 14px",borderRadius:6,fontSize:".76rem",fontWeight:800,background:"#0D4B5E",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                  >
+                    ⚙️ Configure Template
+                  </button>
+                </div>
+
+                {/* Certificate Pass */}
+                {(activeEvent.issueCertificates || activeEvent.certBgUrl) && (
+                  <div style={{background:"white",padding:"10px 14px",borderRadius:8,border:"1px solid #CBD5E1",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:"1.2rem"}}>🎓</span>
+                      <div>
+                        <strong style={{fontSize:".85rem",color:"#0F172A"}}>Certificate Pass</strong>
+                        <div style={{fontSize:".7rem",color:"#64748B"}}>Award felicitation & certificate of honor</div>
+                      </div>
+                      {activeEvent.certBgUrl ? (
+                        <span style={{fontSize:".68rem",background:"#DCFCE7",color:"#15803D",padding:"2px 6px",borderRadius:4,fontWeight:800}}>✓ Configured</span>
+                      ) : (
+                        <span style={{fontSize:".68rem",background:"#FEF3C7",color:"#B45309",padding:"2px 6px",borderRadius:4,fontWeight:800}}>⚠️ Needs Background Image</span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowTemplatesManagerModal(false);
+                        setConfigModal({ ev: activeEvent, type: 'cert' });
+                      }}
+                      style={{padding:"6px 14px",borderRadius:6,fontSize:".76rem",fontWeight:800,background:"#0D4B5E",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                    >
+                      ⚙️ Configure Template
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Additional Custom PDF Templates & Passes Section */}
+            <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:12,padding:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:8}}>
+                <div>
+                  <div style={{fontSize:".88rem",fontWeight:800,color:"#166534",display:"flex",alignItems:"center",gap:6}}>
+                    <span>📑</span> Additional Custom PDF Templates & Passes ({(activeEvent.pdfTemplates || []).length})
+                  </div>
+                  <div style={{fontSize:".72rem",color:"#15803D",marginTop:2}}>
+                    Create unlimited extra PDF passes (e.g. Food Coupons, Gate Passes, ID Cards, Parent Passes) with direct WhatsApp URL links.
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = prompt("Enter Name for new PDF Template (e.g. Food Coupon & Dinner Pass, Token Number, Gate Pass):");
+                    if (name && name.trim()) {
+                      const cleanName = name.trim();
+                      const tplId = "doc_" + Date.now();
+                      const newTpl = {
+                        id: tplId,
+                        name: cleanName,
+                        targetSection: "invites",
+                        targetAudience: "assigned",
+                        bgUrl: "",
+                        map: {},
+                        fontSize: 30,
+                        fontColor: "#000000"
+                      };
+                      const updatedTpls = [...(activeEvent.pdfTemplates || []), newTpl];
+                      const currentEvents = C.events || [];
+                      const eventExists = currentEvents.some(e => e.id === activeEvent.id || e.title === activeEvent.title);
+                      const updatedTargetEvent = { ...activeEvent, pdfTemplates: updatedTpls };
+                      const updatedEvents = eventExists 
+                        ? currentEvents.map(e => (e.id === activeEvent.id || e.title === activeEvent.title) ? updatedTargetEvent : e)
+                        : [...currentEvents, updatedTargetEvent];
+                      const updatedC = { ...C, events: updatedEvents };
+                      if (setC) setC(updatedC);
+                      fbSave(updatedC, auth?.idToken);
+                      setActiveDocType(tplId);
+                      setShowTemplatesManagerModal(false);
+                      setConfigModal({
+                        ev: updatedTargetEvent,
+                        type: 'custom',
+                        customTpl: newTpl
+                      });
+                    }
+                  }}
+                  style={{padding:"8px 14px",borderRadius:8,fontSize:".78rem",fontWeight:800,background:"#15803D",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:5,boxShadow:"0 2px 6px rgba(21,128,61,0.25)"}}
+                >
+                  <span>➕</span> Add New PDF Template
+                </button>
+              </div>
+
+              {/* Template Items */}
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginTop:12}}>
+                {(activeEvent.pdfTemplates || []).map((tpl, tplIdx) => {
+                  const directUrl = `https://www.mmp-cwc.com/?doc=${tpl.id}&pass={TXN_ID}`;
+                  return (
+                    <div key={tpl.id} style={{background:"white",padding:"12px 14px",borderRadius:8,border:"1px solid #CBD5E1",display:"flex",flexDirection:"column",gap:8,boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:"1.2rem"}}>📄</span>
+                          <strong style={{fontSize:".88rem",color:"#0F172A"}}>{tpl.name}</strong>
+                          {tpl.bgUrl ? (
+                            <span style={{fontSize:".68rem",background:"#DCFCE7",color:"#15803D",padding:"2px 6px",borderRadius:4,fontWeight:800}}>
+                              ✓ Configured
+                            </span>
+                          ) : (
+                            <span style={{fontSize:".68rem",background:"#FEF3C7",color:"#B45309",padding:"2px 6px",borderRadius:4,fontWeight:800}}>
+                              ⚠️ Needs Background Image
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{display:"flex",gap:6}}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveDocType(tpl.id);
+                              setShowTemplatesManagerModal(false);
+                              setConfigModal({ ev: activeEvent, type: 'custom', customTpl: tpl });
+                            }}
+                            style={{padding:"6px 12px",borderRadius:6,fontSize:".75rem",fontWeight:800,background:"#0D4B5E",color:"white",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                          >
+                            ⚙️ Configure Template
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!window.confirm(`Delete PDF template "${tpl.name}"?`)) return;
+                              const updatedTpls = (activeEvent.pdfTemplates || []).filter((_, k) => k !== tplIdx);
+                              const currentEvents = C.events || [];
+                              const updatedTargetEvent = { ...activeEvent, pdfTemplates: updatedTpls };
+                              const updatedEvents = currentEvents.map(e => (e.id === activeEvent.id || e.title === activeEvent.title) ? updatedTargetEvent : e);
+                              const updatedC = { ...C, events: updatedEvents };
+                              if (setC) setC(updatedC);
+                              await fbSave(updatedC, auth?.idToken);
+                              if (activeDocType === tpl.id) setActiveDocType('invite');
+                            }}
+                            style={{padding:"6px 10px",borderRadius:6,fontSize:".75rem",fontWeight:800,background:"#FEE2E2",color:"#DC2626",border:"1px solid #FCA5A5",cursor:"pointer"}}
+                          >
+                            🗑️ Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* URL Box */}
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:"#F8FAFC",padding:"6px 10px",borderRadius:6,border:"1px dashed #CBD5E1"}}>
+                        <span style={{fontSize:".72rem",color:"#475569",fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          🔗 <strong>URL:</strong> {directUrl}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(directUrl);
+                            alert(`Copied direct URL for "${tpl.name}"!`);
+                          }}
+                          style={{padding:"3px 10px",background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #BFDBFE",borderRadius:4,fontSize:".72rem",fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}
+                        >
+                          📋 Copy URL
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {(!activeEvent.pdfTemplates || activeEvent.pdfTemplates.length === 0) && (
+                  <div style={{fontSize:".78rem",color:"#64748B",fontStyle:"italic",textAlign:"center",padding:"14px 0"}}>
+                    No custom PDF templates added yet. Click "+ Add New PDF Template" above to create Food Passes, Gate Passes, etc.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
+              <button onClick={()=>setShowTemplatesManagerModal(false)} style={{padding:"8px 20px",borderRadius:8,background:"#F1F5F9",color:"#334155",border:"1px solid #CBD5E1",fontSize:".85rem",cursor:"pointer",fontWeight:700}}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* WhatsApp Applicant Messenger Modal */}
       {selectedWhatsAppReg && (
@@ -25415,15 +35566,22 @@ This cannot be undone.`)) return;
             ...selectedWhatsAppReg, 
             isInviteMode: true, 
             activeDocTpl: currentDocTpl,
+            vibhag: typeof resolveGuestVibhag === 'function' ? (resolveGuestVibhag(selectedWhatsAppReg) || selectedWhatsAppReg.vibhag) : selectedWhatsAppReg.vibhag,
+            Vibhag: typeof resolveGuestVibhag === 'function' ? (resolveGuestVibhag(selectedWhatsAppReg) || selectedWhatsAppReg['Vibhag']) : selectedWhatsAppReg['Vibhag'],
+            "Vibhag New": typeof resolveGuestVibhag === 'function' ? (resolveGuestVibhag(selectedWhatsAppReg) || selectedWhatsAppReg['Vibhag New']) : selectedWhatsAppReg['Vibhag New'],
+            vibhagScope: currentDocTpl?.customTpl?.vibhagScope || "auto",
+            targetEventId: currentDocTpl?.customTpl?.targetEventId,
             customDocId: currentDocTpl?.customTpl ? currentDocTpl.id : null 
           }}
           onClose={() => setSelectedWhatsAppReg(null)}
           C={C}
           auth={auth}
-          allRegs={filteredRegs}
+          allRegs={regs}
+          recipientList={filteredRegs}
           onSelectReg={(nextR) => setSelectedWhatsAppReg(nextR)}
-          onLogSent={async (r, msgType) => {
+          onLogSent={async (r, msgType, sentMessageContent) => {
             const updatedBy = auth?.email || "Admin";
+            const messageBody = sentMessageContent || r.lastWhatsAppContent || "";
             const existingLogs = Array.isArray(r.logHistory) ? r.logHistory : [];
             const waLog = {
               timestamp: new Date().toISOString(),
@@ -25431,13 +35589,52 @@ This cannot be undone.`)) return;
               action: `WhatsApp Sent: ${msgType}`,
               type: "whatsapp",
               messageType: msgType,
+              messageContent: messageBody,
               remarks: `WhatsApp invitation pass (${msgType}) sent to applicant.`
             };
             const newLogs = [...existingLogs, waLog];
             const newCount = (r.whatsAppCount || 0) + 1;
-            setRegs(prev => prev.map(x => x.id === r.id ? { ...x, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp } : x));
+            const updatedRegObj = { 
+              ...r, 
+              logHistory: newLogs, 
+              whatsAppCount: newCount, 
+              lastWhatsAppType: msgType, 
+              lastWhatsAppAt: waLog.timestamp,
+              lastWhatsAppContent: messageBody
+            };
+
+            setRegs(prev => prev.map(x => (x.id === r.id || (x['Transaction ID'] && x['Transaction ID'] === r['Transaction ID'])) ? { ...x, ...updatedRegObj } : x));
+
+            // Append to sub-workspace audit log in localStorage
             try {
-              const cleanData = { ...r, logHistory: newLogs, whatsAppCount: newCount, lastWhatsAppType: msgType, lastWhatsAppAt: waLog.timestamp };
+              const subAuditKey = `mmp_wa_audit_${activeEvent?.id || activeEvent?.title || 'default'}_${currentDocTpl?.id || 'invite'}`;
+              const prevAudit = JSON.parse(localStorage.getItem(subAuditKey) || "[]");
+              const nowObj = new Date();
+              const formattedTime = nowObj.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+              const txn = r['Transaction ID'] || r.transactionId || r.id;
+              const mob = String(r['Mobile Number'] || r.phone || r.mobile || '').replace(/\D/g, '').slice(-10);
+
+              const newEntry = {
+                recipientName: r['Full Name'] || r.name || 'Invitee',
+                recipientMobile: mob,
+                recipientTxnId: txn,
+                vibhag: r.vibhag || r['Vibhag'] || 'General',
+                designation: r.Designation || r.designation || 'Member',
+                subWorkspace: currentDocTpl?.name || 'Sub-Workspace',
+                time: nowObj.toISOString(),
+                timeFormatted: formattedTime,
+                sender: updatedBy,
+                messageType: msgType,
+                messageContent: messageBody
+              };
+
+              const filteredAudit = prevAudit.filter(entry => entry.recipientTxnId !== txn);
+              filteredAudit.push(newEntry);
+              localStorage.setItem(subAuditKey, JSON.stringify(filteredAudit));
+            } catch(e) {}
+
+            try {
+              const cleanData = { ...updatedRegObj };
               delete cleanData.id; delete cleanData._submittedAt;
               await fbUpdateRegistration(r.id, cleanData, auth?.idToken);
             } catch(e){}
@@ -25570,6 +35767,206 @@ This cannot be undone.`)) return;
         </div>
       )}
 
+      
+      {/* ── 💰 Import Donors from Donations Database Modal ── */}
+      {showImportDonorsModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowImportDonorsModal(false)}>
+          <div style={{background:"white",borderRadius:16,padding:mob?18:24,width:"100%",maxWidth:800,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 25px 50px rgba(0,0,0,0.3)",display:"flex",flexDirection:"column",gap:14}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1.5px solid #E2E8F0",paddingBottom:10}}>
+              <div>
+                <h2 style={{fontFamily:"'Playfair Display',serif",color:"#166534",margin:0,fontSize:"1.25rem",display:"flex",alignItems:"center",gap:8}}>
+                  <span>💰</span> Import Verified Donors into "{activeEvent.title}"
+                </h2>
+                <p style={{fontSize:".8rem",color:"#475569",margin:"3px 0 0 0"}}>
+                  Select donors to generate Thank You Letters, 80G Receipts, and WhatsApp broadcasts.
+                </p>
+              </div>
+              <button onClick={()=>setShowImportDonorsModal(false)} style={{background:"#F1F5F9",border:"none",borderRadius:"50%",width:32,height:32,cursor:"pointer",fontWeight:800,fontSize:"1.1rem",color:"#475569"}}>✕</button>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",background:"#F8FAFC",padding:"10px 12px",borderRadius:8,border:"1px solid #CBD5E1"}}>
+              <input
+                type="text"
+                placeholder="🔍 Search by donor name, receipt #, vibhag, program..."
+                value={donorImportSearch}
+                onChange={e=>setDonorImportSearch(e.target.value)}
+                style={{flex:1,minWidth:220,padding:"7px 12px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",boxSizing:"border-box"}}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const filtered = allDonationsList.filter(d => {
+                    if (!donorImportSearch.trim()) return true;
+                    const q = donorImportSearch.toLowerCase();
+                    return Object.values(d).some(v => String(v).toLowerCase().includes(q));
+                  });
+                  setSelectedDonorIds(filtered.map(d => d._docId || d.id));
+                }}
+                style={{padding:"6px 12px",background:"white",border:"1px solid #86EFAC",borderRadius:6,color:"#15803D",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
+              >
+                ✓ Select All
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDonorIds([])}
+                style={{padding:"6px 10px",background:"white",border:"1px solid #CBD5E1",borderRadius:6,color:"#64748B",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
+              >
+                Deselect
+              </button>
+            </div>
+
+            {/* Donors List Table */}
+            {loadingDonations ? (
+              <div style={{textAlign:"center",padding:30,color:"#64748B"}}>⏳ Fetching donations database...</div>
+            ) : (
+              <div style={{maxHeight:"45vh",overflowY:"auto",border:"1px solid #E2E8F0",borderRadius:8}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:".78rem"}}>
+                  <thead>
+                    <tr style={{background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",textAlign:"left",color:"#475569"}}>
+                      <th style={{padding:"8px 10px",width:40}}>Select</th>
+                      <th style={{padding:"8px 10px"}}>Donor Name</th>
+                      <th style={{padding:"8px 10px"}}>Amount (₹)</th>
+                      <th style={{padding:"8px 10px"}}>Receipt #</th>
+                      <th style={{padding:"8px 10px"}}>Date</th>
+                      <th style={{padding:"8px 10px"}}>Vibhag</th>
+                      <th style={{padding:"8px 10px"}}>Program</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allDonationsList
+                      .filter(d => {
+                        if (!donorImportSearch.trim()) return true;
+                        const q = donorImportSearch.toLowerCase();
+                        return Object.values(d).some(v => String(v).toLowerCase().includes(q));
+                      })
+                      .map(d => {
+                        const targetId = d._docId || d.id;
+                        const isSelected = selectedDonorIds.includes(targetId);
+                        const isAlreadyIn = regs.some(r => r.donationId === targetId && r.eventId === selectedEventId);
+
+                        return (
+                          <tr key={targetId} style={{borderBottom:"1px solid #F1F5F9",background:isSelected?"#F0FDF4":"white"}}>
+                            <td style={{padding:"8px 10px",textAlign:"center"}}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {
+                                  setSelectedDonorIds(prev =>
+                                    prev.includes(targetId) ? prev.filter(x => x !== targetId) : [...prev, targetId]
+                                  );
+                                }}
+                              />
+                            </td>
+                            <td style={{padding:"8px 10px",fontWeight:700,color:"#0F172A"}}>
+                              {d.name}
+                              {d.nameGu && <span style={{display:"block",fontSize:".7rem",color:"#15803D",fontWeight:600}}>{d.nameGu}</span>}
+                              {isAlreadyIn && <span style={{fontSize:".62rem",background:"#DCFCE7",color:"#166534",padding:"1px 4px",borderRadius:4,marginLeft:4}}>In Workspace</span>}
+                            </td>
+                            <td style={{padding:"8px 10px",fontWeight:800,color:"#15803D"}}>₹{Number(d.amount).toLocaleString('en-IN')}</td>
+                            <td style={{padding:"8px 10px",fontFamily:"monospace"}}>{d.receiptNo || d.internalReceiptNo || d.id}</td>
+                            <td style={{padding:"8px 10px",color:"#64748B"}}>{d.date}</td>
+                            <td style={{padding:"8px 10px"}}>{d.vibhag || "General"}</td>
+                            <td style={{padding:"8px 10px",fontSize:".72rem",color:"#475569"}}>{d.purpose || d.program || "-"}</td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Modal Bottom Action Bar */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderTop:"1px solid #E2E8F0",paddingTop:10}}>
+              <span style={{fontSize:".8rem",color:"#475569"}}>
+                <strong>{selectedDonorIds.length}</strong> donor(s) selected
+              </span>
+              <div style={{display:"flex",gap:8}}>
+                <button
+                  type="button"
+                  onClick={()=>setShowImportDonorsModal(false)}
+                  style={{padding:"8px 14px",background:"#F1F5F9",color:"#475569",border:"1px solid #CBD5E1",borderRadius:6,fontSize:".8rem",fontWeight:700,cursor:"pointer"}}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={selectedDonorIds.length === 0 || importingDonors}
+                  onClick={async () => {
+                    setImportingDonors(true);
+                    try {
+                      const selectedDons = allDonationsList.filter(d => selectedDonorIds.includes(d._docId || d.id));
+                      let importedCount = 0;
+
+                      for (const d of selectedDons) {
+                        const targetId = d._docId || d.id;
+                        const existing = regs.find(r => r.donationId === targetId && r.eventId === selectedEventId);
+                        if (existing) continue;
+
+                        const newRegEntry = {
+                          "Full Name": d.name,
+                          "Donor Name": d.name,
+                          name: d.name,
+                          nameGu: d.nameGu || "",
+                          "Mobile Number": d.phone || d.mobile || "",
+                          mobile: d.phone || d.mobile || "",
+                          "Amount": d.amount,
+                          amount: d.amount,
+                          "Receipt Number": d.receiptNo || d.internalReceiptNo || d.id,
+                          receiptNo: d.receiptNo || d.internalReceiptNo || d.id,
+                          "Date": d.date,
+                          date: d.date,
+                          "Vibhag": d.vibhag || "General",
+                          vibhag: d.vibhag || "General",
+                          "PAN": d.pan || "",
+                          pan: d.pan || "",
+                          "Program": d.purpose || d.program || activeEvent.title,
+                          "Transaction ID": d.receiptNo || `DON-${targetId.slice(-6)}`,
+                          transactionId: d.receiptNo || `DON-${targetId.slice(-6)}`,
+                          Status: "Approved",
+                          status: "Approved",
+                          eventId: selectedEventId,
+                          eventName: activeEvent.title,
+                          isDonor: true,
+                          donationId: targetId,
+                          isSpecialGuest: true
+                        };
+
+                        const savedRes = await fbSubmitRegistration(newRegEntry, auth?.idToken);
+                        newRegEntry.id = savedRes?.name ? savedRes.name.split("/").pop() : `reg_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+                        setRegs(prev => [newRegEntry, ...prev]);
+                        importedCount++;
+                      }
+
+                      alert(`✅ Successfully imported ${importedCount} donor(s) into "${activeEvent.title}"!`);
+                      setShowImportDonorsModal(false);
+                      setSelectedDonorIds([]);
+                    } catch(err) {
+                      alert("Import failed: " + err.message);
+                    } finally {
+                      setImportingDonors(false);
+                    }
+                  }}
+                  style={{
+                    padding:"8px 18px",
+                    background: selectedDonorIds.length > 0 ? "linear-gradient(135deg, #15803D, #166534)" : "#CBD5E1",
+                    color:"white",
+                    border:"none",
+                    borderRadius:6,
+                    fontSize:".82rem",
+                    fontWeight:800,
+                    cursor: (selectedDonorIds.length > 0 && !importingDonors) ? "pointer" : "not-allowed",
+                    boxShadow: selectedDonorIds.length > 0 ? "0 2px 6px rgba(22,101,52,0.3)" : "none"
+                  }}
+                >
+                  {importingDonors ? "Importing..." : `📥 Import ${selectedDonorIds.length} Donors`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Import Contact Group Modal (Supports Multi-Group Selection) */}
       {showImportContactGroupModal && (
         <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.6)",zIndex:99999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
@@ -25580,7 +35977,7 @@ This cannot be undone.`)) return;
                    <span>🏷️</span> Import Contact Groups
                  </h2>
                  <p style={{fontSize:".82rem",color:"var(--mu)",margin:"4px 0 0 0"}}>
-                   Select one or multiple contact groups to batch import their members into <strong>{activeEvent.title}</strong>
+                   Select contact groups to attach / import into <strong>{currentDocName}</strong> ({activeEvent.title})
                  </p>
                </div>
                <button 
@@ -25594,7 +35991,7 @@ This cannot be undone.`)) return;
             {(() => {
               const groupsMap = {};
               globalGuests.forEach(g => {
-                const gGroups = getContactGroups(g);
+                const gGroups = typeof getResolvedContactGroups === 'function' ? getResolvedContactGroups(g) : getContactGroups(g);
                 gGroups.forEach(grp => {
                   if (!groupsMap[grp]) groupsMap[grp] = [];
                   groupsMap[grp].push(g);
@@ -25607,23 +36004,28 @@ This cannot be undone.`)) return;
                 groupNames = groupNames.filter(name => name.toLowerCase().includes(q));
               }
 
-              // Calculate total unimported across currently selected groups
-              const selectedUnimportedGuestsMap = new Map();
+              const currentActiveDoc = activeDocType || 'invite';
+              const isAlreadyInSubworkspace = (g) => {
+                return regs.some(r => {
+                  if ((r.globalGuestId !== g.id && r["Full Name"] !== g["Full Name"]) || r.eventId !== selectedEventId) return false;
+                  return (r.targetTemplateId === currentActiveDoc) || (Array.isArray(r.assignedDocTypes) && r.assignedDocTypes.includes(currentActiveDoc));
+                });
+              };
+
+              // Total contacts in selected groups
+              const allSelectedGuestsMap = new Map();
               selectedGroupsToImport.forEach(grpName => {
                 const list = groupsMap[grpName] || [];
                 list.forEach(g => {
-                  const isAlreadyInWorkspace = regs.some(r => r.globalGuestId === g.id && r.eventId === selectedEventId);
-                  if (!isAlreadyInWorkspace && !selectedUnimportedGuestsMap.has(g.id)) {
-                    selectedUnimportedGuestsMap.set(g.id, g);
+                  if (!allSelectedGuestsMap.has(g.id)) {
+                    allSelectedGuestsMap.set(g.id, g);
                   }
                 });
               });
-              const totalReadyFromSelected = selectedUnimportedGuestsMap.size;
+              const totalSelectedCount = allSelectedGuestsMap.size;
 
               const toggleGroupSelection = (grp) => {
-                setSelectedGroupsToImport(prev => 
-                  prev.includes(grp) ? prev.filter(x => x !== grp) : [...prev, grp]
-                );
+                setSelectedGroupsToImport(prev => prev.includes(grp) ? prev.filter(x => x !== grp) : [...prev, grp]);
               };
 
               const selectAllGroups = () => {
@@ -25669,9 +36071,8 @@ This cannot be undone.`)) return;
                   <div style={{display:"flex",flexDirection:"column",gap:10,maxHeight:"42vh",overflowY:"auto",paddingRight:4}}>
                     {groupNames.map(grp => {
                       const list = groupsMap[grp] || [];
-                      const importedCount = list.filter(g => regs.some(r => r.globalGuestId === g.id && r.eventId === selectedEventId)).length;
-                      const unimportedCount = list.length - importedCount;
                       const isSelected = selectedGroupsToImport.includes(grp);
+                      const inSubCount = list.filter(g => isAlreadyInSubworkspace(g)).length;
 
                       return (
                         <div 
@@ -25704,36 +36105,30 @@ This cannot be undone.`)) return;
                                 <span>🏷️</span> {grp}
                               </div>
                               <div style={{fontSize:".76rem",color:"#475569",marginTop:2}}>
-                                <strong>{list.length}</strong> total in group • <span style={{color:"#15803D",fontWeight:700}}>{importedCount} in workspace</span> {unimportedCount > 0 ? <span style={{color:"#D97706",fontWeight:700}}>• {unimportedCount} ready to import</span> : <span style={{color:"#64748B",fontWeight:600}}>• (all imported)</span>}
+                                <strong>{list.length}</strong> contacts in group {inSubCount > 0 ? <span>• <strong style={{color:"#15803D"}}>{inSubCount} attached to this sub-workspace</strong></span> : ""}
                               </div>
                             </div>
                           </div>
 
                           <div style={{display:"flex",alignItems:"center",gap:8}} onClick={e => e.stopPropagation()}>
-                            {unimportedCount > 0 ? (
-                              <button
-                                type="button"
-                                disabled={importingContactGroups}
-                                onClick={() => handleImportMultipleContactGroups([grp])}
-                                style={{
-                                  padding: "6px 14px",
-                                  borderRadius: 6,
-                                  border: "none",
-                                  background: "#15803D",
-                                  color: "white",
-                                  fontSize: ".75rem",
-                                  fontWeight: 800,
-                                  cursor: "pointer",
-                                  boxShadow: "0 1px 4px rgba(21,128,61,0.2)"
-                                }}
-                              >
-                                + Import {unimportedCount}
-                              </button>
-                            ) : (
-                              <span style={{padding:"4px 10px",background:"#F1F5F9",color:"#64748B",borderRadius:6,fontSize:".75rem",fontWeight:700}}>
-                                All In Workspace ✓
-                              </span>
-                            )}
+                            <button
+                              type="button"
+                              disabled={importingContactGroups}
+                              onClick={() => handleImportMultipleContactGroups([grp])}
+                              style={{
+                                padding: "6px 14px",
+                                borderRadius: 6,
+                                border: "none",
+                                background: "#15803D",
+                                color: "white",
+                                fontSize: ".75rem",
+                                fontWeight: 800,
+                                cursor: "pointer",
+                                boxShadow: "0 1px 4px rgba(21,128,61,0.2)"
+                              }}
+                            >
+                              + Attach / Import {list.length}
+                            </button>
                           </div>
                         </div>
                       );
@@ -25751,10 +36146,10 @@ This cannot be undone.`)) return;
                     <div style={{fontSize:".82rem",color:"#334155"}}>
                       {selectedGroupsToImport.length > 0 ? (
                         <span>
-                          <strong>{selectedGroupsToImport.length}</strong> group(s) selected • <strong style={{color:"#15803D"}}>{totalReadyFromSelected}</strong> new contact(s) will be imported
+                          <strong>{selectedGroupsToImport.length}</strong> group(s) selected • <strong style={{color:"#15803D"}}>{totalSelectedCount}</strong> contacts will be attached to <strong>{currentDocName}</strong>
                         </span>
                       ) : (
-                        <span style={{color:"#64748B",fontStyle:"italic"}}>Select one or more groups with checkboxes to import together</span>
+                        <span style={{color:"#64748B",fontStyle:"italic"}}>Select one or more groups with checkboxes to attach together</span>
                       )}
                     </div>
 
@@ -25768,24 +36163,24 @@ This cannot be undone.`)) return;
                       </button>
                       <button
                         type="button"
-                        disabled={selectedGroupsToImport.length === 0 || totalReadyFromSelected === 0 || importingContactGroups}
+                        disabled={selectedGroupsToImport.length === 0 || totalSelectedCount === 0 || importingContactGroups}
                         onClick={() => handleImportMultipleContactGroups(selectedGroupsToImport)}
                         style={{
                           padding: "9px 20px",
                           borderRadius: 8,
                           border: "none",
-                          background: (selectedGroupsToImport.length === 0 || totalReadyFromSelected === 0) ? "#CBD5E1" : "linear-gradient(135deg, #0D4B5E, #135D74)",
-                          color: (selectedGroupsToImport.length === 0 || totalReadyFromSelected === 0) ? "#64748B" : "white",
+                          background: (selectedGroupsToImport.length === 0 || totalSelectedCount === 0) ? "#CBD5E1" : "linear-gradient(135deg, #0D4B5E, #135D74)",
+                          color: (selectedGroupsToImport.length === 0 || totalSelectedCount === 0) ? "#64748B" : "white",
                           fontSize: ".85rem",
                           fontWeight: 800,
-                          cursor: (selectedGroupsToImport.length === 0 || totalReadyFromSelected === 0 || importingContactGroups) ? "not-allowed" : "pointer",
-                          boxShadow: (selectedGroupsToImport.length > 0 && totalReadyFromSelected > 0) ? "0 2px 8px rgba(13,75,94,0.25)" : "none",
+                          cursor: (selectedGroupsToImport.length === 0 || totalSelectedCount === 0 || importingContactGroups) ? "not-allowed" : "pointer",
+                          boxShadow: (selectedGroupsToImport.length > 0 && totalSelectedCount > 0) ? "0 2px 8px rgba(13,75,94,0.25)" : "none",
                           display: "flex",
                           alignItems: "center",
                           gap: 6
                         }}
                       >
-                        <span>📥</span> {importingContactGroups ? "Importing..." : "Import Selected Groups (" + totalReadyFromSelected + " Contacts)"}
+                        <span>📥</span> {importingContactGroups ? "Attaching..." : "Attach Selected Groups (" + totalSelectedCount + " Contacts)"}
                       </button>
                     </div>
                   </div>
@@ -25894,6 +36289,45 @@ This cannot be undone.`)) return;
           </div>
         </div>
       )}
+      {/* Import Event & Section Registrations Modal */}
+      {showImportEventRegsModal && (
+        <ImportEventRegistrationsModal
+          isOpen={showImportEventRegsModal}
+          onClose={() => setShowImportEventRegsModal(false)}
+          activeEvent={activeEvent}
+          allEvents={C.events || []}
+          allRegs={regs || []}
+          currentDocTpl={currentDocTpl}
+          availableDocTemplates={availableDocTemplates}
+          auth={auth}
+          C={C}
+          onImportSuccess={(newRegs) => {
+            if (Array.isArray(newRegs) && newRegs.length > 0) {
+              setRegs(prev => {
+                const map = new Map(prev.map(r => [r.id, r]));
+                newRegs.forEach(nr => map.set(nr.id, { ...(map.get(nr.id) || {}), ...nr }));
+                return Array.from(map.values());
+              });
+            }
+            fetchRegs();
+          }}
+        />
+      )}
+
+      {/* Connect Existing Template Modal */}
+      {showConnectTplModal && (
+        <ConnectExistingTemplateModal
+          isOpen={showConnectTplModal}
+          onClose={() => setShowConnectTplModal(false)}
+          activeEvent={activeEvent}
+          C={C}
+          setC={setC}
+          auth={auth}
+          currentDocTpl={currentDocTpl}
+          onConnected={(newId) => setActiveDocType(newId)}
+        />
+      )}
+
       {/* Bulk Download & Envelope Print Selection Modal */}
       <BulkSelectionModal 
         isOpen={Boolean(bulkSelectMode)} 
@@ -26441,26 +36875,63 @@ const getChatbotPortalUrl = () => {
   return "https://www.mmp-cwc.com";
 };
 
-const generateVibhagSummaryWhatsAppText = (summaryData) => {
+const generateVibhagSummaryWhatsAppText = (summaryData, C) => {
   if (!summaryData) return "";
-  const { total, approved, pending, rejected, vibhagList } = summaryData;
+  const { total, approved, pending, rejected, vibhagList, eventList, scopeTitle } = summaryData;
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
   const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 
-  let text = "🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n";
-  text += "🎓 *Education Felicitation 2026 — Executive Summary*\n";
-  text += `📅 *Date:* ${dateStr}  ⏱️ *Time:* ${timeStr}\n`;
-  text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-  text += `📊 *Overall:* Total: *${total}* │ ⏳ Pending: *${pending}* │ 🟢 Approved: *${approved}* │ 🔴 Rejected: *${rejected}*\n`;
-  text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-  
+  const customTpls = C?.whatsappBroadcastTemplates || [];
+  const foundTpl = summaryData?.tplId ? customTpls.find(t => t.id === summaryData.tplId || t.name === summaryData.tplId) : null;
+
+  const defaultHeader = ".  🌷 || મુંબઈ મેઘવાળ પંચાયત || 🌷\n         [NGO]\n   •••• સેન્ટ્રલ વર્કિંગ કમિટી ••••\n☸~~~~~~~~~~~~~~~~~☸";
+  const header = (foundTpl?.header !== undefined ? foundTpl.header : defaultHeader).trim();
+  const appeal = (foundTpl?.appeal !== undefined ? foundTpl.appeal : "").trim();
+  const signatory = (foundTpl?.signatory !== undefined ? foundTpl.signatory : "").trim();
+  const upiId = foundTpl?.upiId || C?.whatsappTemplates?.upiId || "mumba98697331@barodampay";
+  const donateUrl = (typeof window !== "undefined" && window.location.hostname.includes("github.io"))
+    ? "https://pradeepparmar902.github.io/MY_Community_Website/donate/"
+    : "https://mmp-cwc.com/donate/";
+  const targetDonateUrl = foundTpl?.donateLink || C?.whatsappTemplates?.donateLink || donateUrl;
+  const qrHeader = foundTpl?.qrHeader || "💳 *GPay / BHIM QR સ્કેનર & Direct Pay:*";
+  const portalUrl = (typeof window !== "undefined" && window.location.hostname.includes("github.io"))
+    ? "https://pradeepparmar902.github.io/MY_Community_Website/"
+    : "https://mmp-cwc.com";
+
+  let parts = [];
+
+  // GPay Top preview if enabled
+  if (foundTpl?.includeGPay === true) {
+    parts.push(`💳 *દાન QR સ્કેનર:* ${targetDonateUrl}`);
+  }
+
+  // 1. Header Banner
+  if (!foundTpl || foundTpl.includeHeader !== false) {
+    if (header) parts.push(header);
+  }
+
+  // 2. Appeal / Custom Message Text
+  if (foundTpl && foundTpl.includeAppeal !== false && appeal) {
+    parts.push(appeal);
+  }
+
+  // Summary Metrics Section (KPIs and Vibhag Table)
+  let metricsText = "";
+  if (!foundTpl || foundTpl.includeAppeal === false || !appeal) {
+    metricsText += `🎓 *${scopeTitle || "Education Felicitation 2026 — Executive Summary"}*\n`;
+  }
+  metricsText += `📅 *Date:* ${dateStr}  ⏱️ *Time:* ${timeStr}\n`;
+  metricsText += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+  metricsText += `📊 *Overall:* Total: *${total}* │ ⏳ Pending: *${pending}* │ 🟢 Approved: *${approved}* │ 🔴 Rejected: *${rejected}*\n`;
+  metricsText += "━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+
   if (vibhagList && vibhagList.length > 0) {
-    text += "📍 *VIBHAG-WISE BREAKDOWN:*\n";
-    text += "_(T: Total │ P: Pending │ A: Approved │ R: Rejected)_\n";
-    text += "```\n";
-    text += "#  Vibhag          T  P  A  R\n";
-    text += "── ────────────── ── ── ── ──\n";
+    metricsText += "\n📍 *VIBHAG-WISE BREAKDOWN:*\n";
+    metricsText += "_(T: Total │ P: Pending │ A: Approved │ R: Rejected)_\n";
+    metricsText += "```\n";
+    metricsText += "#  Vibhag          T  P  A  R\n";
+    metricsText += "── ────────────── ── ── ── ──\n";
 
     let sumTot = 0, sumPen = 0, sumApp = 0, sumRej = 0;
     vibhagList.forEach(([vName, vStat], idx) => {
@@ -26474,21 +36945,36 @@ const generateVibhagSummaryWhatsAppText = (summaryData) => {
       sumPen += vStat.pending;
       sumApp += vStat.approved;
       sumRej += (vStat.rejected || 0);
-      text += `${numStr} ${cleanV} ${tStr} ${pStr} ${aStr} ${rStr}\n`;
+      metricsText += `${numStr} ${cleanV} ${tStr} ${pStr} ${aStr} ${rStr}\n`;
     });
 
-    text += "── ────────────── ── ── ── ──\n";
+    metricsText += "── ────────────── ── ── ── ──\n";
     const totT = String(sumTot).padStart(2, " ");
     const totP = String(sumPen).padStart(2, " ");
     const totA = String(sumApp).padStart(2, " ");
     const totR = String(sumRej).padStart(2, " ");
-    text += `   TOTAL          ${totT} ${totP} ${totA} ${totR}\n`;
-    text += "```\n";
+    metricsText += `   TOTAL          ${totT} ${totP} ${totA} ${totR}\n`;
+    metricsText += "```";
   }
 
-  text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-  text += `🌐 *Live Portal:* ${getChatbotPortalUrl()}/`;
-  return text;
+  parts.push(metricsText);
+
+  // 5. Signatory / Footer Paragraph
+  if (!foundTpl || foundTpl.includeFooter !== false) {
+    if (signatory) parts.push(signatory);
+  }
+
+  // 6. GPay / QR info if enabled
+  if (foundTpl?.includeGPay === true) {
+    parts.push(qrHeader + "\n" + `🔗 ${targetDonateUrl}\n` + `📲 UPI ID: ${upiId}`);
+  }
+
+  // Portal link
+  if (!foundTpl || foundTpl.includePortalLink !== false) {
+    parts.push(`🌐 *Live Portal:* ${portalUrl}`);
+  }
+
+  return parts.join("\n\n");
 };
 
 const generateApplicationWhatsAppText = (app) => {
@@ -26497,7 +36983,7 @@ const generateApplicationWhatsAppText = (app) => {
   const displayName = rawName.replace(/\|/g, " ").replace(/\s+/g, " ").trim().toUpperCase();
   const txnId = String(app["Transaction ID"] || app.transactionId || app.txnId || app.id || "VG-ID").trim().toUpperCase();
   const status = String(app.Status || app.status || "Pending").trim();
-  const vibhag = String(app["Vibhag"] || "Unspecified").trim().toUpperCase();
+  const vibhag = getRecordVibhag(app).toUpperCase();
   const stream = String(app["Stream"] || "General").trim();
   const marksVal = app["% Obtained"] || app["%"];
   const marks = marksVal ? `${marksVal}%` : "-";
@@ -26606,7 +37092,7 @@ function ApplicationRecordCard({ app, onAction }) {
       <div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px 12px",fontSize:".78rem"}}>
         <div>
           <span style={{color:"#64748B",display:"block",fontSize:".7rem",fontWeight:600}}>VIBHAG</span>
-          <span style={{color:"#0F172A",fontWeight:700}}>{app["Vibhag"] || "Unspecified"}</span>
+          <span style={{color:"#0F172A",fontWeight:700}}>{getRecordVibhag(app)}</span>
         </div>
         <div>
           <span style={{color:"#64748B",display:"block",fontSize:".7rem",fontWeight:600}}>STREAM / CLASS</span>
@@ -26719,13 +37205,13 @@ function ApplicationRecordCard({ app, onAction }) {
 }
 
 // ── Vibhag Analytics Dashboard Card ─────────────────────────────────────────────────────
-function VibhagSummaryCard({ summaryData }) {
+function VibhagSummaryCard({ summaryData, C }) {
   const [copied, setCopied] = useState(false);
   if (!summaryData) return null;
-  const { total, approved, pending, rejected, vibhagList, scopeTitle } = summaryData;
+  const { total, approved, pending, rejected, vibhagList, eventList, scopeTitle } = summaryData;
 
   const handleCopyWhatsApp = () => {
-    const text = generateVibhagSummaryWhatsAppText(summaryData);
+    const text = generateVibhagSummaryWhatsAppText(summaryData, C);
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -26735,7 +37221,7 @@ function VibhagSummaryCard({ summaryData }) {
   };
 
   const handleShareWhatsApp = () => {
-    const text = generateVibhagSummaryWhatsAppText(summaryData);
+    const text = generateVibhagSummaryWhatsAppText(summaryData, C);
     const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(url, "_blank");
   };
@@ -26782,6 +37268,24 @@ function VibhagSummaryCard({ summaryData }) {
           <div style={{fontSize:"1.1rem",fontWeight:800,color:"#DC2626"}}>{rejected}</div>
         </div>
       </div>
+
+      {/* Breakdown by Events (if multiple events) */}
+      {eventList && eventList.length > 0 && (
+        <div style={{padding:"8px 14px",borderBottom:"1px solid #E2E8F0",background:"#F0F9FF"}}>
+          <div style={{fontSize:".73rem",fontWeight:800,color:"#0369A1",marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Selected Events Breakdown:</div>
+          <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:120,overflowY:"auto"}}>
+            {eventList.map(([evName, evStat], idx) => (
+              <div key={idx} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 8px",background:"white",borderRadius:6,fontSize:".76rem",border:"1px solid #BAE6FD"}}>
+                <span style={{fontWeight:700,color:"#0F172A"}}>📌 {evName}</span>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{background:"#EFF6FF",color:"#1D4ED8",padding:"1px 6px",borderRadius:4,fontWeight:800,fontSize:".7rem"}}>Total: {evStat.total}</span>
+                  <span style={{background:"#DCFCE7",color:"#15803D",padding:"1px 6px",borderRadius:4,fontWeight:700,fontSize:".7rem"}}>🟢 {evStat.approved}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Breakdown by Vibhag */}
       {vibhagList && vibhagList.length > 0 && (
@@ -26865,26 +37369,18 @@ function VibhagSummaryCard({ summaryData }) {
 }
 
 // ── Offline Donation Chatbot UI Components ──────────────────────────────────────
-function OfflineDonationEntryCard({ initialData, onSubmit }) {
+function OfflineDonationEntryCard({ initialData, onSubmit, C }) {
   const [name, setName] = useState("");
+  const [mobile, setMobile] = useState(initialData?.mobile || initialData?.phone || "");
   const [date, setDate] = useState(initialData?.initialDate || new Date().toISOString().split('T')[0]);
   const [amount, setAmount] = useState("");
   const [purpose, setPurpose] = useState(initialData?.defaultPurpose || "Education Felicitation 2026");
-  const [vibhag, setVibhag] = useState(initialData?.defaultVibhag || "10 MAHALAXMI");
+  const vibhagOptions = extractVibhagList(C);
+  const [vibhag, setVibhag] = useState(initialData?.defaultVibhag || vibhagOptions[0] || "10 MAHALAXMI");
   const [eventCode, setEventCode] = useState(initialData?.defaultEventCode || "EDU26");
   const [receiptNo, setReceiptNo] = useState("");
   const [submitting, setSubmitting] = useState(false);
-
-  const VIBHAG_OPTIONS_DON = [
-    "10 MAHALAXMI",
-    "15 RAMDEV NAGAR",
-    "2 WALPAKHADI",
-    "22 LOWER PAREL",
-    "30 PRATKISHA NAGAR",
-    "55 BHAYANDER",
-    "65 KALWA",
-    "Outside Mumbai / General"
-  ];
+  const VIBHAG_OPTIONS_DON = vibhagOptions;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -26893,7 +37389,7 @@ function OfflineDonationEntryCard({ initialData, onSubmit }) {
     if (!date) return alert("Please select Donation Date.");
 
     setSubmitting(true);
-    await onSubmit({ name, date, amount, purpose, vibhag, eventCode, receiptNo });
+    await onSubmit({ name, mobile, date, amount, purpose, vibhag, eventCode, receiptNo });
     setSubmitting(false);
   };
 
@@ -26907,6 +37403,11 @@ function OfflineDonationEntryCard({ initialData, onSubmit }) {
         <div style={{gridColumn:"1/-1"}}>
           <label style={{display:"block",fontSize:".7rem",fontWeight:700,color:"#374151",marginBottom:2}}>Name *</label>
           <input type="text" placeholder="Donor Full Name" value={name} onChange={e=>setName(e.target.value)} required style={{width:"100%",padding:"7px 9px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",boxSizing:"border-box",background:"white"}} />
+        </div>
+
+        <div style={{gridColumn:"1/-1"}}>
+          <label style={{display:"block",fontSize:".7rem",fontWeight:800,color:"#15803D",marginBottom:2}}>📱 WhatsApp Mobile Number</label>
+          <input type="tel" placeholder="10-digit WhatsApp number (e.g. 9820582546)" value={mobile} onChange={e=>setMobile(e.target.value)} style={{width:"100%",padding:"7px 9px",borderRadius:6,border:"1.5px solid #86EFAC",fontSize:".82rem",boxSizing:"border-box",background:"#F0FDF4",fontWeight:600}} />
         </div>
 
         <div>
@@ -26964,30 +37465,1184 @@ function OfflineDonationEntryCard({ initialData, onSubmit }) {
   );
 }
 
-function OfflineDonationSuccessCard({ donation }) {
+export const getAppreciationTemplateDefaultUrl = () => {
+  if (typeof window !== "undefined" && window.location.hostname.includes("github.io")) {
+    return "https://pradeepparmar902.github.io/MY_Community_Website/donor_appreciation_poster_tpl.jpg";
+  }
+  return "/donor_appreciation_poster_tpl.jpg";
+};
+
+// ── Canvas-based Donor Appreciation Poster Generator ──
+export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositions) => {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 994;
+    canvas.height = 1024;
+    const ctx = canvas.getContext("2d");
+
+    const activeTpl = templateImgUrl || getAppreciationTemplateDefaultUrl();
+    const defaultTpl = getAppreciationTemplateDefaultUrl();
+
+    // Default percentage positions if not customized
+    const pos = {
+      name: { x: 42.5, y: 52.6, fontSize: 21, color: "#0A2540", visible: true, ...customPositions?.name },
+      nameGu: { x: 42.5, y: 55.2, fontSize: 18, color: "#064E3B", visible: true, ...customPositions?.nameGu },
+      amount: { x: 39.5, y: 63.8, fontSize: 23, color: "#0F172A", visible: true, ...customPositions?.amount },
+      acknowledgment: { x: 50, y: 81.2, fontSize: 13.5, color: "#1E293B", visible: true, ...customPositions?.acknowledgment },
+      receiptDetails: { x: 50, y: 83.2, fontSize: 13.5, color: "#334155", visible: true, ...customPositions?.receiptDetails },
+      date: { x: 60, y: 84.5, fontSize: 13, color: "#334155", visible: false, ...customPositions?.date },
+      vibhag: { x: 30, y: 84.5, fontSize: 13, color: "#334155", visible: false, ...customPositions?.vibhag },
+    };
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        ctx.drawImage(img, 0, 0, 994, 1024);
+
+        const dName = String(donation.name || donation['Full Name'] || 'Respected Donor').trim().toUpperCase();
+        const dNameGuRaw = String(donation.nameGu || donation.donorNameGu || '').trim();
+        const dNameGu = (dNameGuRaw && dNameGuRaw.toLowerCase() !== dName.toLowerCase()) ? dNameGuRaw : '';
+
+        // 1. Donor Name - English (Line 1)
+        if (pos.name.visible !== false) {
+          ctx.save();
+          let fSize = Number(pos.name.fontSize) || 21;
+          if (dName.length > 28) fSize = Math.max(15, fSize - 4);
+          ctx.font = `bold ${fSize}px 'Playfair Display', Georgia, serif`;
+          ctx.textAlign = "center";
+          const px = (pos.name.x / 100) * 994;
+          const py = (pos.name.y / 100) * 1024;
+
+          // Crisp subtle white backing stroke for high contrast
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+          ctx.lineWidth = 3;
+          ctx.lineJoin = "round";
+          ctx.strokeText(dName, px, py);
+
+          ctx.fillStyle = pos.name.color || "#0A2540";
+          ctx.fillText(dName, px, py);
+          ctx.restore();
+        }
+
+        // 2. Donor Name - Gujarati (Line 2)
+        if (pos.nameGu.visible !== false && dNameGu) {
+          ctx.save();
+          let fSizeGu = Number(pos.nameGu.fontSize) || 18;
+          if (dNameGu.length > 28) fSizeGu = Math.max(14, fSizeGu - 3);
+          ctx.font = `bold ${fSizeGu}px 'Noto Sans Gujarati', 'Shruti', 'Gujarati MT', sans-serif`;
+          ctx.textAlign = "center";
+
+          // If Gujarati position was not independently customized, sit right below English line
+          const pxGu = customPositions?.nameGu?.x ? (pos.nameGu.x / 100) * 994 : (pos.name.x / 100) * 994;
+          const pyGu = customPositions?.nameGu?.y ? (pos.nameGu.y / 100) * 1024 : ((pos.name.y / 100) * 1024) + 24;
+
+          const guDisplay = dNameGu.startsWith("(") ? dNameGu : `(${dNameGu})`;
+
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+          ctx.lineWidth = 2.5;
+          ctx.lineJoin = "round";
+          ctx.strokeText(guDisplay, pxGu, pyGu);
+
+          ctx.fillStyle = pos.nameGu.color || "#064E3B";
+          ctx.fillText(guDisplay, pxGu, pyGu);
+          ctx.restore();
+        }
+
+        // 3. Donation Amount on golden INR banner
+        if (pos.amount.visible !== false) {
+          const rawAmt = donation.amount !== undefined ? donation.amount : 0;
+          const amtStr = `₹ ${Number(rawAmt).toLocaleString('en-IN')}/-`;
+          ctx.save();
+          ctx.font = `bold ${Number(pos.amount.fontSize) || 23}px 'Montserrat', Arial, sans-serif`;
+          ctx.textAlign = "center";
+          const px = (pos.amount.x / 100) * 994;
+          const py = (pos.amount.y / 100) * 1024;
+
+          // Crisp white backing stroke for bold contrast
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+          ctx.lineWidth = 3.5;
+          ctx.lineJoin = "round";
+          ctx.strokeText(amtStr, px, py);
+
+          ctx.fillStyle = pos.amount.color || "#0F172A";
+          ctx.fillText(amtStr, px, py);
+          ctx.restore();
+        }
+
+        // 4. Acknowledgment details
+        if (pos.acknowledgment.visible !== false) {
+          ctx.save();
+          ctx.fillStyle = pos.acknowledgment.color || "#1E293B";
+          ctx.font = `italic ${Number(pos.acknowledgment.fontSize) || 13.5}px 'Montserrat', Arial, sans-serif`;
+          ctx.textAlign = "center";
+          const px = (pos.acknowledgment.x / 100) * 994;
+          const py = (pos.acknowledgment.y / 100) * 1024;
+          ctx.fillText("Presented with heartfelt gratitude for supporting the Education Activity 2026.", px, py);
+          ctx.restore();
+        }
+
+        // 5. Receipt details line
+        if (pos.receiptDetails.visible !== false) {
+          const receiptNo = donation.receiptNo || donation.internalReceiptNo || donation.id || 'N/A';
+          const vibhag = donation.vibhag || donation.Vibhag || 'General';
+          const dateStr = donation.date || new Date().toISOString().split('T')[0];
+
+          ctx.save();
+          ctx.fillStyle = pos.receiptDetails.color || "#334155";
+          ctx.font = `italic ${Number(pos.receiptDetails.fontSize) || 13.5}px 'Montserrat', Arial, sans-serif`;
+          ctx.textAlign = "center";
+          const px = (pos.receiptDetails.x / 100) * 994;
+          const py = (pos.receiptDetails.y / 100) * 1024;
+          ctx.fillText(`Receipt #: ${receiptNo}   •   Vibhag: ${vibhag}   •   Date: ${dateStr}`, px, py);
+          ctx.restore();
+        }
+
+        resolve(canvas.toDataURL("image/png"));
+      } catch(err) {
+        reject(err);
+      }
+    };
+    img.onerror = () => {
+      if (activeTpl !== defaultTpl) {
+        const fallbackImg = new Image();
+        fallbackImg.crossOrigin = "anonymous";
+        fallbackImg.onload = () => {
+          ctx.drawImage(fallbackImg, 0, 0, 994, 1024);
+          resolve(canvas.toDataURL("image/png"));
+        };
+        fallbackImg.onerror = reject;
+        fallbackImg.src = defaultTpl;
+      } else {
+        reject(new Error("Failed to load poster template image"));
+      }
+    };
+    img.src = activeTpl;
+  });
+};
+
+// ── Canvas-based Certificate + Ceremony Photo Merger ──
+export const generateMergedDonorPosterCanvas = (certificateDataUrl, photoDataUrl, layout = "side-by-side", donation = {}) => {
+  return new Promise((resolve, reject) => {
+    const certImg = new Image();
+    const photoImg = new Image();
+    let certLoaded = false;
+    let photoLoaded = false;
+
+    const tryRender = () => {
+      if (!certLoaded || !photoLoaded) return;
+      try {
+        const isStacked = layout === "stacked";
+        const canvas = document.createElement("canvas");
+
+        if (isStacked) {
+          // Portrait Stacked (Top: Certificate, Bottom: Photo)
+          canvas.width = 1024;
+          canvas.height = 1720;
+        } else {
+          // Landscape Side-by-Side (Left: Certificate, Right: Photo)
+          canvas.width = 1960;
+          canvas.height = 1100;
+        }
+
+        const ctx = canvas.getContext("2d");
+
+        // 1. Background gradient & gold frame
+        const bgGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        bgGrad.addColorStop(0, "#0F172A");
+        bgGrad.addColorStop(0.5, "#1E293B");
+        bgGrad.addColorStop(1, "#0A192F");
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Gold border around entire poster
+        ctx.strokeStyle = "#D4AF37";
+        ctx.lineWidth = 6;
+        ctx.strokeRect(12, 12, canvas.width - 24, canvas.height - 24);
+
+        ctx.strokeStyle = "rgba(255, 215, 0, 0.4)";
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
+
+        // Top Banner Title
+        ctx.fillStyle = "#FDE047";
+        ctx.font = "bold 26px 'Playfair Display', Georgia, serif";
+        ctx.textAlign = "center";
+        const headerTitle = "MUMBAI MEGHWAL PANCHAYAT  •  DONOR FELICITATION CEREMONY";
+        ctx.fillText(headerTitle, canvas.width / 2, 48);
+
+        if (!isStacked) {
+          // ── Side-by-Side Mode ──
+          const certX = 35;
+          const certY = 68;
+          const certW = 920;
+          const certH = 948;
+
+          // Panel 1: Certificate
+          ctx.save();
+          ctx.shadowColor = "rgba(0,0,0,0.4)";
+          ctx.shadowBlur = 12;
+          ctx.drawImage(certImg, certX, certY, certW, certH);
+          ctx.strokeStyle = "#D4AF37";
+          ctx.lineWidth = 4;
+          ctx.strokeRect(certX, certY, certW, certH);
+          ctx.restore();
+
+          // Panel 2: Photo
+          const photoX = 990;
+          const photoY = 68;
+          const photoW = 935;
+          const photoH = 948;
+
+          // Compute aspect ratio covering for photo
+          ctx.save();
+          ctx.shadowColor = "rgba(0,0,0,0.4)";
+          ctx.shadowBlur = 12;
+
+          // Frame background
+          ctx.fillStyle = "#020617";
+          ctx.fillRect(photoX, photoY, photoW, photoH);
+
+          // Draw photo centered/contained with dark frame
+          const imgAspect = photoImg.width / photoImg.height;
+          const frameAspect = photoW / (photoH - 60);
+          let drawW = photoW;
+          let drawH = photoH - 60;
+          let offsetX = photoX;
+          let offsetY = photoY;
+
+          if (imgAspect > frameAspect) {
+            drawH = photoW / imgAspect;
+            offsetY = photoY + ((photoH - 60 - drawH) / 2);
+          } else {
+            drawW = (photoH - 60) * imgAspect;
+            offsetX = photoX + ((photoW - drawW) / 2);
+          }
+
+          ctx.drawImage(photoImg, offsetX, offsetY, drawW, drawH);
+
+          // Gold frame around photo
+          ctx.strokeStyle = "#D4AF37";
+          ctx.lineWidth = 4;
+          ctx.strokeRect(photoX, photoY, photoW, photoH);
+
+          // Photo Caption Bar
+          ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
+          ctx.fillRect(photoX, photoY + photoH - 58, photoW, 58);
+          ctx.fillStyle = "#FFFFFF";
+          ctx.font = "bold 18px 'Montserrat', sans-serif";
+          ctx.textAlign = "center";
+          const donorLabel = donation.name ? `Donor: ${donation.name} (${donation.vibhag || 'General'})` : "Donation Felicitation & Handover";
+          ctx.fillText(donorLabel, photoX + (photoW / 2), photoY + photoH - 32);
+
+          ctx.fillStyle = "#94A3B8";
+          ctx.font = "italic 13px 'Montserrat', sans-serif";
+          ctx.fillText(`Contribution: ₹${Number(donation.amount || 0).toLocaleString('en-IN')}/-  •  Education Felicitation 2026`, photoX + (photoW / 2), photoY + photoH - 12);
+          ctx.restore();
+
+          // Bottom Footer Bar
+          ctx.fillStyle = "#CBD5E1";
+          ctx.font = "bold 14px 'Montserrat', sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("CENTRAL WORKING COMMITTEE  •  EDUCATION ACTIVITY 2026  •  OFFICIAL COMMUNITY PORTAL", canvas.width / 2, 1060);
+
+        } else {
+          // ── Stacked Mode (Top/Bottom) ──
+          const certX = 35;
+          const certY = 65;
+          const certW = 954;
+          const certH = 980;
+
+          // Top: Certificate
+          ctx.save();
+          ctx.shadowColor = "rgba(0,0,0,0.4)";
+          ctx.shadowBlur = 10;
+          ctx.drawImage(certImg, certX, certY, certW, certH);
+          ctx.strokeStyle = "#D4AF37";
+          ctx.lineWidth = 4;
+          ctx.strokeRect(certX, certY, certW, certH);
+          ctx.restore();
+
+          // Bottom: Photo
+          const photoX = 35;
+          const photoY = 1065;
+          const photoW = 954;
+          const photoH = 590;
+
+          ctx.save();
+          ctx.fillStyle = "#020617";
+          ctx.fillRect(photoX, photoY, photoW, photoH);
+
+          const imgAspect = photoImg.width / photoImg.height;
+          const frameAspect = photoW / (photoH - 50);
+          let drawW = photoW;
+          let drawH = photoH - 50;
+          let offsetX = photoX;
+          let offsetY = photoY;
+
+          if (imgAspect > frameAspect) {
+            drawH = photoW / imgAspect;
+            offsetY = photoY + ((photoH - 50 - drawH) / 2);
+          } else {
+            drawW = (photoH - 50) * imgAspect;
+            offsetX = photoX + ((photoW - drawW) / 2);
+          }
+
+          ctx.drawImage(photoImg, offsetX, offsetY, drawW, drawH);
+          ctx.strokeStyle = "#D4AF37";
+          ctx.lineWidth = 4;
+          ctx.strokeRect(photoX, photoY, photoW, photoH);
+
+          // Caption
+          ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
+          ctx.fillRect(photoX, photoY + photoH - 50, photoW, 50);
+          ctx.fillStyle = "#FFFFFF";
+          ctx.font = "bold 17px 'Montserrat', sans-serif";
+          ctx.textAlign = "center";
+          const donorLabel = donation.name ? `Felicitation Ceremony: ${donation.name} (${donation.vibhag || 'General'})` : "Donation Felicitation & Handover";
+          ctx.fillText(donorLabel, photoX + (photoW / 2), photoY + photoH - 26);
+          ctx.fillStyle = "#94A3B8";
+          ctx.font = "italic 13px 'Montserrat', sans-serif";
+          ctx.fillText(`Contribution: ₹${Number(donation.amount || 0).toLocaleString('en-IN')}/-  •  Education Felicitation 2026`, photoX + (photoW / 2), photoY + photoH - 9);
+          ctx.restore();
+
+          // Footer
+          ctx.fillStyle = "#CBD5E1";
+          ctx.font = "bold 14px 'Montserrat', sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("CENTRAL WORKING COMMITTEE  •  EDUCATION ACTIVITY 2026", canvas.width / 2, 1690);
+        }
+
+        resolve(canvas.toDataURL("image/png"));
+      } catch(err) {
+        reject(err);
+      }
+    };
+
+    certImg.crossOrigin = "anonymous";
+    certImg.onload = () => { certLoaded = true; tryRender(); };
+    certImg.onerror = reject;
+    certImg.src = certificateDataUrl;
+
+    photoImg.crossOrigin = "anonymous";
+    photoImg.onload = () => { photoLoaded = true; tryRender(); };
+    photoImg.onerror = reject;
+    photoImg.src = photoDataUrl;
+  });
+};
+
+// ── Visual Drag & Drop Poster Designer Component ──
+export function DonorPosterVisualMapperModal({ C, auth, onClose, onSaveSuccess }) {
+  const tplImgUrl = C?.donorPosterTemplateUrl || getAppreciationTemplateDefaultUrl();
+  const defaultPositions = {
+    name: { x: 42.5, y: 52.6, fontSize: 21, color: "#0A2540", visible: true, label: "👤 Name (English)" },
+    nameGu: { x: 42.5, y: 55.2, fontSize: 18, color: "#064E3B", visible: true, label: "🇮🇳 Name (ગુજરાતી)" },
+    amount: { x: 39.5, y: 63.8, fontSize: 23, color: "#0F172A", visible: true, label: "💰 Amount (INR)" },
+    acknowledgment: { x: 50, y: 81.2, fontSize: 13.5, color: "#1E293B", visible: true, label: "📜 Acknowledgment" },
+    receiptDetails: { x: 50, y: 83.2, fontSize: 13.5, color: "#334155", visible: true, label: "🧾 Receipt Details" },
+  };
+
+  const [positions, setPositions] = useState(() => {
+    return {
+      name: { ...defaultPositions.name, ...C?.donorPosterPositions?.name },
+      nameGu: { ...defaultPositions.nameGu, ...C?.donorPosterPositions?.nameGu },
+      amount: { ...defaultPositions.amount, ...C?.donorPosterPositions?.amount },
+      acknowledgment: { ...defaultPositions.acknowledgment, ...C?.donorPosterPositions?.acknowledgment },
+      receiptDetails: { ...defaultPositions.receiptDetails, ...C?.donorPosterPositions?.receiptDetails },
+    };
+  });
+
+  const [activeFieldKey, setActiveFieldKey] = useState("name");
+  const [dragging, setDragging] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const containerRef = useRef(null);
+
+  const handlePointerDown = (e, key) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.target.setPointerCapture(e.pointerId);
+    setDragging(key);
+    setActiveFieldKey(key);
+  };
+
+  const handlePointerMove = (e) => {
+    if (!dragging || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    let x = ((e.clientX - rect.left) / rect.width) * 100;
+    let y = ((e.clientY - rect.top) / rect.height) * 100;
+    x = Math.max(2, Math.min(98, x));
+    y = Math.max(2, Math.min(98, y));
+    setPositions(prev => ({
+      ...prev,
+      [dragging]: { ...prev[dragging], x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) }
+    }));
+  };
+
+  const handlePointerUp = (e) => {
+    if (dragging) {
+      try { e.target.releasePointerCapture(e.pointerId); } catch(err){}
+      setDragging(null);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      if (C) {
+        C.donorPosterPositions = positions;
+        await fbSave(C, auth?.idToken);
+      }
+      alert("✅ Appreciation poster field positions saved successfully!");
+      if (onSaveSuccess) onSaveSuccess(positions);
+      if (onClose) onClose();
+    } catch(err) {
+      alert("Save failed: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReset = () => {
+    if (!confirm("Reset all field positions to optimal defaults?")) return;
+    setPositions(defaultPositions);
+  };
+
+  const activeField = positions[activeFieldKey] || positions.name;
+
   return (
-    <div style={{background:"white",border:"1.5px solid #22C55E",borderRadius:10,padding:12,marginTop:6,boxShadow:"0 2px 8px rgba(34,197,94,0.15)"}}>
+    <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(15,23,42,0.8)",backdropFilter:"blur(4px)",zIndex:999999,display:"flex",alignItems:"center",justifyContent:"center",padding:12}}>
+      <div style={{background:"white",borderRadius:16,maxWidth:820,width:"100%",padding:18,boxShadow:"0 25px 50px rgba(0,0,0,0.35)",maxHeight:"94vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,borderBottom:"1px solid #E2E8F0",paddingBottom:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:"1.2rem"}}>🎯</span>
+            <div>
+              <h3 style={{margin:0,fontSize:"1rem",fontWeight:800,color:"#0F172A"}}>
+                Drag & Position Poster Fields (2-Line Name & Amount)
+              </h3>
+              <p style={{margin:0,fontSize:".74rem",color:"#64748B"}}>
+                Drag English name, Gujarati name, and amount badges to position them accurately on certificate blanks.
+              </p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose}
+            style={{background:"#F1F5F9",border:"none",borderRadius:"50%",width:30,height:30,cursor:"pointer",fontWeight:800,fontSize:".9rem",color:"#475569"}}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Content Body: Left Visual Canvas, Right Controls */}
+        <div style={{display:"flex",gap:14,flex:1,overflowY:"auto",flexDirection:typeof window !== "undefined" && window.innerWidth < 640 ? "column" : "row"}}>
+          
+          {/* Interactive Drag Canvas */}
+          <div style={{flex:1.4,display:"flex",flexDirection:"column",alignItems:"center"}}>
+            <div 
+              ref={containerRef}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={handlePointerUp}
+              style={{
+                position:"relative",
+                width:"100%",
+                maxWidth:420,
+                borderRadius:10,
+                overflow:"hidden",
+                border:"2px dashed #93C5FD",
+                boxShadow:"0 4px 12px rgba(0,0,0,0.12)",
+                touchAction:"none",
+                userSelect:"none",
+                background:"#F8FAFC"
+              }}
+            >
+              <img 
+                src={tplImgUrl} 
+                alt="Appreciation Poster Template" 
+                style={{width:"100%",display:"block",pointerEvents:"none"}} 
+              />
+
+              {/* Draggable Field Tags */}
+              {Object.entries(positions).map(([k, p]) => {
+                if (p.visible === false) return null;
+                const isSelected = activeFieldKey === k;
+                const isCurDragging = dragging === k;
+
+                return (
+                  <div
+                    key={k}
+                    onPointerDown={(e) => handlePointerDown(e, k)}
+                    style={{
+                      position:"absolute",
+                      left:`${p.x}%`,
+                      top:`${p.y}%`,
+                      transform:"translate(-50%, -50%)",
+                      background: isCurDragging ? "#EA580C" : isSelected ? "#2563EB" : k === "nameGu" ? "#065F46" : "rgba(15, 23, 42, 0.9)",
+                      color:"white",
+                      padding:"3px 8px",
+                      borderRadius:6,
+                      fontSize:".73rem",
+                      fontWeight:800,
+                      cursor: isCurDragging ? "grabbing" : "grab",
+                      userSelect:"none",
+                      whiteSpace:"nowrap",
+                      zIndex: isCurDragging ? 20 : isSelected ? 15 : 5,
+                      border: isSelected ? "2px solid #FFFFFF" : "1px solid rgba(255,255,255,0.4)",
+                      boxShadow:"0 3px 10px rgba(0,0,0,0.35)",
+                      display:"flex",
+                      alignItems:"center",
+                      gap:4
+                    }}
+                    title="Click to select or drag to move"
+                  >
+                    <span>⠿</span>
+                    <span>{p.label || k}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right Controls Panel */}
+          <div style={{flex:1,display:"flex",flexDirection:"column",gap:10,background:"#F8FAFC",borderRadius:10,padding:12,border:"1px solid #E2E8F0"}}>
+            <div style={{fontSize:".82rem",fontWeight:800,color:"#0F172A"}}>
+              Active Field Settings:
+            </div>
+
+            {/* Field Selector Tabs */}
+            <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+              {Object.entries(positions).map(([k, p]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setActiveFieldKey(k)}
+                  style={{
+                    padding:"4px 8px",
+                    borderRadius:6,
+                    fontSize:".72rem",
+                    fontWeight:700,
+                    cursor:"pointer",
+                    background: activeFieldKey === k ? "#2563EB" : "white",
+                    color: activeFieldKey === k ? "white" : "#334155",
+                    border: activeFieldKey === k ? "1px solid #1D4ED8" : "1px solid #CBD5E1"
+                  }}
+                >
+                  {p.label || k}
+                </button>
+              ))}
+            </div>
+
+            {/* Selected Field Coordinates & Styling */}
+            <div style={{background:"white",borderRadius:8,padding:10,border:"1px solid #E2E8F0",display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{fontSize:".76rem",fontWeight:800,color:"#1E40AF"}}>
+                Editing: {activeField.label || activeFieldKey}
+              </div>
+
+              {/* X & Y Sliders */}
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:".7rem",color:"#475569",marginBottom:2}}>
+                  <span>Horizontal (X):</span>
+                  <strong>{activeField.x}%</strong>
+                </div>
+                <input 
+                  type="range" 
+                  min="2" 
+                  max="98" 
+                  step="0.5" 
+                  value={activeField.x}
+                  onChange={e => {
+                    const val = parseFloat(e.target.value);
+                    setPositions(prev => ({
+                      ...prev,
+                      [activeFieldKey]: { ...prev[activeFieldKey], x: val }
+                    }));
+                  }}
+                  style={{width:"100%"}}
+                />
+              </div>
+
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:".7rem",color:"#475569",marginBottom:2}}>
+                  <span>Vertical (Y):</span>
+                  <strong>{activeField.y}%</strong>
+                </div>
+                <input 
+                  type="range" 
+                  min="2" 
+                  max="98" 
+                  step="0.5" 
+                  value={activeField.y}
+                  onChange={e => {
+                    const val = parseFloat(e.target.value);
+                    setPositions(prev => ({
+                      ...prev,
+                      [activeFieldKey]: { ...prev[activeFieldKey], y: val }
+                    }));
+                  }}
+                  style={{width:"100%"}}
+                />
+              </div>
+
+              {/* Font Size */}
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:".7rem",color:"#475569",marginBottom:2}}>
+                  <span>Font Size:</span>
+                  <strong>{activeField.fontSize || 22}px</strong>
+                </div>
+                <input 
+                  type="range" 
+                  min="10" 
+                  max="36" 
+                  step="1" 
+                  value={activeField.fontSize || 22}
+                  onChange={e => {
+                    const val = parseInt(e.target.value);
+                    setPositions(prev => ({
+                      ...prev,
+                      [activeFieldKey]: { ...prev[activeFieldKey], fontSize: val }
+                    }));
+                  }}
+                  style={{width:"100%"}}
+                />
+              </div>
+
+              {/* Color Picker */}
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <label style={{fontSize:".7rem",color:"#475569"}}>Text Color:</label>
+                <input 
+                  type="color" 
+                  value={activeField.color || (activeFieldKey === "amount" ? "#0F172A" : activeFieldKey === "nameGu" ? "#064E3B" : "#0A2540")}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setPositions(prev => ({
+                      ...prev,
+                      [activeFieldKey]: { ...prev[activeFieldKey], color: val }
+                    }));
+                  }}
+                  style={{width:34,height:26,cursor:"pointer",border:"none",borderRadius:4,background:"transparent"}}
+                />
+                <span style={{fontSize:".68rem",fontFamily:"monospace",color:"#64748B"}}>{activeField.color}</span>
+              </div>
+            </div>
+
+            <div style={{display:"flex",gap:6,marginTop:"auto"}}>
+              <button
+                type="button"
+                onClick={handleReset}
+                style={{padding:"8px 10px",borderRadius:6,background:"#F1F5F9",color:"#475569",border:"1px solid #CBD5E1",fontWeight:700,fontSize:".74rem",cursor:"pointer"}}
+              >
+                ↺ Reset Defaults
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleSave}
+                style={{flex:1,padding:"8px 12px",borderRadius:6,background:"#15803D",color:"white",border:"none",fontWeight:800,fontSize:".78rem",cursor:saving?"wait":"pointer",boxShadow:"0 2px 6px rgba(21,128,61,0.3)"}}
+              >
+                {saving ? "Saving..." : "💾 Save & Apply"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OfflineDonationSuccessCard({ donation, C, auth, onReload }) {
+  const [baseCertUrl, setBaseCertUrl] = useState(null);
+  const [posterUrl, setPosterUrl] = useState(null);
+  const [attachedPhotoUrl, setAttachedPhotoUrl] = useState(null);
+  const [mergeLayout, setMergeLayout] = useState("side-by-side");
+  const [generating, setGenerating] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [copiedImage, setCopiedImage] = useState(false);
+  const [showMapperModal, setShowMapperModal] = useState(false);
+  const photoInputRef = useRef(null);
+  const [targetPhone, setTargetPhone] = useState(
+    donation.mobile || donation.phone || donation['Mobile Number'] || donation['Phone'] || donation['WhatsApp Number'] || ''
+  );
+
+  useEffect(() => {
+    const p = donation.mobile || donation.phone || donation['Mobile Number'] || donation['Phone'] || donation['WhatsApp Number'] || '';
+    if (p) setTargetPhone(p);
+  }, [donation]);
+
+  const loadPoster = async () => {
+    setGenerating(true);
+    try {
+      const tplUrl = C?.donorPosterTemplateUrl || getAppreciationTemplateDefaultUrl();
+      const certUrl = await generateDonorPosterCanvas(donation, tplUrl, C?.donorPosterPositions);
+      setBaseCertUrl(certUrl);
+
+      if (attachedPhotoUrl) {
+        const mergedUrl = await generateMergedDonorPosterCanvas(certUrl, attachedPhotoUrl, mergeLayout, donation);
+        setPosterUrl(mergedUrl);
+      } else {
+        setPosterUrl(certUrl);
+      }
+    } catch(err) {
+      console.warn("Poster generation error:", err);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPoster();
+  }, [donation, C, C?.donorPosterPositions, attachedPhotoUrl, mergeLayout]);
+
+
+
+  const handleAttachPhotoUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (re) => {
+      setAttachedPhotoUrl(re.target.result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleRemoveAttachedPhoto = () => {
+    setAttachedPhotoUrl(null);
+  };
+
+  const handleDownloadPoster = () => {
+    if (!posterUrl) return;
+    const link = document.createElement("a");
+    link.href = posterUrl;
+    link.download = `MMP_Appreciation_Certificate_${(donation.name || 'Donor').replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const getThankYouWhatsAppMsg = () => {
+    const dName = donation.name || "Respected Donor";
+    const amt = Number(donation.amount || 0).toLocaleString('en-IN');
+    const rNo = donation.receiptNo || donation.internalReceiptNo || donation.id || 'N/A';
+    const vib = donation.vibhag || "General";
+    const dt = donation.date || new Date().toISOString().split('T')[0];
+
+    return `🌷 || મુંબઈ મેઘવાળ પંચાયત || 🌷\n         [NGO]\n   •••• સેન્ટ્રલ વર્કિંગ કમિટી ••••\n☸~~~~~~~~~~~~~~~~~☸\n\nવિષય: શૈક્ષણિક કાર્યક્રમ દાન રસીદ & સન્માન પત્રક\n\nનમસ્તે શ્રીમાન/શ્રીમતી *${dName}*,\nવિદ્યાર્થી ગુણગૌરવ પુરસ્કાર ૨૦૨૬ માટે આપના ઉદાર દાન બદલ મુંબઈ મેઘવાળ પંચાયત આપનો હૃદયપૂર્વક આભાર માને છે.\n\n🧾 *દાન પાવતી વિગત:*\n• દાતા: *${dName}*\n• રકમ: *₹${amt}/-*\n• પાવતી નં.: *${rNo}*\n• વિભાગ: *${vib}*\n• તારીખ: *${dt}*\n• હેતુ: *${donation.purpose || donation.program || 'Education Activity 2026'}*\n\n📜 આપનું ડિજિટલ સન્માન પ્રમાણપત્ર (Certificate of Appreciation) તૈયાર થઈ ગયું છે.\n\nલિ. સેન્ટ્રલ વર્કિંગ કમિટી\nમુંબઈ મેઘવાળ પંચાયત\n🌐 https://www.mmp-cwc.com`;
+  };
+
+  const handleCopyText = () => {
+    navigator.clipboard.writeText(getThankYouWhatsAppMsg());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleShareWhatsApp = async () => {
+    const text = getThankYouWhatsAppMsg();
+    const cleanPhone = String(targetPhone || donation.phone || donation.mobile || donation['Mobile Number'] || '').replace(/\D/g, '').slice(-10);
+
+    // 1. Try copying poster image to clipboard for instant Ctrl+V pasting in WhatsApp Web
+    if (posterUrl) {
+      try {
+        const res = await fetch(posterUrl);
+        const blob = await res.blob();
+        if (navigator.clipboard && navigator.clipboard.write) {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob })
+          ]);
+          setCopiedImage(true);
+          setTimeout(() => setCopiedImage(false), 5000);
+        }
+
+        // 2. On supported mobile browsers, trigger native share with image file attached
+        if (navigator.share && navigator.canShare) {
+          const file = new File([blob], `Certificate_${(donation.name || 'Donor').replace(/[^a-zA-Z0-9]/g, '_')}.png`, { type: 'image/png' });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: "MMP Certificate of Appreciation",
+              text: text
+            });
+            return;
+          }
+        }
+      } catch(e) {
+        console.log("Clipboard / Share file notice:", e);
+      }
+    }
+
+    // 3. Launch WhatsApp directly to the donor's phone with pre-filled message
+    const waUrl = cleanPhone 
+      ? `https://api.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(text)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(waUrl, "_blank");
+  };
+
+  return (
+    <div style={{background:"white",border:"1.5px solid #22C55E",borderRadius:12,padding:12,marginTop:6,boxShadow:"0 2px 10px rgba(34,197,94,0.15)"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,borderBottom:"1px solid #F1F5F9",paddingBottom:6}}>
         <div style={{fontSize:".85rem",fontWeight:800,color:"#15803D"}}>🎉 Offline Donation Recorded</div>
         <span style={{background:"#DCFCE7",color:"#166534",fontSize:".68rem",padding:"2px 6px",borderRadius:6,fontWeight:800}}>Offline</span>
       </div>
+
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,fontSize:".78rem"}}>
         <div><span style={{color:"#64748B"}}>Donor:</span> <strong>{donation.name}</strong></div>
         <div><span style={{color:"#64748B"}}>Amount:</span> <strong style={{color:"#15803D"}}>₹{Number(donation.amount).toLocaleString('en-IN')}</strong></div>
         <div><span style={{color:"#64748B"}}>Date:</span> <strong>{donation.date}</strong></div>
         <div><span style={{color:"#64748B"}}>Vibhag:</span> <strong>{donation.vibhag}</strong></div>
         <div><span style={{color:"#64748B"}}>Receipt #:</span> <strong>{donation.receiptNo || donation.internalReceiptNo || donation.id}</strong></div>
+        <div><span style={{color:"#64748B"}}>WhatsApp:</span> <strong style={{color:"#15803D"}}>{targetPhone ? ("+91 " + String(targetPhone).replace(/\D/g,'').slice(-10)) : "Not provided"}</strong></div>
         <div><span style={{color:"#64748B"}}>Event Code:</span> <strong>{donation.eventCode || 'EDU26'}</strong></div>
       </div>
-      <div style={{marginTop:8,padding:"4px 8px",background:"#F8FAFC",borderRadius:6,fontSize:".72rem",color:"#475569"}}>
-        <strong>Purpose:</strong> {donation.purpose || donation.program}
+
+      {/* Photo Import & Merger Bar */}
+      <div style={{marginTop:10,background:"#EFF6FF",border:"1.5px dashed #93C5FD",borderRadius:10,padding:"9px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:32,height:32,borderRadius:8,background:"#DBEAFE",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.1rem"}}>
+            📸
+          </div>
+          <div>
+            <div style={{fontSize:".78rem",fontWeight:800,color:"#1E40AF",display:"flex",alignItems:"center",gap:6}}>
+              <span>{attachedPhotoUrl ? "✓ Handover Photo Attached & Merged" : "Attach Group / Handover Photo"}</span>
+              {attachedPhotoUrl && (
+                <span style={{background:"#10B981",color:"white",fontSize:".65rem",padding:"1px 6px",borderRadius:4,fontWeight:800}}>
+                  Merged Single Poster
+                </span>
+              )}
+            </div>
+            <div style={{fontSize:".68rem",color:"#64748B"}}>
+              {attachedPhotoUrl ? "Merged into a single poster for 1-click WhatsApp & download" : "Upload ceremony or physical certificate photo to merge with letter"}
+            </div>
+          </div>
+        </div>
+
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <input
+            type="file"
+            ref={photoInputRef}
+            accept="image/*"
+            style={{display:"none"}}
+            onChange={handleAttachPhotoUpload}
+          />
+          <button
+            type="button"
+            onClick={() => photoInputRef.current?.click()}
+            style={{padding:"6px 12px",borderRadius:6,background:"#2563EB",color:"white",border:"none",fontWeight:800,fontSize:".74rem",cursor:"pointer",display:"flex",alignItems:"center",gap:4,boxShadow:"0 2px 6px rgba(37,99,235,0.25)"}}
+          >
+            <span>{attachedPhotoUrl ? "🔄 Change Photo" : "➕ Upload Local Photo"}</span>
+          </button>
+          {attachedPhotoUrl && (
+            <button
+              type="button"
+              onClick={handleRemoveAttachedPhoto}
+              style={{padding:"6px 8px",borderRadius:6,background:"#FEE2E2",color:"#DC2626",border:"none",fontWeight:800,fontSize:".74rem",cursor:"pointer"}}
+              title="Remove attached photo and return to certificate only"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Merge Layout Switcher (when photo is attached) */}
+      {attachedPhotoUrl && (
+        <div style={{marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"#F1F5F9",padding:"5px 10px",borderRadius:8}}>
+          <span style={{fontSize:".7rem",fontWeight:700,color:"#475569"}}>Poster Layout:</span>
+          <button
+            type="button"
+            onClick={() => setMergeLayout("side-by-side")}
+            style={{
+              padding:"3px 8px",
+              borderRadius:5,
+              fontSize:".68rem",
+              fontWeight:800,
+              cursor:"pointer",
+              background: mergeLayout === "side-by-side" ? "#2563EB" : "white",
+              color: mergeLayout === "side-by-side" ? "white" : "#334155",
+              border: mergeLayout === "side-by-side" ? "1px solid #1D4ED8" : "1px solid #CBD5E1"
+            }}
+          >
+            ⬛⬛ Side-by-Side (Dual Frame)
+          </button>
+          <button
+            type="button"
+            onClick={() => setMergeLayout("stacked")}
+            style={{
+              padding:"3px 8px",
+              borderRadius:5,
+              fontSize:".68rem",
+              fontWeight:800,
+              cursor:"pointer",
+              background: mergeLayout === "stacked" ? "#2563EB" : "white",
+              color: mergeLayout === "stacked" ? "white" : "#334155",
+              border: mergeLayout === "stacked" ? "1px solid #1D4ED8" : "1px solid #CBD5E1"
+            }}
+          >
+            🟫 Stacked (Top & Bottom)
+          </button>
+        </div>
+      )}
+
+      {/* Generated Appreciation Poster Preview */}
+      <div style={{marginTop:8,background:"#F8FAFC",borderRadius:8,padding:10,border:"1px solid #E2E8F0",textAlign:"center"}}>
+        <div style={{fontSize:".75rem",fontWeight:800,color:"#0F172A",marginBottom:6,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          <span>📜</span> {attachedPhotoUrl ? "Single Merged Poster (Certificate + Handover Photo):" : "Certificate of Appreciation Poster Generated:"}
+        </div>
+
+        {generating ? (
+          <div style={{padding:20,fontSize:".75rem",color:"#64748B"}}>⏳ Rendering Personalized Poster...</div>
+        ) : posterUrl ? (
+          <div>
+            <img 
+              src={posterUrl} 
+              alt="Donation Appreciation Certificate" 
+              style={{width:"100%",maxWidth:340,borderRadius:8,boxShadow:"0 3px 10px rgba(0,0,0,0.15)",border:"1px solid #CBD5E1",marginBottom:8}} 
+            />
+
+            {/* Action Buttons Bar */}
+            <div style={{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap",marginBottom:8}}>
+              <button
+                type="button"
+                onClick={() => setShowMapperModal(true)}
+                style={{padding:"6px 10px",borderRadius:6,background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #BFDBFE",fontWeight:800,fontSize:".74rem",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+                title="Drag and position donor name and amount to match your poster lines"
+              >
+                <span>🎯</span> Adjust Positions
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadPoster}
+                style={{padding:"6px 12px",borderRadius:6,background:"#0D4B5E",color:"white",border:"none",fontWeight:800,fontSize:".74rem",cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
+              >
+                <span>📥</span> Download Poster
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyText}
+                style={{padding:"6px 10px",borderRadius:6,background:"#F1F5F9",color:"#334155",border:"1px solid #CBD5E1",fontWeight:700,fontSize:".74rem",cursor:"pointer"}}
+              >
+                {copied ? "✓ Text Copied!" : "📋 Copy Message"}
+              </button>
+            </div>
+
+            {/* Direct WhatsApp Recipient & Dispatch Bar */}
+            <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:6,textAlign:"left"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:".75rem",fontWeight:800,color:"#15803D",display:"flex",alignItems:"center",gap:5}}>
+                  <span>💬</span> Send to Donor's WhatsApp:
+                </span>
+                <span style={{fontSize:".68rem",fontWeight:700,color:targetPhone ? "#166534" : "#DC2626"}}>
+                  {targetPhone ? `+91 ${String(targetPhone).replace(/\D/g,'').slice(-10)}` : "Enter 10-digit number"}
+                </span>
+              </div>
+
+              <div style={{display:"flex",gap:6}}>
+                <input
+                  type="tel"
+                  placeholder="Enter 10-digit WhatsApp number"
+                  value={targetPhone}
+                  onChange={e => setTargetPhone(e.target.value)}
+                  style={{flex:1,padding:"7px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",fontFamily:"inherit",fontWeight:700,background:"white"}}
+                />
+                <button
+                  type="button"
+                  onClick={handleShareWhatsApp}
+                  style={{
+                    padding:"7px 14px",
+                    borderRadius:6,
+                    background:"#25D366",
+                    color:"white",
+                    border:"none",
+                    fontWeight:800,
+                    fontSize:".78rem",
+                    cursor:"pointer",
+                    display:"flex",
+                    alignItems:"center",
+                    gap:5,
+                    boxShadow:"0 2px 6px rgba(37,211,102,0.35)",
+                    whiteSpace:"nowrap"
+                  }}
+                  title="Open WhatsApp chat with donor, prefill message, and copy poster image"
+                >
+                  <span>💬</span> Send to WhatsApp
+                </button>
+              </div>
+
+              {copiedImage && (
+                <div style={{fontSize:".72rem",color:"#15803D",fontWeight:800,textAlign:"center",background:"#DCFCE7",padding:"4px 8px",borderRadius:6}}>
+                  ✓ Poster image copied to clipboard! Just press <strong>Ctrl + V</strong> in WhatsApp to paste the certificate image.
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div style={{fontSize:".72rem",color:"#94A3B8"}}>Certificate preview unavailable</div>
+        )}
+      </div>
+      {showMapperModal && (
+        <DonorPosterVisualMapperModal
+          C={C}
+          auth={auth}
+          onClose={() => setShowMapperModal(false)}
+          onSaveSuccess={() => {
+            loadPoster();
+            if (onReload) onReload();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function DonationSummaryCard({ summaryData, onAction }) {
+
+function WhatsAppBroadcastCard({ cardData, C }) {
+  const [copied, setCopied] = useState(false);
+  const tpls = C?.whatsappTemplates || {};
+  const customTpls = C?.whatsappBroadcastTemplates || [];
+  const foundTpl = customTpls.find(t => t.id === cardData.tplId);
+
+  const getBroadcastMessage = () => {
+    const donateUrl = (typeof window !== "undefined" && window.location.hostname.includes("github.io"))
+      ? "https://pradeepparmar902.github.io/MY_Community_Website/donate/"
+      : "https://mmp-cwc.com/donate/";
+    const portalUrl = (typeof window !== "undefined" && window.location.hostname.includes("github.io"))
+      ? "https://pradeepparmar902.github.io/MY_Community_Website/"
+      : "https://mmp-cwc.com";
+
+    const targetDonateUrl = foundTpl?.donateLink || tpls.donateLink || donateUrl;
+    const upi = foundTpl?.upiId || tpls.upiId || "mumba98697331@barodampay";
+    const header = foundTpl?.header || tpls.gujaratiHeader || ".  🌷 || મુંબઈ મેઘવાળ પંચાયત || 🌷\n         [NGO]\n   •••• સેન્ટ્રલ વર્કિંગ કમિટી ••••\n☸~~~~~~~~~~~~~~~~~☸";
+    const appeal = foundTpl?.appeal || cardData.answer || tpls.gujaratiAppeal || "";
+    const signatory = foundTpl?.signatory || tpls.gujaratiSignatory || "લિ. વિનોદભાઈ મકવાણા / સેન્ટ્રલ વર્કિંગ કમિટી";
+    const qrHeader = foundTpl?.qrHeader || tpls.qrHeader || "💳 *GPay / BHIM QR સ્કેનર & Direct Pay:*";
+
+    const parts = [];
+    if (foundTpl?.includeGPay === true) {
+      parts.push(`💳 *દાન QR સ્કેનર:* ${targetDonateUrl}`);
+    }
+    if (foundTpl?.includeHeader !== false && header.trim()) {
+      parts.push(header.trim());
+    }
+    if (foundTpl?.includeAppeal !== false && appeal.trim()) {
+      parts.push(appeal.trim());
+    }
+    if (foundTpl?.includeFooter !== false && signatory.trim()) {
+      parts.push(signatory.trim());
+    }
+    if (foundTpl?.includeGPay === true) {
+      parts.push(qrHeader + "\n" + `🔗 ${targetDonateUrl}\n` + `📲 UPI ID: ${upi}`);
+    }
+    parts.push(`🌐 પોર્ટલ: ${portalUrl}`);
+    return parts.join("\n\n");
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(getBroadcastMessage());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleShare = () => {
+    const msg = getBroadcastMessage();
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
+  return (
+    <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #E2E8F0",display:"flex",gap:6,alignItems:"center"}}>
+      <button
+        onClick={handleCopy}
+        style={{
+          flex: 1,
+          padding: "7px 10px",
+          background: copied ? "#DCFCE7" : "white",
+          color: copied ? "#15803D" : "#334155",
+          border: `1px solid ${copied ? "#86EFAC" : "#CBD5E1"}`,
+          borderRadius: 6,
+          fontSize: ".75rem",
+          fontWeight: 700,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 4
+        }}
+      >
+        <span>{copied ? "✅" : "📋"}</span>
+        <span>{copied ? "Copied!" : "Copy for WhatsApp"}</span>
+      </button>
+
+      <button
+        onClick={handleShare}
+        style={{
+          flex: 1,
+          padding: "7px 12px",
+          background: "#25D366",
+          color: "white",
+          border: "none",
+          borderRadius: 6,
+          fontSize: ".75rem",
+          fontWeight: 700,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 4,
+          boxShadow: "0 2px 6px rgba(37,211,102,0.25)"
+        }}
+      >
+        <span>🟢</span>
+        <span>Share on WhatsApp</span>
+      </button>
+    </div>
+  );
+}
+
+function DonationSummaryCard({ summaryData, onAction, C }) {
   const { totalAmount, totalCount, onlineAmount, onlineCount, offlineAmount, offlineCount, vibhagBreakdown } = summaryData;
+  const [copied, setCopied] = useState(false);
+
+  const getFormattedSummaryText = () => {
+    const donateUrl = (typeof window !== "undefined" && window.location.hostname.includes("github.io"))
+      ? "https://pradeepparmar902.github.io/MY_Community_Website/donate/"
+      : "https://mmp-cwc.com/donate/";
+    const portalUrl = (typeof window !== "undefined" && window.location.hostname.includes("github.io"))
+      ? "https://pradeepparmar902.github.io/MY_Community_Website/"
+      : "https://mmp-cwc.com";
+
+    const qrLink = C?.whatsappTemplates?.donateLink || donateUrl;
+    const upi = C?.whatsappTemplates?.upiId || "mumba98697331@barodampay";
+
+    let msg = `💳 *QR સ્કેનર & Direct Pay:* ${qrLink}\n`;
+    msg += `📊 *MMP Donations & Collection Summary*\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `💰 *Total Collections:* ₹${totalAmount.toLocaleString('en-IN')}\n`;
+    msg += `👥 *Total Donors:* ${totalCount}\n`;
+    msg += `🟢 *Online (Razorpay):* ₹${onlineAmount.toLocaleString('en-IN')} (${onlineCount} txns)\n`;
+    msg += `🟠 *Offline / Manual:* ₹${offlineAmount.toLocaleString('en-IN')} (${offlineCount} entries)\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `📍 *Vibhag Breakdown:*\n`;
+
+    (vibhagBreakdown || []).forEach(([vName, vData]) => {
+      msg += `• *${vName}*: ₹${vData.total.toLocaleString('en-IN')} (${vData.count} donors)\n`;
+    });
+
+    msg += `\n📲 *UPI ID:* ${upi}\n`;
+    msg += `🌐 *Live Portal:* ${portalUrl}`;
+    return msg;
+  };
+
+  const handleCopyWhatsApp = () => {
+    navigator.clipboard.writeText(getFormattedSummaryText());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleShareWhatsApp = () => {
+    const msg = getFormattedSummaryText();
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  };
 
   return (
     <div style={{background:"white",border:"1.5px solid #CBD5E1",borderRadius:12,padding:14,marginTop:6,boxShadow:"0 4px 12px rgba(0,0,0,0.05)"}}>
@@ -27049,12 +38704,268 @@ function DonationSummaryCard({ summaryData, onAction }) {
           ➕ Add Offline
         </button>
       </div>
+
+      {/* WhatsApp Sharing Bar */}
+      <div style={{marginTop:10,paddingTop:8,borderTop:"1px solid #F1F5F9",display:"flex",gap:6,alignItems:"center"}}>
+        <button
+          onClick={handleCopyWhatsApp}
+          style={{
+            flex: 1,
+            padding: "8px 10px",
+            background: copied ? "#DCFCE7" : "white",
+            color: copied ? "#15803D" : "#475569",
+            border: `1px solid ${copied ? "#86EFAC" : "#CBD5E1"}`,
+            borderRadius: 6,
+            fontSize: ".75rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 4
+          }}
+          title="Copy formatted summary text for WhatsApp"
+        >
+          <span>{copied ? "✅" : "📋"}</span>
+          <span>{copied ? "Copied!" : "Copy for WhatsApp"}</span>
+        </button>
+
+        <button
+          onClick={handleShareWhatsApp}
+          style={{
+            flex: 1,
+            padding: "8px 12px",
+            background: "#25D366",
+            color: "white",
+            border: "none",
+            borderRadius: 6,
+            fontSize: ".75rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 4,
+            boxShadow: "0 2px 6px rgba(37,211,102,0.25)"
+          }}
+          title="Share summary directly to WhatsApp"
+        >
+          <span>🟢</span>
+          <span>Share on WhatsApp</span>
+        </button>
+      </div>
     </div>
   );
 }
 
-function DonorListCard({ donorData, auth, onRefresh }) {
+
+// ── Robust English to Gujarati Name & Vibhag Transliteration Engine ────────────
+const GUJARATI_KNOWN_WORDS = {
+  // Common Names & Surnames
+  "pradeep": "પ્રદીપ", "pradip": "પ્રદીપ", "parmar": "પરમાર",
+  "jeram": "જેરામ", "jairam": "જયરામ", "mulji": "મૂલજી", "solanki": "સોલંકી",
+  "ravikumar": "રવિકુમાર", "ravi": "રવિ", "punjalal": "પુંજાલાલ", "punja": "પુંજા", "dharia": "ધારિયા", "dhariya": "ધારિયા",
+  "vinod": "વિનોદ", "vinodbhai": "વિનોદભાઈ", "makwana": "મકવાણા", "makawana": "મકવાણા",
+  "prakash": "પ્રકાશ", "gohil": "ગોહિલ", "vasant": "વસંત", "padava": "પડવા", "padva": "પડવા",
+  "keshav": "કેશવ", "wagh": "વાઘ", "vagh": "વાઘ", "ashwin": "અશ્વિન", "kataria": "કટારીયા", "katariya": "કટારીયા",
+  "samiksha": "સમીક્ષા", "chudasama": "ચુડાસમા", "dinesh": "દિનેશ", "sondarva": "સોંદરવા",
+  "khushi": "ખુશી", "jogadiya": "જોગડીયા", "jogadia": "જોગડીયા", "ramesh": "રમેશ", "suresh": "સુરેશ",
+  "mahesh": "મહેશ", "kamlesh": "કમલેશ", "hitesh": "હિતેશ", "rajesh": "રાજેશ", "mukesh": "મુકેશ",
+  "bharat": "ભરત", "bharatbhai": "ભરતભાઈ", "kishor": "કિશોર", "kishorbhai": "કિશોરભાઈ",
+  "naresh": "નરેશ", "haresh": "હરેશ", "paresh": "પરેશ", "jagdish": "જગદીશ", "manoj": "મનોજ",
+  "sanjay": "સંજય", "ajay": "અજય", "vijay": "વિજય", "anil": "અનિલ", "sunil": "સુનીલ",
+  "chetan": "ચેતન", "ketan": "કેતન", "bhupendra": "ભૂપેન્દ્ર", "narendra": "નરેન્દ્ર", "jitendra": "જીતેન્દ્ર",
+  "mahima": "મહિમા", "priya": "પ્રિયા", "pooja": "પૂજા", "puja": "પૂજા", "neha": "નેહા", "hetal": "હેતલ",
+  "bhavna": "ભાવના", "rekha": "રેખા", "geeta": "ગીતા", "gita": "ગીતા", "meena": "મીના", "mina": "મીના",
+  "chavda": "ચાવડા", "rathod": "રાઠોડ", "chauhan": "ચૌહાણ", "maru": "મારુ", "baraiya": "બારૈયા",
+  "vanza": "વાંઝા", "vaja": "વાજા", "dabhi": "ડાભી", "purabia": "પૂરબીયા", "purabiya": "પૂરબીયા",
+  "bhati": "ભાટી", "jadav": "જાદવ", "pandya": "પંડ્યા", "shah": "શાહ", "mehta": "મહેતા", "patel": "પટેલ",
+  
+  // Vibhags & Locations
+  "mahalaxmi": "મહાલક્ષ્મી", "nehru nagar": "નેહરુ નગર", "nehru": "નેહરુ", "nagar": "નગર",
+  "walpakhadi": "વાલપાખાડી", "lower parel": "લોઅર પરેલ", "parel": "પરેલ", "pratiksha nagar": "પ્રતીક્ષા નગર",
+  "pratkishanagar": "પ્રતીક્ષા નગર", "pratkishanagar": "પ્રતીક્ષા નગર", "pratkish": "પ્રતીક્ષા",
+  "bhayander": "ભાઈંદર", "bhayandar": "ભાઈંદર", "kalwa": "કલવા", "kurla": "કુર્લા", "ghatkopar": "ઘાટકોપર",
+  "chembur": "ચેમ્બુર", "sion": "સાયન", "dadar": "દાદર", "bandra": "વાંદ્રા", "andheri": "અંધેરી", "borivali": "બોરીવલી",
+  "outside mumbai": "મુંબઈ બહાર", "general": "સામાન્ય", "mumbai": "મુંબઈ"
+};
+
+const transliterateEnglishToGujaratiPhonetic = (text) => {
+  if (!text) return "";
+  const str = String(text).trim();
+
+  // If already contains Gujarati characters, return as-is
+  if (/[\u0A80-\u0AFF]/.test(str)) return str;
+
+  // Split into tokens by spaces and punctuation while preserving delimiters
+  const tokens = str.split(/([\s,()\-\/]+)/);
+
+  const convertedTokens = tokens.map(token => {
+    if (!token || /^[\s,()\-\/]+$/.test(token)) return token;
+
+    const lower = token.toLowerCase();
+    if (GUJARATI_KNOWN_WORDS[lower]) {
+      return GUJARATI_KNOWN_WORDS[lower];
+    }
+
+    // Number conversion (e.g. 10 -> ૧૦, 33 -> ૩૩)
+    if (/^\d+$/.test(token)) {
+      const gujDigits = ['૦', '૧', '૨', '૩', '૪', '૫', '૬', '૭', '૮', '૯'];
+      return token.split('').map(d => gujDigits[parseInt(d, 10)] || d).join('');
+    }
+
+    // Algorithmic phonetic transliteration fallback
+    let s = lower;
+    const rules = [
+      // Multi-char matches
+      { re: /ch/g, val: 'ચ' }, { re: /chh/g, val: 'છ' }, { re: /kh/g, val: 'ખ' }, { re: /gh/g, val: 'ઘ' },
+      { re: /jh/g, val: 'ઝ' }, { re: /th/g, val: 'થ' }, { re: /dh/g, val: 'ધ' }, { re: /bh/g, val: 'ભ' },
+      { re: /ph/g, val: 'ફ' }, { re: /sh/g, val: 'શ' }, { re: /shh/g, val: 'ષ' },
+      // Vowels & diphthongs
+      { re: /aa/g, val: 'ા' }, { re: /ee/g, val: 'ી' }, { re: /oo/g, val: 'ૂ' }, { re: /ai/g, val: 'ૈ' }, { re: /au/g, val: 'ૌ' },
+      // Single consonants
+      { re: /k/g, val: 'ક' }, { re: /g/g, val: 'ગ' }, { re: /j/g, val: 'જ' }, { re: /t/g, val: 'ત' },
+      { re: /d/g, val: 'દ' }, { re: /n/g, val: 'ન' }, { re: /p/g, val: 'પ' }, { re: /f/g, val: 'ફ' },
+      { re: /b/g, val: 'બ' }, { re: /m/g, val: 'મ' }, { re: /y/g, val: 'ય' }, { re: /r/g, val: 'ર' },
+      { re: /l/g, val: 'લ' }, { re: /v/g, val: 'વ' }, { re: /w/g, val: 'વ' }, { re: /s/g, val: 'સ' },
+      { re: /h/g, val: 'હ' }, { re: /z/g, val: 'ઝ' },
+      // Vowel signs
+      { re: /a/g, val: 'ા' }, { re: /i/g, val: 'િ' }, { re: /u/g, val: 'ુ' }, { re: /e/g, val: 'ે' }, { re: /o/g, val: 'ો' }
+    ];
+
+    let res = "";
+    let i = 0;
+    while (i < s.length) {
+      let matched = false;
+      // Try 3-char, 2-char, 1-char
+      for (const len of [3, 2, 1]) {
+        if (i + len <= s.length) {
+          const sub = s.slice(i, i + len);
+          for (const rule of rules) {
+            if (rule.re.source === sub) {
+              res += rule.val;
+              i += len;
+              matched = true;
+              break;
+            }
+          }
+          if (matched) break;
+        }
+      }
+      if (!matched) {
+        res += s[i];
+        i++;
+      }
+    }
+    return res;
+  });
+
+  return convertedTokens.join('');
+};
+
+function DonorListCard({ donorData, auth, onRefresh, C }) {
   const [filterText, setFilterText] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [copiedIndividualId, setCopiedIndividualId] = useState(null);
+  const [savingPosterId, setSavingPosterId] = useState(null);
+
+  const getIndividualDonorMsg = (d) => {
+    const dName = d.name || "Respected Donor";
+    const amt = Number(d.amount || 0).toLocaleString('en-IN');
+    const rNo = d.receiptNo || d.internalReceiptNo || d.id || 'N/A';
+    const vib = d.vibhag || "General";
+    const dt = d.date || new Date().toISOString().split('T')[0];
+    const pur = d.purpose || d.program || "Education Felicitation 2026";
+
+    return `🌷 || મુંબઈ મેઘવાળ પંચાયત || 🌷\n         [NGO]\n   •••• સેન્ટ્રલ વર્કિંગ કમિટી ••••\n☸~~~~~~~~~~~~~~~~~☸\n\nવિષય: શૈક્ષણિક કાર્યક્રમ દાન રસીદ & સન્માન પત્રક\n\nનમસ્તે શ્રીમાન/શ્રીમતી *${dName}*,\nવિદ્યાર્થી ગુણગૌરવ પુરસ્કાર ૨૦૨૬ માટે આપના ઉદાર દાન બદલ મુંબઈ મેઘવાળ પંચાયત આપનો હૃદયપૂર્વક આભાર માને છે.\n\n🧾 *દાન પાવતી વિગત:*\n• દાતા: *${dName}*\n• રકમ: *₹${amt}/-*\n• પાવતી નં.: *${rNo}*\n• વિભાગ: *${vib}*\n• તારીખ: *${dt}*\n• હેતુ: *${pur}*\n\n📜 આપનું ડિજિટલ સન્માન પ્રમાણપત્ર (Certificate of Appreciation) તૈયાર થઈ ગયું છે.\n\nલિ. સેન્ટ્રલ વર્કિંગ કમિટી\nમુંબઈ મેઘવાળ પંચાયત\n🌐 https://www.mmp-cwc.com`;
+  };
+
+  const handleDirectDonorSavePoster = async (d) => {
+    const dId = d._docId || d.id || d.name;
+    setSavingPosterId(dId);
+    try {
+      const tplUrl = C?.donorPosterTemplateUrl || getAppreciationTemplateDefaultUrl();
+      const posterDataUrl = await generateDonorPosterCanvas(d, tplUrl, C?.donorPosterPositions);
+      const link = document.createElement("a");
+      link.href = posterDataUrl;
+      link.download = `MMP_Appreciation_Certificate_${(d.name || 'Donor').replace(/[^a-zA-Z0-9]/g, '_')}_₹${d.amount || 0}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch(err) {
+      alert("Failed to save poster: " + err.message);
+    } finally {
+      setSavingPosterId(null);
+    }
+  };
+
+  const handleDirectDonorCopyMsg = (d) => {
+    const text = getIndividualDonorMsg(d);
+    navigator.clipboard.writeText(text);
+    const dId = d._docId || d.id || d.name;
+    setCopiedIndividualId(dId);
+    setTimeout(() => setCopiedIndividualId(null), 2500);
+  };
+
+  const handleDirectDonorWhatsApp = async (d) => {
+    const text = getIndividualDonorMsg(d);
+    const rawPhone = d.phone || d.mobile || d['Mobile Number'] || d['Phone'] || d['WhatsApp Number'] || '';
+    const cleanPhone = String(rawPhone).replace(/\D/g, '').slice(-10);
+
+    // Try generating and copying poster to clipboard for instant pasting
+    try {
+      const tplUrl = C?.donorPosterTemplateUrl || getAppreciationTemplateDefaultUrl();
+      const posterDataUrl = await generateDonorPosterCanvas(d, tplUrl, C?.donorPosterPositions);
+      const res = await fetch(posterDataUrl);
+      const blob = await res.blob();
+      if (navigator.clipboard && navigator.clipboard.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob })
+        ]);
+      }
+    } catch(e) {
+      console.log("Direct WhatsApp clipboard error:", e);
+    }
+
+    const waUrl = cleanPhone 
+      ? `https://api.whatsapp.com/send?phone=91${cleanPhone}&text=${encodeURIComponent(text)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(waUrl, "_blank");
+  };
+  const [exportFormat, setExportFormat] = useState("gujarati");
+  const [includeVibhag, setIncludeVibhag] = useState(false);
+  const [includeReceipt, setIncludeReceipt] = useState(false);
+  const [includeGPay, setIncludeGPay] = useState(true);
+  const [translateNamesGu, setTranslateNamesGu] = useState(true);
+  const [showTemplateEditor, setShowTemplateEditor] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+
+  // Edit Donation Modal State
+  const [editingDonation, setEditingDonation] = useState(null);
+  const [activePosterDonor, setActivePosterDonor] = useState(null);
+  const [showPosterTplUploadModal, setShowPosterTplUploadModal] = useState(false);
+  const [showPosterMapperModal, setShowPosterMapperModal] = useState(false);
+  const [uploadingPosterTpl, setUploadingPosterTpl] = useState(false);
+  const posterTplInputRef = useRef(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    nameGu: "",
+    amount: "",
+    date: "",
+    vibhag: "",
+    vibhagGu: "",
+    purpose: "",
+    eventCode: "",
+    receiptNo: "",
+    paymentMode: "",
+    status: "",
+    pan: "",
+    phone: "",
+    email: "",
+    remarks: ""
+  });
+
   const donors = donorData.donors || [];
 
   const filtered = donors.filter(d => {
@@ -27068,11 +38979,187 @@ function DonorListCard({ donorData, auth, onRefresh }) {
     );
   });
 
+  const tpls = C?.whatsappTemplates || {};
+  const [customHeader, setCustomHeader] = useState(tpls.gujaratiHeader !== undefined ? tpls.gujaratiHeader : `.  🌷 || મુંબઈ મેઘવાળ પંચાયત || 🌷\n         [NGO]\n   •••• સેન્ટ્રલ વર્કિંગ કમિટી ••••\n☸~~~~~~~~~~~~~~~~~☸`);
+  const [customAppeal, setCustomAppeal] = useState(tpls.gujaratiAppeal !== undefined ? tpls.gujaratiAppeal : "સુજ્ઞ જ્ઞાતિજનો વિદ્યાર્થી ને પ્રોત્સાહિત કરવા અને તેમનું મનોબળ વધારવા આયોજિત શૈક્ષણિક કાર્યક્રમ વિદ્યાર્થી ગુણગૌરવ પુરસ્કાર માટે દાન ના પ્રવાહ ની અપેક્ષા છે તેથી આપ પણ આપની ઈચ્છા અનુસાર દાન આપી શકો છો.\nહાલમાં આવેલું દાન અને દાતા ઓના નામ નીચે પ્રમાણે છે.");
+  const [customRowPattern, setCustomRowPattern] = useState(tpls.rowPattern || "₹ {AMOUNT}/- {NAME}");
+  const [customSignatory, setCustomSignatory] = useState(tpls.gujaratiSignatory !== undefined ? tpls.gujaratiSignatory : "લિ. વિનોદભાઈ મકવાણા / સેન્ટ્રલ વર્કિંગ કમિટી");
+  const [customQrHeader, setCustomQrHeader] = useState(tpls.qrHeader || "💳 *GPay / BHIM QR સ્કેનર & Direct Pay:*");
+  const [customUpiId, setCustomUpiId] = useState(tpls.upiId || "mumba98697331@barodampay");
+
+  const handleSaveTemplate = async () => {
+    setSavingTemplate(true);
+    try {
+      const updatedTpls = {
+        ...tpls,
+        gujaratiHeader: customHeader,
+        gujaratiAppeal: customAppeal,
+        rowPattern: customRowPattern,
+        gujaratiSignatory: customSignatory,
+        qrHeader: customQrHeader,
+        upiId: customUpiId
+      };
+      if (C) {
+        C.whatsappTemplates = updatedTpls;
+        await fbSave(C, auth?.idToken);
+      }
+      alert("✅ WhatsApp Template saved successfully to database!");
+      setShowTemplateEditor(false);
+    } catch(err) {
+      alert("Failed to save template: " + err.message);
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const getFormattedDonorListText = () => {
+    const totalAmt = Number(donorData.totalAmount || 0).toLocaleString('en-IN');
+    const count = filtered.length;
+
+    const donateUrl = (typeof window !== "undefined" && window.location.hostname.includes("github.io"))
+      ? "https://pradeepparmar902.github.io/MY_Community_Website/donate/"
+      : "https://mmp-cwc.com/donate/";
+    const portalUrl = (typeof window !== "undefined" && window.location.hostname.includes("github.io"))
+      ? "https://pradeepparmar902.github.io/MY_Community_Website/"
+      : "https://mmp-cwc.com";
+
+    if (exportFormat === "gujarati") {
+      const header = tpls.gujaratiHeader !== undefined ? tpls.gujaratiHeader : `.  🌷 || મુંબઈ મેઘવાળ પંચાયત || 🌷\n         [NGO]\n   •••• સેન્ટ્રલ વર્કિંગ કમિટી ••••\n☸~~~~~~~~~~~~~~~~~☸`;
+      const appeal = tpls.gujaratiAppeal !== undefined ? tpls.gujaratiAppeal : "સુજ્ઞ જ્ઞાતિજનો વિદ્યાર્થી ને પ્રોત્સાહિત કરવા અને તેમનું મનોબળ વધારવા આયોજિત શૈક્ષણિક કાર્યક્રમ વિદ્યાર્થી ગુણગૌરવ પુરસ્કાર માટે દાન ના પ્રવાહ ની અપેક્ષા છે તેથી આપ પણ આપની ઈચ્છા અનુસાર દાન આપી શકો છો.\nહાલમાં આવેલું દાન અને દાતા ઓના નામ નીચે પ્રમાણે છે.";
+      const signatory = tpls.gujaratiSignatory !== undefined ? tpls.gujaratiSignatory : "લિ. વિનોદભાઈ મકવાણા / સેન્ટ્રલ વર્કિંગ કમિટી";
+      const rowPattern = tpls.rowPattern || "₹ {AMOUNT}/- {NAME}";
+      const totalPattern = tpls.totalLabel || "💰 *કુલ દાન રકમ: ₹{TOTAL}* ({COUNT} દાતાઓ)";
+      const qrHeader = tpls.qrHeader || "💳 *GPay / BHIM QR સ્કેનર & Direct Pay:*";
+      const upiId = tpls.upiId || "mumba98697331@barodampay";
+      const targetDonateUrl = tpls.donateLink || donateUrl;
+
+      // Ensure Donate QR Link is at the top so WhatsApp ALWAYS generates the Bank of Baroda QR Standee Preview
+      let msg = `💳 *દાન QR સ્કેનર:* ${targetDonateUrl}\n\n`;
+      msg += header + "\n\n" + appeal + "\n•••••••••••••••••••••••••••••\n";
+
+      filtered.forEach((d, idx) => {
+        const amt = Number(d.amount).toLocaleString('en-IN');
+        const customWordDict = C?.gujaratiWordDictionary || {};
+        const savedGuName = (d.nameGu && d.nameGu.trim()) ? d.nameGu.trim() : (d.donorNameGu && d.donorNameGu.trim()) ? d.donorNameGu.trim() : "";
+        const donorName = (translateNamesGu 
+          ? (savedGuName || transliterateEnglishToGujaratiPhonetic(d.name || "", customWordDict))
+          : d.name) || d.name;
+        
+        let line = rowPattern.replace("{AMOUNT}", amt).replace("{NAME}", donorName).replace("{INDEX}", String(idx + 1));
+        if (!line.includes(donorName)) line = `₹ ${amt}/- ${donorName}`;
+
+        const extras = [];
+        if (includeVibhag && d.vibhag && d.vibhag !== "General") {
+          const savedGuVibhag = (d.vibhagGu && d.vibhagGu.trim()) ? d.vibhagGu.trim() : "";
+          const vibhagText = translateNamesGu 
+            ? (savedGuVibhag || transliterateEnglishToGujaratiPhonetic(d.vibhag || "", customWordDict))
+            : d.vibhag;
+          extras.push(vibhagText);
+        }
+        if (includeReceipt && (d.receiptNo || d.internalReceiptNo || d.id)) extras.push(`Receipt: ${d.receiptNo || d.internalReceiptNo || d.id}`);
+        if (extras.length > 0) line += ` (${extras.join(", ")})`;
+        msg += line + "\n";
+      });
+
+      msg += "•••••••••••••••••••••••••••••\n";
+      const totalLine = totalPattern.replace("{TOTAL}", totalAmt).replace("{COUNT}", String(count));
+      msg += totalLine + "\n";
+      if (signatory) msg += signatory + "\n";
+
+      if (includeGPay) {
+        msg += "\n" + qrHeader + "\n";
+        msg += `🔗 ${targetDonateUrl}\n`;
+        msg += `📲 UPI ID: ${upiId}\n\n`;
+      }
+      msg += `🌐 પોર્ટલ: ${portalUrl}`;
+      return msg;
+    }
+
+    if (exportFormat === "single_line") {
+      let msg = `📋 *MMP Community Donor Registry Summary*\n`;
+      msg += `💰 *Total Collections:* ₹${totalAmt} (${count} Donors)\n`;
+      msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+
+      filtered.forEach((d, idx) => {
+        const amt = Number(d.amount).toLocaleString('en-IN');
+        let line = `${idx + 1}. ₹${amt}/- ${d.name}`;
+        const extras = [];
+        if (includeVibhag && d.vibhag && d.vibhag !== "General") extras.push(d.vibhag);
+        if (includeReceipt && (d.receiptNo || d.internalReceiptNo || d.id)) extras.push(d.receiptNo || d.internalReceiptNo || d.id);
+        if (extras.length > 0) line += ` (${extras.join(", ")})`;
+        msg += line + "\n";
+      });
+
+      msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+      if (includeGPay) {
+        msg += `💳 *GPay / BHIM QR Scanner & Direct Pay:*\n`;
+        msg += `🔗 ${donateUrl}\n`;
+        msg += `📲 UPI ID: mumba98697331@barodampay\n\n`;
+      }
+      msg += `🌐 *View Live on Portal:* ${portalUrl}`;
+      return msg;
+    }
+
+    let msg = `📋 *MMP Community Donor Registry Summary*\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `💰 *Total Collections:* ₹${totalAmt}\n`;
+    msg += `👥 *Total Donors Recorded:* ${count}\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    filtered.forEach((d, idx) => {
+      const isOff = d.isOffline || d.paymentMode === "Offline" || String(d.paymentMethod || "").toLowerCase().includes("offline");
+      msg += `${idx + 1}. *${d.name}* — ₹${Number(d.amount).toLocaleString('en-IN')}\n`;
+      if (includeVibhag) msg += `   📍 Vibhag: ${d.vibhag || "General"} | 📅 ${d.date}\n`;
+      if (includeReceipt) msg += `   🧾 Receipt: ${d.receiptNo || d.internalReceiptNo || d.id} (${isOff ? "Offline" : "Online"})\n`;
+      msg += "\n";
+    });
+
+    if (includeGPay) {
+      msg += `💳 *GPay / BHIM QR Scanner & Direct Pay:*\n`;
+      msg += `🔗 ${donateUrl}\n`;
+      msg += `📲 UPI ID: mumba98697331@barodampay\n\n`;
+    }
+    msg += `🌐 *View Live on Portal:* ${portalUrl}`;
+    return msg;
+  };
+
+  const handleCopyWhatsApp = () => {
+    navigator.clipboard.writeText(getFormattedDonorListText());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleShareWhatsApp = () => {
+    const msg = getFormattedDonorListText();
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  };
+
   return (
     <div style={{background:"white",border:"1.5px solid #CBD5E1",borderRadius:12,padding:12,marginTop:6}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <div style={{fontSize:".82rem",fontWeight:800,color:"#0F172A"}}>📋 Donor Registry ({filtered.length} of {donors.length})</div>
-        <span style={{fontSize:".78rem",fontWeight:800,color:"#15803D"}}>₹{donorData.totalAmount.toLocaleString('en-IN')} Total</span>
+        <div style={{fontSize:".82rem",fontWeight:800,color:"#0F172A",display:"flex",alignItems:"center",gap:6}}>
+          <span>📋</span> Donor Registry ({filtered.length} of {donors.length})
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <button
+            type="button"
+            onClick={() => setShowPosterMapperModal(true)}
+            style={{padding:"3px 8px",borderRadius:5,background:"#EFF6FF",border:"1px solid #93C5FD",color:"#1D4ED8",fontSize:".68rem",fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:3}}
+            title="Drag and drop variables to position Name & Amount on poster"
+          >
+            <span>🎯</span> Adjust Positions
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowPosterTplUploadModal(true)}
+            style={{padding:"3px 8px",borderRadius:5,background:"#F0FDF4",border:"1px solid #86EFAC",color:"#15803D",fontSize:".68rem",fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:3}}
+            title="Upload or change Appreciation Certificate background template"
+          >
+            <span>🎨</span> Poster Template
+          </button>
+          <span style={{fontSize:".78rem",fontWeight:800,color:"#15803D"}}>₹{donorData.totalAmount.toLocaleString('en-IN')} Total</span>
+        </div>
       </div>
 
       <input
@@ -27083,15 +39170,57 @@ function DonorListCard({ donorData, auth, onRefresh }) {
         style={{width:"100%",padding:"6px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".75rem",boxSizing:"border-box",marginBottom:8}}
       />
 
-      <div style={{maxHeight:260,overflowY:"auto",display:"flex",flexDirection:"column",gap:6}}>
+      <div style={{maxHeight:220,overflowY:"auto",display:"flex",flexDirection:"column",gap:6}}>
         {filtered.map((d, di) => {
           const isOff = d.isOffline || d.paymentMode === "Offline" || String(d.paymentMethod || "").toLowerCase().includes("offline");
           return (
             <div key={di} style={{background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:8,padding:"8px 10px",fontSize:".76rem"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
-                <div style={{fontWeight:800,color:"#0F172A"}}>{di + 1}. {d.name}</div>
+                <div style={{fontWeight:800,color:"#0F172A"}}>
+                  {di + 1}. {d.name}
+                  {(d.nameGu || d.donorNameGu) && (
+                    <span style={{display:"block",fontSize:".74rem",color:"#15803D",fontWeight:700,marginTop:2}}>
+                      {d.nameGu || d.donorNameGu}
+                    </span>
+                  )}
+                </div>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
                   <span style={{fontWeight:800,color:"#15803D",fontSize:".82rem"}}>₹{Number(d.amount).toLocaleString('en-IN')}</span>
+                  <button
+                    type="button"
+                    onClick={() => setActivePosterDonor(d)}
+                    style={{background:"#F0FDF4",border:"1px solid #86EFAC",color:"#166534",fontSize:".68rem",padding:"2px 6px",borderRadius:4,cursor:"pointer",fontWeight:800,display:"flex",alignItems:"center",gap:3}}
+                    title="View, download, or share Certificate of Appreciation poster for this donor"
+                  >
+                    <span>🖼️</span> Poster
+                  </button>
+                  <button
+                    onClick={() => {
+                      const customWordDict = C?.gujaratiWordDictionary || {};
+                      setEditingDonation(d);
+                      setEditFormData({
+                        name: d.name || "",
+                        nameGu: d.nameGu || transliterateEnglishToGujaratiPhonetic(d.name || "", customWordDict),
+                        amount: d.amount || "",
+                        date: d.date || new Date().toISOString().split('T')[0],
+                        vibhag: d.vibhag || "10 MAHALAXMI",
+                        vibhagGu: d.vibhagGu || (String(d.vibhag || "").toLowerCase().includes("outside") ? "મુંબઈ બહાર / સામાન્ય" : transliterateEnglishToGujaratiPhonetic(d.vibhag || "", customWordDict)),
+                        purpose: d.purpose || d.program || "Education Felicitation 2026",
+                        eventCode: d.eventCode || "EDU26",
+                        receiptNo: d.receiptNo || d.internalReceiptNo || d.id || "",
+                        paymentMode: d.paymentMode || (d.isOffline ? "Offline" : "Online"),
+                        status: d.status || "Verified",
+                        pan: d.pan || "",
+                        phone: d.phone || "",
+                        email: d.email || "",
+                        remarks: d.remarks || d.Remarks || ""
+                      });
+                    }}
+                    style={{background:"#EFF6FF",border:"1px solid #BFDBFE",color:"#1D4ED8",fontSize:".68rem",padding:"2px 6px",borderRadius:4,cursor:"pointer",fontWeight:700,display:"flex",alignItems:"center",gap:2}}
+                    title="Edit complete record & Gujarati translation"
+                  >
+                    ✏️ Edit
+                  </button>
                   <button
                     onClick={async (e) => {
                       e.stopPropagation();
@@ -27117,16 +39246,1062 @@ function DonorListCard({ donorData, auth, onRefresh }) {
                 <span>📍 {d.vibhag || d.program || "General"}</span>
                 <span style={{background:isOff?"#FFEDD5":"#DCFCE7",color:isOff?"#C2410C":"#15803D",padding:"0 4px",borderRadius:4,fontWeight:700}}>{isOff ? "Offline" : "Online"}</span>
                 <span>Receipt: <strong>{d.receiptNo || d.internalReceiptNo || d.id}</strong></span>
+                {(d.phone || d.mobile) && (
+                  <span style={{color:"#15803D",fontWeight:700}}>📱 +91 {String(d.phone || d.mobile).replace(/\D/g,'').slice(-10)}</span>
+                )}
+              </div>
+
+              {/* Individual Donor Actions Bar: WhatsApp, Save Poster to drive, Copy Message, Preview */}
+              <div style={{display:"flex",gap:6,alignItems:"center",marginTop:6,flexWrap:"wrap",borderTop:"1px dashed #E2E8F0",paddingTop:6}}>
+                <button
+                  type="button"
+                  onClick={() => handleDirectDonorWhatsApp(d)}
+                  style={{padding:"4px 9px",borderRadius:5,background:"#25D366",color:"white",border:"none",fontSize:".7rem",fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:4,boxShadow:"0 1px 4px rgba(37,211,102,0.3)"}}
+                  title={`Directly send WhatsApp to ${d.name} (${d.phone || d.mobile || 'No mobile'})`}
+                >
+                  <span>💬</span> WhatsApp
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDirectDonorSavePoster(d)}
+                  disabled={savingPosterId === (d._docId || d.id || d.name)}
+                  style={{padding:"4px 9px",borderRadius:5,background:"#0D4B5E",color:"white",border:"none",fontSize:".7rem",fontWeight:800,cursor:savingPosterId === (d._docId || d.id || d.name) ? "wait" : "pointer",display:"flex",alignItems:"center",gap:4}}
+                  title="Directly download / save this donor's certificate poster to local drive"
+                >
+                  <span>📥</span> {savingPosterId === (d._docId || d.id || d.name) ? "Saving..." : "Save Poster"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDirectDonorCopyMsg(d)}
+                  style={{padding:"4px 8px",borderRadius:5,background:"#F1F5F9",color:"#334155",border:"1px solid #CBD5E1",fontSize:".7rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:3}}
+                  title="Copy individual thank you message for this donor"
+                >
+                  <span>{copiedIndividualId === (d._docId || d.id || d.name) ? "✓ Copied!" : "📋 Copy"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActivePosterDonor(d)}
+                  style={{padding:"4px 8px",borderRadius:5,background:"#EFF6FF",color:"#1D4ED8",border:"1px solid #BFDBFE",fontSize:".7rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:3}}
+                  title="Full screen view and adjustments for this poster"
+                >
+                  <span>👁️</span> Preview
+                </button>
               </div>
             </div>
           );
         })}
       </div>
+
+      <div style={{marginTop:10,paddingTop:8,borderTop:"1px solid #E2E8F0",display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:4}}>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
+            <span style={{fontSize:".7rem",fontWeight:700,color:"#475569",marginRight:2}}>Format:</span>
+            <button
+              onClick={() => setExportFormat("gujarati")}
+              style={{
+                padding:"3px 7px",
+                borderRadius:4,
+                fontSize:".68rem",
+                fontWeight:700,
+                cursor:"pointer",
+                border: exportFormat === "gujarati" ? "1px solid #166534" : "1px solid #CBD5E1",
+                background: exportFormat === "gujarati" ? "#DCFCE7" : "white",
+                color: exportFormat === "gujarati" ? "#15803D" : "#475569"
+              }}
+            >
+              📜 ગુજરાતી (1-Line)
+            </button>
+            <button
+              onClick={() => setExportFormat("single_line")}
+              style={{
+                padding:"3px 7px",
+                borderRadius:4,
+                fontSize:".68rem",
+                fontWeight:700,
+                cursor:"pointer",
+                border: exportFormat === "single_line" ? "1px solid #1D4ED8" : "1px solid #CBD5E1",
+                background: exportFormat === "single_line" ? "#EFF6FF" : "white",
+                color: exportFormat === "single_line" ? "#1D4ED8" : "#475569"
+              }}
+            >
+              ⚡ Compact (1-Line)
+            </button>
+            <button
+              onClick={() => setExportFormat("detailed")}
+              style={{
+                padding:"3px 7px",
+                borderRadius:4,
+                fontSize:".68rem",
+                fontWeight:700,
+                cursor:"pointer",
+                border: exportFormat === "detailed" ? "1px solid #7C3AED" : "1px solid #CBD5E1",
+                background: exportFormat === "detailed" ? "#F5F3FF" : "white",
+                color: exportFormat === "detailed" ? "#7C3AED" : "#475569"
+              }}
+            >
+              📝 Detailed
+            </button>
+          </div>
+
+          <button
+            onClick={() => setShowTemplateEditor(!showTemplateEditor)}
+            style={{
+              padding:"3px 8px",
+              borderRadius:4,
+              fontSize:".68rem",
+              fontWeight:700,
+              cursor:"pointer",
+              border:"1px solid #CBD5E1",
+              background:"#F8FAFC",
+              color:"#0F172A",
+              display:"flex",
+              alignItems:"center",
+              gap:3
+            }}
+            title="Edit WhatsApp Message Template"
+          >
+            <span>⚙️</span>
+            <span>{showTemplateEditor ? "Close Template" : "Edit Template"}</span>
+          </button>
+        </div>
+
+        {/* Poster Viewer & Share Modal */}
+      {activePosterDonor && (
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(15,23,42,0.7)",backdropFilter:"blur(4px)",zIndex:999999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"white",borderRadius:16,maxWidth:520,width:"100%",padding:20,boxShadow:"0 25px 50px rgba(0,0,0,0.3)",maxHeight:"90vh",overflowY:"auto"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,borderBottom:"1px solid #E2E8F0",paddingBottom:8}}>
+              <div style={{fontSize:".95rem",fontWeight:800,color:"#0F172A",display:"flex",alignItems:"center",gap:6}}>
+                <span>📜</span> Appreciation Certificate: {activePosterDonor.name}
+              </div>
+              <button 
+                onClick={() => setActivePosterDonor(null)}
+                style={{background:"#F1F5F9",border:"none",borderRadius:"50%",width:30,height:30,cursor:"pointer",fontWeight:800,fontSize:".9rem",color:"#475569"}}
+              >
+                ✕
+              </button>
+            </div>
+
+            <OfflineDonationSuccessCard donation={activePosterDonor} C={C} auth={auth} onReload={onRefresh} />
+
+            <div style={{marginTop:12,display:"flex",justifyContent:"flex-end"}}>
+              <button
+                type="button"
+                onClick={() => setActivePosterDonor(null)}
+                style={{padding:"8px 16px",borderRadius:8,background:"#F1F5F9",color:"#475569",border:"1px solid #CBD5E1",fontWeight:700,fontSize:".8rem",cursor:"pointer"}}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPosterMapperModal && (
+        <DonorPosterVisualMapperModal
+          C={C}
+          auth={auth}
+          onClose={() => setShowPosterMapperModal(false)}
+          onSaveSuccess={() => {
+            if (onRefresh) onRefresh();
+          }}
+        />
+      )}
+
+      {/* Template Upload Modal */}
+      {showPosterTplUploadModal && (
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(15,23,42,0.7)",backdropFilter:"blur(4px)",zIndex:999999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"white",borderRadius:16,maxWidth:460,width:"100%",padding:20,boxShadow:"0 25px 50px rgba(0,0,0,0.3)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,borderBottom:"1px solid #E2E8F0",paddingBottom:8}}>
+              <div style={{fontSize:".95rem",fontWeight:800,color:"#0F172A",display:"flex",alignItems:"center",gap:6}}>
+                <span>🎨</span> Appreciation Certificate Template
+              </div>
+              <button 
+                onClick={() => setShowPosterTplUploadModal(false)}
+                style={{background:"#F1F5F9",border:"none",borderRadius:"50%",width:30,height:30,cursor:"pointer",fontWeight:800,fontSize:".9rem",color:"#475569"}}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{textAlign:"center",marginBottom:14}}>
+              <p style={{fontSize:".8rem",color:"#64748B",margin:"0 0 10px 0"}}>
+                Current active template for Certificate of Appreciation:
+              </p>
+              <img 
+                src={C?.donorPosterTemplateUrl || getAppreciationTemplateDefaultUrl()} 
+                alt="Current Template" 
+                style={{width:"100%",maxHeight:220,objectFit:"contain",borderRadius:8,border:"1px solid #CBD5E1",boxShadow:"0 2px 6px rgba(0,0,0,0.1)"}}
+              />
+            </div>
+
+            <input 
+              type="file" 
+              ref={posterTplInputRef} 
+              accept="image/*" 
+              style={{display:"none"}} 
+              onChange={async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setUploadingPosterTpl(true);
+                try {
+                  const downloadUrl = await fbUploadPhoto(file, auth?.idToken);
+
+                  if (C) {
+                    C.donorPosterTemplateUrl = downloadUrl;
+                    await fbSave(C, auth?.idToken);
+                  }
+                  alert("✅ New appreciation poster template uploaded & saved successfully!");
+                  setShowPosterTplUploadModal(false);
+                } catch(err) {
+                  alert("Upload failed: " + err.message);
+                } finally {
+                  setUploadingPosterTpl(false);
+                }
+              }}
+            />
+
+            <div style={{display:"flex",gap:8}}>
+              <button
+                type="button"
+                onClick={() => posterTplInputRef.current?.click()}
+                disabled={uploadingPosterTpl}
+                style={{flex:1,padding:"10px",borderRadius:8,background:"#0D4B5E",color:"white",border:"none",fontWeight:800,fontSize:".82rem",cursor:uploadingPosterTpl?"wait":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}
+              >
+                <span>📂</span> {uploadingPosterTpl ? "Uploading..." : "Upload New Template Image"}
+              </button>
+
+              {C?.donorPosterTemplateUrl && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!confirm("Reset to the default Appreciation Certificate template?")) return;
+                    try {
+                      delete C.donorPosterTemplateUrl;
+                      await fbSave(C, auth?.idToken);
+                      alert("✅ Reset to default template.");
+                    } catch(e) {
+                      alert("Error: " + e.message);
+                    }
+                  }}
+                  style={{padding:"10px 14px",borderRadius:8,background:"#FEE2E2",color:"#DC2626",border:"none",fontWeight:800,fontSize:".8rem",cursor:"pointer"}}
+                >
+                  Reset Default
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTemplateEditor && (
+          <div style={{background:"#F8FAFC",border:"1.5px solid #CBD5E1",borderRadius:8,padding:10,fontSize:".75rem",display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{fontWeight:800,color:"#15803D",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>📱 Customize WhatsApp Template Text</span>
+              <span style={{fontSize:".65rem",color:"#64748B"}}>Saves to Database</span>
+            </div>
+
+            <div>
+              <label style={{display:"block",fontSize:".68rem",color:"#475569",fontWeight:700,marginBottom:2}}>Header Banner:</label>
+              <textarea
+                rows={3}
+                value={customHeader}
+                onChange={e=>setCustomHeader(e.target.value)}
+                style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".72rem",boxSizing:"border-box"}}
+              />
+            </div>
+
+            <div>
+              <label style={{display:"block",fontSize:".68rem",color:"#475569",fontWeight:700,marginBottom:2}}>Appeal Body Text:</label>
+              <textarea
+                rows={3}
+                value={customAppeal}
+                onChange={e=>setCustomAppeal(e.target.value)}
+                style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".72rem",boxSizing:"border-box"}}
+              />
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div>
+                <label style={{display:"block",fontSize:".68rem",color:"#475569",fontWeight:700,marginBottom:2}}>Row Format ({'{AMOUNT}'}, {'{NAME}'}):</label>
+                <input
+                  type="text"
+                  value={customRowPattern}
+                  onChange={e=>setCustomRowPattern(e.target.value)}
+                  placeholder="₹ {AMOUNT}/- {NAME}"
+                  style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".72rem",boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+              <div>
+                <label style={{display:"block",fontSize:".68rem",color:"#475569",fontWeight:700,marginBottom:2}}>Signatory / Footer:</label>
+                <input
+                  type="text"
+                  value={customSignatory}
+                  onChange={e=>setCustomSignatory(e.target.value)}
+                  placeholder="લિ. વિનોદભાઈ મકવાણા"
+                  style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".72rem",boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div>
+                <label style={{display:"block",fontSize:".68rem",color:"#475569",fontWeight:700,marginBottom:2}}>QR Scanner Header:</label>
+                <input
+                  type="text"
+                  value={customQrHeader || "💳 *GPay / BHIM QR સ્કેનર & Direct Pay:*"}
+                  onChange={e=>setCustomQrHeader(e.target.value)}
+                  style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".72rem",boxSizing:"border-box",background:"white"}}
+                />
+              </div>
+              <div>
+                <label style={{display:"block",fontSize:".68rem",color:"#475569",fontWeight:700,marginBottom:2}}>UPI ID (VPA):</label>
+                <input
+                  type="text"
+                  value={customUpiId || "mumba98697331@barodampay"}
+                  onChange={e=>setCustomUpiId(e.target.value)}
+                  style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".72rem",boxSizing:"border-box",background:"white",fontWeight:700,color:"#2563EB"}}
+                />
+              </div>
+            </div>
+
+            <div style={{display:"flex",justifyContent:"flex-end",gap:6}}>
+              <button
+                type="button"
+                onClick={handleSaveTemplate}
+                disabled={savingTemplate}
+                style={{padding:"6px 14px",background:"#15803D",color:"white",border:"none",borderRadius:6,fontSize:".75rem",fontWeight:800,cursor:"pointer"}}
+              >
+                {savingTemplate ? "Saving..." : "💾 Save Template"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap",fontSize:".7rem",color:"#475569"}}>
+          <label style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}>
+            <input type="checkbox" checked={includeVibhag} onChange={e=>setIncludeVibhag(e.target.checked)} />
+            Include Vibhag
+          </label>
+          <label style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}>
+            <input type="checkbox" checked={includeReceipt} onChange={e=>setIncludeReceipt(e.target.checked)} />
+            Include Receipt #
+          </label>
+          <label style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}>
+            <input type="checkbox" checked={includeGPay} onChange={e=>setIncludeGPay(e.target.checked)} />
+            Include GPay & QR Link
+          </label>
+        </div>
+
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <button
+            onClick={handleCopyWhatsApp}
+            style={{
+              flex: 1,
+              padding: "8px 10px",
+              background: copied ? "#DCFCE7" : "white",
+              color: copied ? "#15803D" : "#475569",
+              border: `1px solid ${copied ? "#86EFAC" : "#CBD5E1"}`,
+              borderRadius: 6,
+              fontSize: ".75rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4
+            }}
+            title="Copy donor list to clipboard for WhatsApp"
+          >
+            <span>{copied ? "✅" : "📋"}</span>
+            <span>{copied ? "Copied!" : "Copy for WhatsApp"}</span>
+          </button>
+
+          <button
+            onClick={handleShareWhatsApp}
+            style={{
+              flex: 1,
+              padding: "8px 12px",
+              background: "#25D366",
+              color: "white",
+              border: "none",
+              borderRadius: 6,
+              fontSize: ".75rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4,
+              boxShadow: "0 2px 6px rgba(37,211,102,0.25)"
+            }}
+            title="Share directly to WhatsApp"
+          >
+            <span>🟢</span>
+            <span>Share on WhatsApp</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Modal: Edit Submitted Donation Record (All Fields & Gujarati Translation) ── */}
+      {editingDonation && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:999999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setEditingDonation(null)}>
+          <div style={{background:"white",borderRadius:14,width:"100%",maxWidth:560,maxHeight:"92vh",display:"flex",flexDirection:"column",boxShadow:"0 25px 50px -12px rgba(0,0,0,0.5)",overflow:"hidden"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",background:"linear-gradient(135deg, #1E40AF, #1D4ED8)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontSize:".95rem",fontWeight:800,display:"flex",alignItems:"center",gap:6}}>
+                <span>✏️</span> Edit Complete Donation Record
+              </div>
+              <button type="button" onClick={()=>setEditingDonation(null)} style={{background:"none",border:"none",color:"white",fontSize:"1.3rem",cursor:"pointer"}}>✕</button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setSavingEdit(true);
+                try {
+                  const customWordDict = C?.gujaratiWordDictionary || {};
+                  const targetId = editingDonation._docId || editingDonation.id;
+                  const updatedRecord = {
+                    ...editingDonation,
+                    name: editFormData.name.trim(),
+                    nameGu: (editFormData.nameGu && editFormData.nameGu.trim()) ? editFormData.nameGu.trim() : transliterateEnglishToGujaratiPhonetic(editFormData.name.trim(), customWordDict),
+                    donorNameGu: (editFormData.nameGu && editFormData.nameGu.trim()) ? editFormData.nameGu.trim() : transliterateEnglishToGujaratiPhonetic(editFormData.name.trim(), customWordDict),
+                    amount: parseFloat(editFormData.amount) || 0,
+                    date: editFormData.date,
+                    vibhag: editFormData.vibhag,
+                    vibhagGu: editFormData.vibhagGu,
+                    purpose: editFormData.purpose,
+                    program: editFormData.purpose,
+                    eventCode: editFormData.eventCode,
+                    receiptNo: editFormData.receiptNo,
+                    internalReceiptNo: editFormData.receiptNo,
+                    paymentMode: editFormData.paymentMode,
+                    paymentMethod: editFormData.paymentMode,
+                    status: editFormData.status,
+                    pan: editFormData.pan.trim().toUpperCase(),
+                    phone: editFormData.phone.trim(),
+                    email: editFormData.email.trim(),
+                    remarks: editFormData.remarks.trim()
+                  };
+
+                  Object.assign(editingDonation, updatedRecord);
+
+                  await fbUpdateDonation(targetId, updatedRecord, auth?.idToken);
+                  alert("✅ Donation record and Gujarati translation updated successfully!");
+                  setEditingDonation(null);
+                  if (onRefresh) onRefresh();
+                } catch(err) {
+                  alert("Failed to update donation: " + err.message);
+                } finally {
+                  setSavingEdit(false);
+                }
+              }}
+              style={{padding:18,overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:12}}
+            >
+              {/* Names Section */}
+              <div style={{background:"#F8FAFC",border:"1.5px solid #CBD5E1",borderRadius:10,padding:12,display:"flex",flexDirection:"column",gap:10}}>
+                <div>
+                  <label style={{display:"block",fontSize:".74rem",fontWeight:700,color:"#1E293B",marginBottom:3,textAlign:"left"}}>Donor Full Name (English) *</label>
+                  <input
+                    type="text"
+                    value={editFormData.name}
+                    onChange={e => {
+                      const v = e.target.value;
+                      const customWordDict = C?.gujaratiWordDictionary || {};
+                      setEditFormData(prev => ({
+                        ...prev,
+                        name: v,
+                        nameGu: transliterateEnglishToGujaratiPhonetic(v, customWordDict)
+                      }));
+                    }}
+                    required
+                    style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".88rem",boxSizing:"border-box",background:"white"}}
+                  />
+                </div>
+
+                <div>
+                  <label style={{display:"block",fontSize:".74rem",fontWeight:800,color:"#15803D",marginBottom:3,textAlign:"left"}}>દાતાનું પૂરું નામ (ગુજરાતી) *</label>
+                  <input
+                    type="text"
+                    value={editFormData.nameGu}
+                    onChange={e => setEditFormData({ ...editFormData, nameGu: e.target.value })}
+                    required
+                    style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1.5px solid #86EFAC",fontSize:".92rem",fontWeight:700,color:"#14532D",background:"#F0FDF4",boxSizing:"border-box"}}
+                    title="Directly correct any Gujarati letters here"
+                  />
+                </div>
+              </div>
+
+              {/* Amount and Date */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div>
+                  <label style={{display:"block",fontSize:".72rem",fontWeight:700,color:"#374151",marginBottom:3,textAlign:"left"}}>Amount (₹) *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={editFormData.amount}
+                    onChange={e => setEditFormData({ ...editFormData, amount: e.target.value })}
+                    required
+                    style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".88rem",fontWeight:700,color:"#15803D",boxSizing:"border-box"}}
+                  />
+                </div>
+                <div>
+                  <label style={{display:"block",fontSize:".72rem",fontWeight:700,color:"#374151",marginBottom:3,textAlign:"left"}}>Date *</label>
+                  <input
+                    type="date"
+                    value={editFormData.date}
+                    onChange={e => setEditFormData({ ...editFormData, date: e.target.value })}
+                    required
+                    style={{width:"100%",padding:"7px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",boxSizing:"border-box"}}
+                  />
+                </div>
+              </div>
+
+              {/* Vibhag */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div>
+                  <label style={{display:"block",fontSize:".72rem",fontWeight:700,color:"#374151",marginBottom:3,textAlign:"left"}}>Vibhag (English)</label>
+                  <select
+                    value={editFormData.vibhag}
+                    onChange={e => {
+                      const v = e.target.value;
+                      const customWordDict = C?.gujaratiWordDictionary || {};
+                      const gu = v.toLowerCase().includes("outside") ? "મુંબઈ બહાર / સામાન્ય" : transliterateEnglishToGujaratiPhonetic(v, customWordDict);
+                      setEditFormData({ ...editFormData, vibhag: v, vibhagGu: gu });
+                    }}
+                    style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".8rem",boxSizing:"border-box",background:"white"}}
+                  >
+                    {extractVibhagList(C).map(v => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{display:"block",fontSize:".72rem",fontWeight:800,color:"#15803D",marginBottom:3,textAlign:"left"}}>વિભાગ (ગુજરાતી)</label>
+                  <input
+                    type="text"
+                    value={editFormData.vibhagGu || ""}
+                    onChange={e => setEditFormData({ ...editFormData, vibhagGu: e.target.value })}
+                    style={{width:"100%",padding:"7px 10px",borderRadius:6,border:"1.5px solid #86EFAC",fontSize:".82rem",fontWeight:700,color:"#14532D",background:"#F0FDF4",boxSizing:"border-box"}}
+                  />
+                </div>
+              </div>
+
+              {/* Purpose & Receipt Number */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div>
+                  <label style={{display:"block",fontSize:".72rem",fontWeight:700,color:"#374151",marginBottom:3,textAlign:"left"}}>Purpose / Program</label>
+                  <input
+                    type="text"
+                    value={editFormData.purpose}
+                    onChange={e => setEditFormData({ ...editFormData, purpose: e.target.value })}
+                    style={{width:"100%",padding:"7px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",boxSizing:"border-box"}}
+                  />
+                </div>
+                <div>
+                  <label style={{display:"block",fontSize:".72rem",fontWeight:700,color:"#374151",marginBottom:3,textAlign:"left"}}>Receipt Number</label>
+                  <input
+                    type="text"
+                    value={editFormData.receiptNo}
+                    onChange={e => setEditFormData({ ...editFormData, receiptNo: e.target.value })}
+                    style={{width:"100%",padding:"7px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",boxSizing:"border-box"}}
+                  />
+                </div>
+              </div>
+
+              {/* Status and Mode */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div>
+                  <label style={{display:"block",fontSize:".72rem",fontWeight:700,color:"#374151",marginBottom:3,textAlign:"left"}}>Payment Mode</label>
+                  <select
+                    value={editFormData.paymentMode}
+                    onChange={e => setEditFormData({ ...editFormData, paymentMode: e.target.value })}
+                    style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".8rem",boxSizing:"border-box",background:"white"}}
+                  >
+                    <option value="Offline">Offline / Cash / Cheque</option>
+                    <option value="Online">Online Payment Gateway</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{display:"block",fontSize:".72rem",fontWeight:700,color:"#374151",marginBottom:3,textAlign:"left"}}>Status</label>
+                  <select
+                    value={editFormData.status}
+                    onChange={e => setEditFormData({ ...editFormData, status: e.target.value })}
+                    style={{width:"100%",padding:"8px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".8rem",boxSizing:"border-box",background:"white"}}
+                  >
+                    <option value="Verified">Verified</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* PAN, Phone, Email */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div>
+                  <label style={{display:"block",fontSize:".72rem",fontWeight:700,color:"#374151",marginBottom:3,textAlign:"left"}}>PAN Number (80G)</label>
+                  <input
+                    type="text"
+                    value={editFormData.pan}
+                    onChange={e => setEditFormData({ ...editFormData, pan: e.target.value })}
+                    style={{width:"100%",padding:"7px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",textTransform:"uppercase",boxSizing:"border-box"}}
+                  />
+                </div>
+                <div>
+                  <label style={{display:"block",fontSize:".72rem",fontWeight:700,color:"#374151",marginBottom:3,textAlign:"left"}}>Phone Number</label>
+                  <input
+                    type="tel"
+                    value={editFormData.phone}
+                    onChange={e => setEditFormData({ ...editFormData, phone: e.target.value })}
+                    style={{width:"100%",padding:"7px 10px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".82rem",boxSizing:"border-box"}}
+                  />
+                </div>
+              </div>
+
+              <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:10}}>
+                <button
+                  type="button"
+                  onClick={()=>setEditingDonation(null)}
+                  style={{padding:"8px 16px",background:"#F1F5F9",color:"#475569",border:"1px solid #CBD5E1",borderRadius:6,fontSize:".82rem",fontWeight:700,cursor:"pointer"}}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  style={{padding:"8px 20px",background:"linear-gradient(135deg, #166534, #15803D)",color:"white",border:"none",borderRadius:6,fontSize:".85rem",fontWeight:800,cursor:"pointer",boxShadow:"0 2px 4px rgba(22,101,52,0.3)"}}
+                >
+                  {savingEdit ? "Saving..." : "💾 Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
 
-// ── Community AI & Registration Chatbot Widget ──────────────────────────────────────────
+function DynamicChatbotFormCard({ formDef, destination = "donations", introTitle, introText, initialData, C, auth, activeUser, onSubmitSuccess }) {
+  const [nameGu, setNameGu] = useState(initialData?.nameGu || "");
+  const [formData, setFormData] = useState(() => {
+    const init = {};
+    if (initialData) {
+      if (initialData.defaultVibhag) init["Vibhag"] = initialData.defaultVibhag;
+      if (initialData.defaultName) init["Full Name"] = initialData.defaultName;
+      if (initialData.defaultAmount) init["Amount"] = initialData.defaultAmount;
+      if (initialData.defaultPurpose) init["Purpose"] = initialData.defaultPurpose;
+    }
+    return init;
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [submittedResult, setSubmittedResult] = useState(null);
+
+  const vibhagList = extractVibhagList(C);
+  const fields = Array.isArray(formDef?.fields) && formDef.fields.length > 0 ? formDef.fields : null;
+
+  // If no custom fields, render fallback standard fields
+  const standardFields = [
+    { label: "Full Name", type: "text", required: true, placeholder: "Enter donor / applicant name" },
+    { label: "Mobile Number", type: "tel", required: true, placeholder: "10-digit mobile number" },
+    { label: "Date", type: "date", required: true, defaultValue: new Date().toISOString().split("T")[0] },
+    { label: "Amount", type: "number", required: destination === "donations", placeholder: "e.g. 5000" },
+    { label: "Vibhag", type: "select", required: true, options: vibhagList },
+    { label: "Purpose / Event Code", type: "text", placeholder: "e.g. Education Felicitation 2026" },
+    { label: "Internal Receipt Number", type: "text", placeholder: "e.g. R-1024" }
+  ];
+
+  const activeFields = fields || standardFields;
+
+  const handleFieldChange = (key, val) => {
+    setFormData(prev => ({ ...prev, [key]: val }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const idToken = auth?.idToken || localStorage.getItem("trustPublicAuthToken") || localStorage.getItem("globalAuthToken") || "";
+      const submitDate = formData["Date"] || formData["date"] || new Date().toISOString().split("T")[0];
+      const donorName = formData["Full Name"] || formData["name"] || formData["Name"] || formData["Donor Name"] || activeUser?.name || "Anonymous";
+      const userPhone = formData["Mobile Number"] || formData["mobile"] || formData["Phone Number"] || activeUser?.mobile || "";
+      const vibhagVal = formData["Vibhag"] || formData["vibhag"] || formData["MMP Vibhag"] || (vibhagList[0] || "10 MAHALAXMI");
+
+      if (destination === "donations") {
+        const amt = parseFloat(formData["Amount"] || formData["amount"] || 0);
+        const receiptNoVal = formData["Internal Receipt Number"] || formData["receiptNo"] || formData["Receipt No"] || "";
+        const purposeVal = formData["Purpose / Event Code"] || formData["Purpose"] || formData["purpose"] || formDef?.name || "Education Felicitation 2026";
+        const eventCodeVal = formData["Event Code"] || formData["eventCode"] || "EDU26";
+
+        const customWordDict = C?.gujaratiWordDictionary || {};
+        const finalGu = (nameGu && nameGu.trim()) ? nameGu.trim() : transliterateEnglishToGujaratiPhonetic(donorName, customWordDict);
+        const donRecord = {
+          name: donorName,
+          nameGu: finalGu,
+          mobile: userPhone,
+          amount: amt,
+          date: submitDate,
+          purpose: purposeVal,
+          vibhag: vibhagVal,
+          eventCode: eventCodeVal,
+          receiptNo: receiptNoVal,
+          internalReceiptNo: receiptNoVal,
+          paymentMode: "Offline",
+          paymentMethod: "Offline Collection",
+          status: "Verified",
+          isOffline: true,
+          recordedBy: activeUser?.name || "Admin",
+          recordedAt: new Date().toISOString(),
+          ...formData
+        };
+
+        const res = await fbSubmitDonation(donRecord, idToken);
+        donRecord.id = res?.name ? res.name.split("/").pop() : "OFF-" + Date.now().toString().slice(-6);
+        setSubmittedResult({ type: "donation", data: donRecord });
+        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("donation_updated"));
+        if (onSubmitSuccess) onSubmitSuccess(donRecord);
+      } else if (destination === "registrations") {
+        const regRecord = {
+          eventId: formDef?.id || "edu_2026",
+          eventTitle: formDef?.name || "Education Felicitation 2026",
+          submitterMob: userPhone,
+          formData: {
+            "Full Name": donorName,
+            "Mobile Number": userPhone,
+            "Vibhag": vibhagVal,
+            ...formData
+          }
+        };
+
+        const res = await fbSubmitRegistration(regRecord, idToken);
+        const generatedId = res?.id || res?.["Transaction ID"] || regRecord["Transaction ID"] || "REG-OK";
+        setSubmittedResult({ type: "registration", data: { ...regRecord.formData, id: generatedId, transactionId: generatedId } });
+        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("registration_updated"));
+        if (onSubmitSuccess) onSubmitSuccess(regRecord);
+      } else {
+        const volRecord = { ...formData, name: donorName, mobile: userPhone, status: "Pending" };
+        await fbSubmitVolunteer(volRecord);
+        setSubmittedResult({ type: "volunteer", data: volRecord });
+        if (onSubmitSuccess) onSubmitSuccess(volRecord);
+      }
+    } catch (err) {
+      alert("Submission failed: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (submittedResult) {
+    if (submittedResult.type === "donation") {
+      return <OfflineDonationSuccessCard donation={submittedResult.data} C={C} />;
+    }
+    return (
+      <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:14,marginTop:6,boxShadow:"0 2px 8px rgba(34,197,94,0.15)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,borderBottom:"1px solid #DCFCE7",paddingBottom:6}}>
+          <div style={{fontSize:".88rem",fontWeight:800,color:"#15803D"}}>🎉 Registration Submitted Successfully!</div>
+          <span style={{background:"#DCFCE7",color:"#166534",fontSize:".68rem",padding:"2px 7px",borderRadius:6,fontWeight:800}}>Saved to Registrations</span>
+        </div>
+        <div style={{fontSize:".8rem",color:"#1E293B",lineHeight:1.5}}>
+          <div>Transaction ID: <strong style={{color:"#2563EB",fontFamily:"monospace"}}>{submittedResult.data.transactionId || submittedResult.data.id}</strong></div>
+          <div>Name: <strong>{submittedResult.data["Full Name"] || submittedResult.data.name}</strong></div>
+          <div>Vibhag: <strong>{submittedResult.data["Vibhag"] || submittedResult.data.vibhag}</strong></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={{background:"#F8FAFC",border:"1.5px solid #CBD5E1",borderRadius:12,padding:14,marginTop:8,display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #E2E8F0",paddingBottom:6}}>
+        <div style={{fontSize:".85rem",fontWeight:800,color:"#0F172A",display:"flex",alignItems:"center",gap:6}}>
+          <span>📝</span> {formDef?.name || introTitle || "Interactive Form"}
+        </div>
+        <span style={{
+          background: destination === "donations" ? "#FEF3C7" : "#EFF6FF",
+          color: destination === "donations" ? "#92400E" : "#1D4ED8",
+          fontSize: ".68rem",
+          padding: "2px 6px",
+          borderRadius: 4,
+          fontWeight: 800,
+          border: "1px solid " + (destination === "donations" ? "#FCD34D" : "#BFDBFE")
+        }}>
+          {destination === "donations" ? "💰 Offline Donation" : destination === "registrations" ? "📥 Event Registration" : "👥 Volunteer"}
+        </span>
+      </div>
+
+      {introText && (
+        <div style={{fontSize:".75rem",color:"#475569",lineHeight:1.4}}>
+          {introText}
+        </div>
+      )}
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(140px, 1fr))",gap:8}}>
+        {activeFields.map((field, idx) => {
+          const label = field.label || field.name || ("Field " + (idx + 1));
+          const type = (field.type || "text").toLowerCase();
+          const isReq = field.required !== false;
+          const val = formData[label] !== undefined ? formData[label] : (field.defaultValue || "");
+          const isVibhagField = label.toLowerCase().includes("vibhag");
+          const isNameField = (label.toLowerCase().includes("name") || label.toLowerCase().includes("donor")) && !label.toLowerCase().includes("vibhag") && !label.toLowerCase().includes("event") && !label.toLowerCase().includes("father") && !label.toLowerCase().includes("mother");
+
+          if (isNameField) {
+            return (
+              <div key={idx} style={{gridColumn: "1/-1",display:"flex",flexDirection:"column",gap:10,background:"#F8FAFC",border:"1.5px solid #CBD5E1",borderRadius:8,padding:12}}>
+                <div>
+                  <label style={{display:"block",fontSize:".74rem",fontWeight:700,color:"#1E293B",marginBottom:4,textAlign:"left",whiteSpace:"nowrap"}}>
+                    {label} (English) {isReq ? "*" : ""}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={field.placeholder || "Enter Full Name in English"}
+                    value={val}
+                    onChange={e => {
+                      const v = e.target.value;
+                      handleFieldChange(label, v);
+                      const customWordDict = C?.gujaratiWordDictionary || {};
+                      setNameGu(transliterateEnglishToGujaratiPhonetic(v, customWordDict));
+                    }}
+                    required={isReq}
+                    style={{width:"100%",padding:"8px 12px",borderRadius:6,border:"1px solid #94A3B8",fontSize:".88rem",boxSizing:"border-box",background:"white"}}
+                  />
+                </div>
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <label style={{fontSize:".74rem",fontWeight:800,color:"#15803D",textAlign:"left",whiteSpace:"nowrap"}}>
+                      દાતાનું નામ (ગુજરાતી) *
+                    </label>
+                    <span style={{fontSize:".62rem",color:"#166534",background:"#DCFCE7",padding:"1px 6px",borderRadius:4,fontWeight:700}}>✏️ Edit if needed</span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="દાતાનું ગુજરાતી નામ (e.g. પ્રદીપ પરમાર)"
+                    value={nameGu}
+                    onChange={e => setNameGu(e.target.value)}
+                    style={{width:"100%",padding:"8px 12px",borderRadius:6,border:"1.5px solid #86EFAC",fontSize:".9rem",fontWeight:700,color:"#14532D",background:"#F0FDF4",boxSizing:"border-box"}}
+                    title="Directly correct any Gujarati letters here"
+                  />
+                </div>
+              </div>
+            );
+          }
+
+          // 1. If field has its OWN explicit options from Form Builder, ALWAYS use them!
+          let fieldOpts = [];
+          if (Array.isArray(field.options) && field.options.length > 0) {
+            fieldOpts = field.options.map(opt => (typeof opt === "string" ? opt.trim() : (opt?.value || opt?.label || "").trim())).filter(Boolean);
+          } else if (typeof field.options === "string" && field.options.trim().length > 0) {
+            fieldOpts = field.options.split(",").map(opt => opt.trim()).filter(Boolean);
+          } else if (isVibhagField) {
+            fieldOpts = vibhagList;
+          }
+
+          if (type === "select" || fieldOpts.length > 0) {
+            return (
+              <div key={idx} style={{gridColumn: "1/-1"}}>
+                <label style={{display:"block",fontSize:".7rem",fontWeight:700,color:"#374151",marginBottom:2}}>
+                  {label} {isReq ? "*" : ""}
+                </label>
+                <select
+                  value={val || fieldOpts[0] || ""}
+                  onChange={e => handleFieldChange(label, e.target.value)}
+                  required={isReq}
+                  style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".78rem",background:"white",boxSizing:"border-box",fontWeight:600}}
+                >
+                  {!isVibhagField && <option value="">-- Select {label} --</option>}
+                  {fieldOpts.map((optVal, oi) => (
+                    <option key={oi} value={optVal}>{optVal}</option>
+                  ))}
+                </select>
+              </div>
+            );
+          }
+
+          return (
+            <div key={idx} style={{gridColumn: (type === "address" || type === "textarea") ? "1/-1" : "auto"}}>
+              <label style={{display:"block",fontSize:".7rem",fontWeight:700,color:"#374151",marginBottom:2}}>
+                {label} {isReq ? "*" : ""}
+              </label>
+              <input
+                type={type === "number" ? "number" : type === "date" ? "date" : type === "tel" ? "tel" : type === "email" ? "email" : "text"}
+                value={val}
+                onChange={e => handleFieldChange(label, e.target.value)}
+                placeholder={field.placeholder || ("Enter " + label)}
+                required={isReq}
+                style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #CBD5E1",fontSize:".78rem",boxSizing:"border-box",background:"white"}}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        type="submit"
+        disabled={submitting}
+        style={{
+          marginTop: 4,
+          padding: "9px",
+          borderRadius: 8,
+          border: "none",
+          background: destination === "donations" ? "linear-gradient(135deg, #15803D, #166534)" : "linear-gradient(135deg, #2563EB, #1D4ED8)",
+          color: "white",
+          fontSize: ".82rem",
+          fontWeight: 800,
+          cursor: submitting ? "wait" : "pointer",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.15)"
+        }}
+      >
+        {submitting ? "Saving..." : ("💾 Submit & Save to " + (destination === "donations" ? "Donations" : destination === "registrations" ? "Registrations" : "Volunteers"))}
+      </button>
+    </form>
+  );
+}
+
+
+// ── Interactive Question Buttons Grid Card Component ────────────────────────
+function QuestionButtonsCard({ onAction, isAnyAdmin, isDonationCollector, allCommands = [] }) {
+  const categories = [
+    {
+      title: "📊 Live Registrations & Analytics",
+      color: "#2563EB",
+      bg: "#EFF6FF",
+      border: "#BFDBFE",
+      items: [
+        { cmd: "/Educ_all", label: "All Entries Summary", icon: "📊", adminOnly: true },
+        { cmd: "/edu_pending", label: "Pending Applications", icon: "⏳", adminOnly: true },
+        { cmd: "/edu_approved", label: "Approved List", icon: "🟢", adminOnly: true },
+        { cmd: "/vibhag", label: "Vibhag-wise Breakdown", icon: "📍", adminOnly: true },
+        { cmd: "/status", label: "Check Application Status", icon: "🔍", adminOnly: false }
+      ]
+    },
+    {
+      title: "💰 Donations & Donor Registry",
+      color: "#15803D",
+      bg: "#F0FDF4",
+      border: "#BBF7D0",
+      items: [
+        { cmd: "/don_entry", label: "Offline Donation Entry Form", icon: "➕", collectorOnly: true },
+        { cmd: "/don_list", label: "Donor Registry & Broadcast", icon: "📋", adminOnly: true },
+        { cmd: "/donate", label: "Bank Account & QR Code", icon: "💳", adminOnly: false }
+      ]
+    },
+    {
+      title: "👥 Committee & Leadership",
+      color: "#7C3AED",
+      bg: "#F5F3FF",
+      border: "#DDD6FE",
+      items: [
+        { cmd: "/edu", label: "Education Committee", icon: "🎓", adminOnly: false },
+        { cmd: "/cwc", label: "CWC Committee Members", icon: "👥", adminOnly: false },
+        { cmd: "/trust", label: "About Trust & History", icon: "🏢", adminOnly: false },
+        { cmd: "/contact", label: "Office Contact & Timings", icon: "📞", adminOnly: false }
+      ]
+    },
+    {
+      title: "🗓️ Events & General Guidelines",
+      color: "#D97706",
+      bg: "#FFFBEB",
+      border: "#FDE68A",
+      items: [
+        { cmd: "/events", label: "Upcoming Community Events", icon: "🗓️", adminOnly: false },
+        { cmd: "/help", label: "Full Commands Guide", icon: "⚡", adminOnly: false }
+      ]
+    }
+  ];
+
+  return (
+    <div style={{
+      marginTop: 8,
+      padding: "12px",
+      background: "#FFFFFF",
+      borderRadius: 12,
+      border: "1.5px solid #E2E8F0",
+      boxShadow: "0 3px 12px rgba(0,0,0,0.05)",
+      display: "flex",
+      flexDirection: "column",
+      gap: 12
+    }}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #F1F5F9",paddingBottom:6}}>
+        <span style={{fontSize:".82rem",fontWeight:800,color:"#0F172A",display:"flex",alignItems:"center",gap:6}}>
+          <span>🔘</span> Interactive Question Buttons:
+        </span>
+        <span style={{fontSize:".7rem",color:"#64748B",fontWeight:600}}>Click any button below 👇</span>
+      </div>
+
+      {categories.map((cat, cIdx) => {
+        const visibleItems = cat.items.filter(item => {
+          if (item.adminOnly && !isAnyAdmin) return false;
+          if (item.collectorOnly && !isDonationCollector && !isAnyAdmin) return false;
+          return true;
+        });
+
+        if (visibleItems.length === 0) return null;
+
+        return (
+          <div key={cIdx} style={{
+            background: cat.bg,
+            border: `1px solid ${cat.border}`,
+            borderRadius: 10,
+            padding: "8px 10px"
+          }}>
+            <div style={{fontSize:".72rem",fontWeight:800,color:cat.color,textTransform:"uppercase",letterSpacing:0.5,marginBottom:6}}>
+              {cat.title}
+            </div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {visibleItems.map((item, iIdx) => (
+                <button
+                  key={iIdx}
+                  type="button"
+                  onClick={() => {
+                    const displayTitle = `${item.icon} ${item.label}`;
+                    onAction(item.cmd, displayTitle);
+                  }}
+                  style={{
+                    background: "white",
+                    border: `1.5px solid ${cat.border}`,
+                    borderRadius: 8,
+                    padding: "6px 10px",
+                    fontSize: ".75rem",
+                    fontWeight: 700,
+                    color: "#1E293B",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                    transition: "all 0.15s ease",
+                    whiteSpace: "nowrap"
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = cat.color;
+                    e.currentTarget.style.color = "white";
+                    e.currentTarget.style.borderColor = cat.color;
+                    e.currentTarget.style.transform = "translateY(-1px)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "white";
+                    e.currentTarget.style.color = "#1E293B";
+                    e.currentTarget.style.borderColor = cat.border;
+                    e.currentTarget.style.transform = "none";
+                  }}
+                  title={`Execute ${item.cmd}`}
+                >
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
+                  <span style={{fontSize:".65rem",opacity:0.65,fontWeight:600}}>({item.cmd})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function CommunityChatbot({ C, auth, onShowLogin }) {
   if (C.chatbotEnabled === false) {
     return null;
@@ -27144,6 +40319,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
   const [regs, setRegs] = useState([]);
   const [regsLoaded, setRegsLoaded] = useState(false);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
+  const [slashViewMode, setSlashViewMode] = useState("buttons"); // "buttons" | "list"
   const [slashSubmenu, setSlashSubmenu] = useState(null); // null | "vibhags"
   const chatBottomRef = useRef(null);
 
@@ -27324,17 +40500,9 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       cmd: "/events",
       icon: "🎓",
       title: "Upcoming Education Felicitation 2026 events",
-      answer: "🎓 **Education Felicitation 2026 - Mumbai Meghwal Panchayat & Vidya Gohil Trust**\n\n• **Event**: Annual Student Education Felicitation 2026\n• **Eligibility**: Students scoring 50%+ in 10th, 12th, Degree, Diploma & Post-Graduation\n• **Registration Portal**: Online via website Events section\n• **Date**: 02-10-2026\n• **Venue**: Mumbai (To be officially announced soon)\n• **Required Documents**: Marksheet & Passport Photo\n\n• [Watch Registration Video](https://youtu.be/hg2dxZjDLfo)\n• [Visit Website Portal](https://www.mmp-cwc.com)",
+      answer: "🎓 **Education Felicitation 2026 - Mumbai Meghwal Panchayat & Vidya Gohil Trust**\n\n• **Event**: Annual Student Education Felicitation 2026\n• **Eligibility**: Students scoring 50%+ in 10th, 12th, Degree, Diploma & Post-Graduation\n• **Registration Portal**: Online via website Events section\n• **Venue & Date**: Mumbai (To be officially announced soon)\n• **Required Documents**: Marksheet & Passport Photo\n\nFor assistance with registration, contact your Vibhag Head.",
       enabled: true,
-      adminOnly: false
-    },
-    {
-      id: "kb_edu_committee",
-      cmd: "/edu_committee",
-      icon: "👥",
-      title: "Education Committee Members",
-      answer: "👥 **Education Felicitation 2026 Committee Members**:\n\n• **Pradeep Parmar** — Trustee / Lead Coordinator (+91 9820785209)\n• **Keshav Wagh** — Lower Parel Head (+91 9967821964)\n• **Ashwin Kataria** — Ramdev Nagar Head (+91 8082234187)\n• **Samiksha Chudasama** — Committee Member (+91 7977561920)\n• **Dinesh Sondarva** — Mahalaxmi Head (+91 8779227886)\n• **Khushi Jogadiya** — Pratiksha Nagar Head (+91 8591563577)",
-      enabled: true,
+      roleAccess: "public",
       adminOnly: false
     },
     {
@@ -27342,8 +40510,9 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       cmd: "/cwc_committee",
       icon: "🏛️",
       title: "CWC Committee Members",
-      answer: "🏛️ **Central Working Committee (CWC) Members**:\n\n• **President**: MMP Central Leadership\n• **General Secretary**: CWC Executive\n• **Treasurer / Financial Head**: Trust Executive\n• **Coordination Team**: Central Vibhag Team\n\n*(You can edit full member details & phone numbers in Admin Panel)*",
+      answer: "🏛️ **Central Working Committee (CWC) Members**:\n\n• **President**: Ravi Dharia - President MMP CWC\n• **General Secretary**: CWC Executive\n• **Treasurer / Financial Head**: Trust Executive\n• **Coordination Team**: Central Vibhag Team\n\n*(You can edit full member details & phone numbers in Admin Panel)*",
       enabled: true,
+      roleAccess: "public",
       adminOnly: false
     },
     {
@@ -27352,8 +40521,10 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       icon: "💰",
       title: "80G Tax Donations & Bank Details",
       answer: "💰 **Donations & 80G Tax Exemption**:\n\n• Vidya Gohil Charitable Trust offers **80G Tax Benefits** for all eligible donations under Indian Income Tax regulations.\n• You can donate online securely via Razorpay (UPI, Google Pay, PhonePe, Cards, NetBanking) on our **Donate** page.\n• Automated 80G tax receipts and 10BE acknowledgement certificates are provided.",
-      enabled: false, // Default hidden for MMP
-      adminOnly: false
+      enabled: true,
+      roleAccess: "public",
+      adminOnly: false,
+      attachedWhatsAppTplId: "tpl_general_donation"
     },
     {
       id: "kb_contact",
@@ -27362,113 +40533,178 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       title: "Trust Helpline & Office Contacts",
       answer: "📞 **Trust Office & Helpline Contacts**:\n\n• **Office**: Mumbai, Maharashtra\n• **Email**: info@mmp-cwc-new.com\n• **Helpline Mobile**: +91 9820785209 / +91 9967821964\n• **Timings**: 10:00 AM – 7:00 PM (Mon – Sat)",
       enabled: true,
+      roleAccess: "public",
       adminOnly: false
-    }
-  ];
-
-  const kbList = Array.isArray(C.chatbotKnowledgeBase) && C.chatbotKnowledgeBase.length > 0 ? C.chatbotKnowledgeBase : DEFAULT_KB;
-
-  // System Core Commands + Custom Knowledge Base Commands
-  const SYSTEM_COMMANDS = [
+    },
     {
+      id: "kb_check",
       cmd: "/check",
       icon: "🔍",
-      label: "Check My Application Status",
-      desc: "Look up your application status by logged-in mobile or Transaction ID",
-      action: "/check",
+      title: "Check Application Status",
+      answer: "🔍 **Check Application Status**:\n\nPlease enter your **Transaction ID (e.g. VG-7, EDU26-2)** or **Registered Mobile Number** to look up your live status.",
+      enabled: true,
+      roleAccess: "public",
       adminOnly: false
     },
     {
+      id: "kb_donation_update",
       cmd: "/donation update",
       icon: "✍️",
-      label: "Record Offline Donation",
-      desc: "Add offline donation (Restricted to Donation Collectors)",
-      action: "/donation update",
+      title: "Record Offline Donation",
+      answer: "✍️ **Record Offline Donation**:\n\nUse the interactive form below to record cash, cheque, or direct bank transfer donations with instant database syncing.",
+      enabled: true,
+      roleAccess: "donation_collector",
       adminOnly: true,
-      donationCollectorOnly: true
+      attachedFormId: "builtin_offline_donation",
+      storageDestination: "donations"
     },
     {
-      cmd: "/donner",
-      icon: "✍️",
-      label: "Record Offline Donation (/donner)",
-      desc: "Offline donation entry form (Donation Collectors only)",
-      action: "/donation update",
+      id: "kb_donationsummary",
+      cmd: "/donation summary",
+      icon: "📊",
+      title: "Donation Summary (Vibhag-wise Collections)",
+      answer: "📊 **Mumbai Meghwal Panchayat - Live Donation Collection Summary**:\n\nHere is the real-time breakdown of online & offline collections across all Vibhags:",
+      enabled: true,
+      roleAccess: "donation_collector",
       adminOnly: true,
-      donationCollectorOnly: true
+      attachedWhatsAppTplId: "tpl_donor_summary"
     },
     {
-      cmd: "/donation sumary",
-      icon: "💰",
-      label: "Donation Summary (Vibhag-wise)",
-      desc: "Total collections & Vibhag metrics (Donation Collectors only)",
-      action: "/donation sumary",
-      adminOnly: true,
-      donationCollectorOnly: true
-    },
-    {
+      id: "kb_donerlist",
       cmd: "/donerlist",
       icon: "📋",
-      label: "Donor List (Person-wise)",
-      desc: "Complete registry of donors (Donation Collectors only)",
-      action: "/donerlist",
+      title: "Donor Registry List & WhatsApp Broadcast",
+      answer: "📋 **Mumbai Meghwal Panchayat - Live Donor Registry**:\n\nHere is the verified list of donors contributing to the Education Felicitation & Trust programs:",
+      enabled: true,
+      roleAccess: "donation_collector",
       adminOnly: true,
-      donationCollectorOnly: true
+      attachedWhatsAppTplId: "tpl_edu_appeal"
     },
     {
+      id: "kb_all",
       cmd: "/all",
-      icon: "📊",
-      label: "Summary of ALL Entries",
-      desc: "Complete registration counts & metrics across ALL Vibhags",
-      action: "Summary data of all entry ALL",
+      icon: "📈",
+      title: "Summary of ALL Student Registrations",
+      answer: "📈 **All Registrations Summary**:\n\nLive counts and status metrics across all Vibhags and programs.",
+      enabled: true,
+      roleAccess: "vibhag_admin",
       adminOnly: true
     },
     {
+      id: "kb_vibhag",
       cmd: "/vibhag",
       icon: "📍",
-      label: "Summary by Vibhag #",
-      desc: "Choose a specific Vibhag (e.g. 15 RAMDEV NAGAR, 10 MAHALAXMI)",
-      hasSubmenu: true,
+      title: "Summary by Vibhag #",
+      answer: "📍 **Vibhag-wise Analytics**:\n\nSelect or enter a specific Vibhag (e.g. 10 MAHALAXMI, 15 RAMDEV NAGAR) to see localized registration data.",
+      enabled: true,
+      roleAccess: "vibhag_admin",
       adminOnly: true
     },
     {
+      id: "kb_pending",
       cmd: "/pending",
       icon: "⏳",
-      label: "Pending Review List",
-      desc: "Show registrations currently awaiting committee approval",
-      action: "Show all pending registrations",
+      title: "Pending Review Registrations",
+      answer: "⏳ **Pending Applications**:\n\nList of student registrations currently awaiting committee document verification.",
+      enabled: true,
+      roleAccess: "vibhag_admin",
       adminOnly: true
     },
     {
+      id: "kb_approved",
       cmd: "/approved",
       icon: "🟢",
-      label: "Approved List",
-      desc: "Show registrations verified & approved by committee",
-      action: "Show approved registrations",
+      title: "Approved Registrations List",
+      answer: "🟢 **Approved Applications**:\n\nList of verified and confirmed student applicants.",
+      enabled: true,
+      roleAccess: "vibhag_admin",
       adminOnly: true
     }
   ];
 
-  const DYNAMIC_KB_COMMANDS = kbList.filter(item => item.enabled !== false).map(item => ({
-    cmd: item.cmd,
-    icon: item.icon || "❓",
-    label: item.title,
-    desc: item.answer.slice(0, 65) + "...",
-    action: item.cmd,
-    adminOnly: Boolean(item.adminOnly)
-  }));
+  // Merge saved knowledge base by unique ID so edits, renames, and deletions persist 100% reliably
+  const rawKb = Array.isArray(C.chatbotKnowledgeBase) ? C.chatbotKnowledgeBase : [];
+  const kbMap = new Map();
+  DEFAULT_KB.forEach(item => kbMap.set(item.id, { ...item }));
 
-  const ALL_SLASH_COMMANDS = [
-    ...SYSTEM_COMMANDS,
-    ...DYNAMIC_KB_COMMANDS,
-    {
+  const SYSTEM_FIXED_CMDS = {
+    "kb_events": "/Edu_events",
+    "kb_edu_committee": "/Edu_committee",
+    "kb_edu_eligibility": "/Edu_eligibility",
+    "kb_all": "/Edu_all",
+    "kb_pending": "/Edu_pending",
+    "kb_approved": "/Edu_approved",
+    "kb_check": "/check",
+    "kb_vibhag": "/vibhag",
+    "kb_donationsummary": "/don_summary",
+    "kb_donerlist": "/don_list",
+    "kb_donation_update": "/don_entry",
+    "kb_donationupdate": "/don_entry",
+    "kb_donate": "/don_80g",
+    "kb_cwc_committee": "/cwc_committee",
+    "kb_contact": "/contact"
+  };
+
+  rawKb.forEach(item => {
+    if (item && item.id) {
+      const existing = kbMap.get(item.id) || {};
+      let correctCmd = item.cmd;
+      
+      // If a command was accidentally overwritten with a duplicate (e.g. /donner or /education)
+      const isDuplicateConflict = item.cmd === "/donner" || item.cmd === "/education" || item.cmd === "/Education";
+      if (SYSTEM_FIXED_CMDS[item.id] && (!item.cmd || isDuplicateConflict)) {
+        correctCmd = SYSTEM_FIXED_CMDS[item.id];
+      }
+      kbMap.set(item.id, { ...existing, ...item, cmd: correctCmd || existing.cmd });
+    } else if (item && item.cmd) {
+      const fallbackId = "kb_" + item.cmd.replace(/\W/g, "");
+      const existing = kbMap.get(fallbackId) || {};
+      kbMap.set(fallbackId, { id: fallbackId, ...existing, ...item });
+    }
+  });
+  const kbList = Array.from(kbMap.values());
+
+  // Unified, deduplicated slash commands derived directly from active Knowledge Base & Core System
+  const ALL_SLASH_COMMANDS = useMemo(() => {
+    const list = kbList.filter(item => item.enabled !== false).map(item => {
+      const cleanCmd = (item.cmd || "").trim();
+      const isVibhagMenu = cleanCmd === "/vibhag";
+      return {
+        cmd: cleanCmd,
+        order: item.order !== undefined && item.order !== null ? Number(item.order) : 999,
+        icon: item.icon || "❓",
+        label: item.title || cleanCmd,
+        desc: (item.answer || "").slice(0, 80) + "...",
+        action: cleanCmd,
+        hasSubmenu: isVibhagMenu,
+        adminOnly: item.roleAccess === "vibhag_admin" || item.roleAccess === "super_admin" || Boolean(item.adminOnly),
+        donationCollectorOnly: item.roleAccess === "donation_collector",
+        attachedFormId: item.attachedFormId,
+        attachedWhatsAppTplId: item.attachedWhatsAppTplId
+      };
+    }).sort((a, b) => (a.order || 999) - (b.order || 999));
+
+        list.push({
+      cmd: "/buttons",
+      order: 1,
+      icon: "🔘",
+      label: "Interactive Question Buttons",
+      desc: "Display clickable question and action buttons for 1-click answers",
+      action: "/buttons",
+      adminOnly: false
+    });
+    list.push({
       cmd: "/help",
-      icon: "❓",
+      order: 9999,
+      icon: "⚡",
       label: "Commands & Capabilities Guide",
       desc: "View full list of questions this chatbot is capable of answering",
       action: "/help",
       adminOnly: false
-    }
-  ];
+    });
+
+    return list;
+  }, [kbList]);
 
   const [messages, setMessages] = useState([
     {
@@ -27502,11 +40738,22 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
   }, [messages, isOpen]);
 
   const ensureRegistrations = async () => {
-    let sourceList = regs;
+    let sourceList = (typeof window !== 'undefined' && window.__MMP_ALL_REGS_RAW__ && window.__MMP_ALL_REGS_RAW__.length > 0)
+      ? window.__MMP_ALL_REGS_RAW__
+      : ((typeof window !== 'undefined' && window.__MMP_REGS_CACHE__ && window.__MMP_REGS_CACHE__.length > 0)
+          ? window.__MMP_REGS_CACHE__
+          : ((regs && regs.length > 0) ? regs : (typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem("mmp_cached_registrations") || "[]") : [])));
+
     if (!sourceList || sourceList.length === 0) {
       try {
         setLoading(true);
-        let token = auth?.idToken || localStorage.getItem("trustPublicAuthToken") || localStorage.getItem("globalAuthToken") || "";
+        let token = auth?.idToken || (typeof localStorage !== 'undefined' ? (localStorage.getItem("trustPublicAuthToken") || localStorage.getItem("globalAuthToken")) : "");
+        if (!token && typeof localStorage !== 'undefined') {
+          try {
+            const s = JSON.parse(localStorage.getItem("trustAuth") || "{}");
+            if (s?.idToken) token = s.idToken;
+          } catch(e) {}
+        }
         if (!token && fbAuth?.currentUser) {
           try { token = await fbAuth.currentUser.getIdToken(); } catch (e) {}
         }
@@ -27516,6 +40763,10 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
         });
         sourceList = data || [];
         setRegs(sourceList);
+        if (typeof window !== 'undefined') {
+          window.__MMP_REGS_CACHE__ = sourceList;
+          window.__MMP_ALL_REGS_RAW__ = sourceList;
+        }
         setRegsLoaded(true);
       } catch (e) {
         console.error("Chatbot regs load error:", e);
@@ -27523,50 +40774,102 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       } finally {
         setLoading(false);
       }
+    } else {
+      if (typeof window !== 'undefined') {
+        window.__MMP_ALL_REGS_RAW__ = sourceList;
+      }
     }
 
-    // Comprehensive Trash, Directory, and Education 2026 Student Filter
+    // Comprehensive Trash & Directory Filter (For standard applicant counts)
     const cleanList = (sourceList || []).filter(r => {
       if (!r) return false;
-      // Exclude all deleted / trash items
       if (r.deleted === true || r.deleted === "true" || r.isDeleted === true || r.isTrash === true || r.inTrash === true || r.status === "Deleted" || r.Status === "Deleted") {
         return false;
       }
-      // Exclude special guest directory and workspace imports of directory contacts
-      if (r.isGlobalGuest === true || r.isSpecialGuest === true || Boolean(r.globalGuestId) || r.formId === "global_guest_directory" || r.formId === "global_guest_directory_import") {
+      if (r.isGlobalGuest === true || r.formId === "global_guest_directory") {
         return false;
       }
-      // Ensure we target Education Felicitation 2026 student applications
-      const evName = String(r.eventName || r.eventTitle || r.eventId || "").toLowerCase();
-      const isEduEvent = evName.includes("education") || evName.includes("felicitation") || evName.includes("2026") || evName.includes("vidya") || evName.includes("student") || evName === "" || evName === "unknown event";
-      const isEduTxn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase().startsWith("VG-") || String(r['Transaction ID'] || r.transactionId || "").toUpperCase().startsWith("EDU");
-      const hasStudentFields = Boolean(r['Stream / Class'] || r['Stream'] || r['Course'] || r['% Obtained'] || r.percentage || r['Marks / Percentage'] || r['Standard'] || r.marksheet);
-
-      if (!isEduEvent && !isEduTxn && !hasStudentFields) {
-        return false;
-      }
-
       return true;
     });
 
     return cleanList;
   };
 
-  const handleSendMessage = async (userText) => {
+  const resolveEventTitle = (evIdOrTitle) => {
+    if (!evIdOrTitle) return "";
+    if (evIdOrTitle === "all") return "All Events Combined";
+    if (evIdOrTitle === "education2026" || evIdOrTitle === "edu26" || String(evIdOrTitle).toLowerCase().includes("education")) return "Education Felicitation 2026";
+    const evObj = (C?.events || []).find(e => e.id === evIdOrTitle || e.title === evIdOrTitle || (e.id && String(e.id).toLowerCase() === String(evIdOrTitle).toLowerCase()));
+    if (evObj && evObj.title) return evObj.title;
+    return evIdOrTitle;
+  };
+
+  const filterRegsByKbTargetEvents = (regsList, targetEventIds) => {
+    if (!Array.isArray(regsList) || regsList.length === 0) return [];
+    if (!Array.isArray(targetEventIds) || targetEventIds.length === 0 || targetEventIds.includes('all')) {
+      return regsList;
+    }
+
+    return regsList.filter(r => {
+      if (!r) return false;
+      if (r.deleted === true || r.isDeleted === true || r.Status === "Deleted" || r.status === "Deleted") return false;
+      if (r.isGlobalGuest === true || r.formId === "global_guest_directory") return false;
+
+      const rEvId = String(r.eventId || '').toLowerCase().trim();
+      const rEvName = String(r.eventName || r.eventTitle || r.program || r.purpose || r.title || '').toLowerCase().trim();
+      const combined = `${rEvId} ${rEvName}`.toLowerCase();
+
+      return targetEventIds.some(target => {
+        const tClean = String(target).toLowerCase().trim();
+        if (!tClean || tClean === 'all') return true;
+        if (r.eventId === target || rEvId === tClean) return true;
+        if (tClean.includes('education') || tClean === 'education2026' || tClean === 'edu26') {
+          const isEduEv = combined.includes('education') || combined.includes('felicitation') || combined.includes('vidya') || combined.includes('student');
+          const isEduTxn = String(r['Transaction ID'] || '').toUpperCase().startsWith('VG-') || String(r['Transaction ID'] || '').toUpperCase().startsWith('EDU');
+          const hasStudent = Boolean(r['Stream / Class'] || r['Stream'] || r['Course'] || r['% Obtained'] || r.studentName);
+          return isEduEv || isEduTxn || hasStudent;
+        }
+
+        const tokens = tClean.split(/[\s_/-]+/).filter(w => w.length > 2 && w !== 'event' && w !== 'program');
+        if (tokens.length > 0) {
+          return tokens.some(tok => combined.includes(tok));
+        }
+        return combined.includes(tClean);
+      });
+    });
+  };
+
+  const handleSendMessage = async (userText, overrideDisplayText) => {
     const query = (userText || input).trim();
     if (!query) return;
+    const userDisplay = overrideDisplayText || query;
     setInput("");
     setShowSlashMenu(false);
     setSlashSubmenu(null);
 
     const newMsgId = "m_" + Date.now();
-    const userMsg = { id: newMsgId, sender: "user", text: query };
+    const userMsg = { id: newMsgId, sender: "user", text: userDisplay };
     setMessages(prev => [...prev, userMsg]);
     setLoading(true);
 
+    const qLower = query.toLowerCase();
+    if (qLower === "/button" || qLower === "/buttons" || qLower === "/quick" || qLower === "button" || qLower === "buttons" || qLower === "quick buttons") {
+      setLoading(false);
+      setMessages(prev => [
+        ...prev,
+        {
+          id: "m_b_" + Date.now(),
+          sender: "bot",
+          type: "question_buttons_card",
+          text: "Here are all available **Interactive Question Buttons**. Simply tap any button below to instantly receive the information:",
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+      return;
+    }
+
     try {
       const currentRegs = await ensureRegistrations();
-    const qLower = query.toLowerCase();
     const cleanQuery = query.trim().toUpperCase().replace(/\s+/g, "");
     const cleanHyphen = cleanQuery.replace(/[^A-Z0-9]/g, "");
 
@@ -27624,66 +40927,38 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       return false;
     });
 
-    // ── Command 1: /donation update (Offline Donation Entry Flow) ──
-    if (qLower === "/donation update" || qLower === "donation update" || qLower === "/donner" || qLower === "donner" || qLower === "/donor" || qLower === "donor" || qLower === "/offline donation" || qLower === "offline donation" || qLower.startsWith("/donation update") || qLower.startsWith("/donner")) {
+    // ── Command 1: /don_entry & Interactive Form Connection ──
+    const isDonEntryTrigger = (
+      qLower === "/don_entry" || qLower === "don_entry" || qLower === "/don entry" ||
+      qLower === "/donation update" || qLower === "donation update" ||
+      qLower === "/donner" || qLower === "donner" || qLower === "/donor" || qLower === "donor" ||
+      qLower === "/offline donation" || qLower === "offline donation" ||
+      qLower.startsWith("/donation update") || qLower.startsWith("/don_entry") ||
+      (matchedKb && (matchedKb.attachedFormId || matchedKb.cmd === "/don_entry" || (matchedKb.title && matchedKb.title.toLowerCase().includes("offline donation"))))
+    );
+
+    if (isDonEntryTrigger) {
       if (!isDonationCollector) {
         botReply = `🔒 **Access Restricted: Donation Collector Role Required**\n\nRecording offline donations is strictly restricted to authorized **Donation Collectors** and **Super Admins**.\n\n• ℹ️ **Your Access**: Regular registration/vibhag committee members are not authorized for payment collections.\n• 👉 Please connect with Super Admin (+91 9820785209) to assign you the **Donation Collector** role.`;
       } else {
-        // Check if user provided parameters inline: e.g. Name: John, Amount: 5000...
-        const parseInline = (text) => {
-          const res = {};
-          const nameM = text.match(/name[:\s=]+([^,\n]+)/i);
-          const amtM = text.match(/amount[:\s=]+([^,\n]+)/i);
-          const dateM = text.match(/date[:\s=]+([^,\n]+)/i);
-          const purpM = text.match(/purpose[:\s=]+([^,\n]+)/i);
-          const vibM = text.match(/vibhag(?:\s*number)?[:\s=]+([^,\n]+)/i);
-          const evM = text.match(/event(?:\s*code)?[:\s=]+([^,\n]+)/i);
-          const rcpM = text.match(/(?:internal\s*)?receipt(?:\s*number)?[:\s=]+([^,\n]+)/i);
-          if (nameM) res.name = nameM[1].trim();
-          if (amtM) res.amount = amtM[1].trim().replace(/[^0-9.]/g, '');
-          if (dateM) res.date = dateM[1].trim();
-          if (purpM) res.purpose = purpM[1].trim();
-          if (vibM) res.vibhag = vibM[1].trim();
-          if (evM) res.eventCode = evM[1].trim();
-          if (rcpM) res.receiptNo = rcpM[1].trim();
-          return res;
-        };
+        const customFormId = matchedKb?.attachedFormId;
+        const attachedCustomForm = (customFormId && customFormId !== "builtin_offline_donation")
+          ? (C?.forms || []).find(f => (f.id === customFormId || f.name === customFormId || (f.name && customFormId && f.name.toLowerCase() === customFormId.toLowerCase())))
+          : null;
 
-        const inlineData = parseInline(query);
-        if (inlineData.name && inlineData.amount) {
-          // Direct inline submission!
-          try {
-            const donDate = inlineData.date || new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-            const donRecord = {
-              name: inlineData.name,
-              amount: parseFloat(inlineData.amount) || 0,
-              date: donDate,
-              program: inlineData.purpose || "Education Felicitation 2026",
-              purpose: inlineData.purpose || "Education Felicitation 2026",
-              vibhag: inlineData.vibhag || (sessionVibhag !== "All Vibhags" ? sessionVibhag : "General"),
-              eventCode: inlineData.eventCode || "EDU26",
-              receiptNo: inlineData.receiptNo || `RCP-${Math.floor(1000 + Math.random() * 9000)}`,
-              internalReceiptNo: inlineData.receiptNo || `RCP-${Math.floor(1000 + Math.random() * 9000)}`,
-              paymentMode: "Offline",
-              paymentMethod: "Offline / Cash / Cheque",
-              status: "Verified",
-              isOffline: true,
-              id: `DON-OFF-${Math.floor(100000 + Math.random() * 900000)}`,
-              recordedBy: activeUser?.email || activeUser?.name || "Admin",
-              recordedAt: new Date().toISOString()
-            };
-
-            await fbSubmitDonation(donRecord, auth?.idToken);
-            botType = "offline_donation_success";
-            botReply = `✅ **Offline Donation Successfully Saved to Database!**`;
-            cardData = { donation: donRecord };
-          } catch (err) {
-            botReply = `❌ **Failed to save offline donation**: ${err.message}`;
-          }
+        if (attachedCustomForm) {
+          botType = "dynamic_form";
+          botReply = matchedKb?.answer || `✍️ **${attachedCustomForm.name}**\n\nPlease complete the interactive form below:`;
+          cardData = {
+            formDef: attachedCustomForm,
+            destination: matchedKb?.storageDestination || "donations",
+            introTitle: matchedKb?.title || attachedCustomForm.name,
+            introText: matchedKb?.answer
+          };
         } else {
-          // Render interactive form card
+          // Standard / Built-in Offline Donation Entry Form
           botType = "offline_donation_form";
-          botReply = `✍️ **Offline Donation Entry Form**\n\nPlease enter the offline donation details below. All fields will be stored directly into the official Donations database:`;
+          botReply = matchedKb?.answer || `✍️ **Offline Donation Entry Form**\n\nPlease enter the offline donation details below. All fields will be stored directly into the official Donations database:`;
           cardData = {
             initialDate: new Date().toISOString().split('T')[0],
             defaultVibhag: sessionVibhag && sessionVibhag !== "All Vibhags" ? sessionVibhag : "10 MAHALAXMI",
@@ -27692,7 +40967,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
           };
         }
       }
-    } else if (qLower === "/donation sumary" || qLower === "/donation summary" || qLower === "donation sumary" || qLower === "donation summary" || qLower === "/donationsummary" || qLower === "/donationsumary") {
+    } else if (qLower === "/don_summary" || qLower === "don_summary" || qLower === "/don summary" || qLower === "/donation sumary" || qLower === "/donation summary" || qLower === "donation sumary" || qLower === "donation summary" || qLower === "/donationsummary" || qLower === "/donationsumary" || (matchedKb && (matchedKb.id === "kb_donationsummary" || matchedKb.title.toLowerCase().includes("donation summary")))) {
       if (!isDonationCollector) {
         botReply = `🔒 **Access Restricted: Donation Collector Role Required**\n\nDonation summaries and financial metrics are restricted to authorized **Donation Collectors** and **Super Admins**.\n\n• 👉 If you are an assigned Donation Collector, please enter your **10-digit Authorized Mobile Number** to unlock.`;
       } else {
@@ -27726,7 +41001,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
           });
 
           botType = "donation_summary_card";
-          botReply = `💰 **Live Donation Summary (Vibhag-wise & Mode-wise)**:`;
+          botReply = (matchedKb && matchedKb.answer) ? matchedKb.answer : `💰 **Live Donation Summary (Vibhag-wise & Mode-wise)**:`;
           cardData = {
             totalAmount: totalAmt,
             totalCount: allDonations.length,
@@ -27734,13 +41009,14 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
             onlineCount: onlineCount,
             offlineAmount: offlineAmt,
             offlineCount: offlineCount,
-            vibhagBreakdown: Object.entries(vibhagMap).sort((a, b) => b[1].total - a[1].total)
+            vibhagBreakdown: Object.entries(vibhagMap).sort((a, b) => b[1].total - a[1].total),
+            tplId: matchedKb?.attachedWhatsAppTplId || "tpl_donor_summary"
           };
         } catch (err) {
           botReply = `❌ **Failed to fetch donation summary**: ${err.message}`;
         }
       }
-    } else if (qLower === "/donerlist" || qLower === "/donorlist" || qLower === "/donnerlist" || qLower === "donerlist" || qLower === "donorlist" || qLower === "donnerlist" || qLower === "/donor list" || qLower === "donor list" || qLower === "/donner list") {
+    } else if (qLower === "/don_list" || qLower === "don_list" || qLower === "/don list" || qLower === "/donerlist" || qLower === "/donorlist" || qLower === "/donnerlist" || qLower === "donerlist" || qLower === "donorlist" || qLower === "donnerlist" || qLower === "/donor list" || qLower === "donor list" || qLower === "/donner list" || (matchedKb && (matchedKb.id === "kb_donerlist" || matchedKb.title.toLowerCase().includes("donor registry") || matchedKb.title.toLowerCase().includes("donor list")))) {
       if (!isDonationCollector) {
         botReply = `🔒 **Access Restricted: Donation Collector Role Required**\n\nDonor registries and person-wise collections are restricted to authorized **Donation Collectors** and **Super Admins**.\n\n• 👉 If you are an assigned Donation Collector, please enter your **10-digit Authorized Mobile Number** to unlock.`;
       } else {
@@ -27752,10 +41028,11 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
             botReply = `📋 **No donation records found in the database.**`;
           } else {
             botType = "donor_list_card";
-            botReply = `📋 **Person-wise Donor Registry (${allDonations.length} Donors Recorded)**:`;
+            botReply = (matchedKb && matchedKb.answer) ? matchedKb.answer : `📋 **Person-wise Donor Registry (${allDonations.length} Donors Recorded)**:`;
             cardData = {
               donors: allDonations,
-              totalAmount: allDonations.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0)
+              totalAmount: allDonations.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0),
+              tplId: matchedKb?.attachedWhatsAppTplId || "tpl_edu_appeal"
             };
           }
         } catch (err) {
@@ -27790,12 +41067,276 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
       } else {
         botReply = `🔐 **Please Log In to Check Your Application Status**\n\nFor security and privacy, please log in with your registered mobile number on the website.\n\n• 👉 **Option 1**: Log in using the **Login** button at top right.\n• 👉 **Option 2**: Type your **Transaction ID (e.g. VG-7, EDU26-2)** or **10-digit Mobile Number** directly below to verify.`;
       }
-    } else if (matchedKb) {
-      if (matchedKb.adminOnly && !isAnyAdmin) {
-        botReply = `🔒 **Access Restricted**\n\nThis question/data is restricted to authorized Committee Admins.\n\n👉 Please type your 10-digit Authorized Mobile Number to unlock.`;
+    } else if (qLower === "/edu_all" || qLower === "edu_all" || qLower === "/edu all" || qLower === "edu all" || qLower === "/education all" || qLower === "education all" || qLower === "/education_all" || (matchedKb && (matchedKb.id === "kb_all" || (matchedKb.cmd && matchedKb.cmd.toLowerCase().includes("all")) || (matchedKb.title && matchedKb.title.toLowerCase().includes("summary of all"))))) {
+      // ── Trigger Live ALL Summary Card with Target Events Scoping ──
+      if (!isAnyAdmin) {
+        botReply = C.chatbotAdminRestrictedMsg || `🔒 **Access Restricted**\n\nRegistration summaries, Vibhag counts, and committee metrics are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock.`;
       } else {
-        botReply = matchedKb.answer;
+        const scopedEvents = matchedKb?.targetEventIds || ["all"];
+        const targetEventRegs = filterRegsByKbTargetEvents(currentRegs, scopedEvents);
+
+        let approved = 0, pending = 0, rejected = 0;
+        const vibhagBreakMap = {};
+
+        targetEventRegs.forEach(r => {
+          const s = String(r.Status || r.status || "Pending").trim();
+          if (s === "Approved") approved++;
+          else if (s === "Disapproved" || s === "Rejected") rejected++;
+          else pending++;
+
+          const rV = getRecordVibhag(r) !== 'Unspecified' ? getRecordVibhag(r) : String(r["Vibhag"] || r["Vibhag New"] || r["vibhag"] || "10 MAHALAXMI").trim();
+          if (!vibhagBreakMap[rV]) vibhagBreakMap[rV] = { total: 0, approved: 0, pending: 0, rejected: 0 };
+          vibhagBreakMap[rV].total++;
+          if (s === "Approved") vibhagBreakMap[rV].approved++;
+          else if (s === "Disapproved" || s === "Rejected") vibhagBreakMap[rV].rejected++;
+          else vibhagBreakMap[rV].pending++;
+        });
+
+        const breakList = Object.entries(vibhagBreakMap).sort((a, b) => a[0].localeCompare(b[0]));
+        
+        // Resolve clean human-readable event titles
+        const cleanEventTitles = scopedEvents.map(resolveEventTitle);
+        const eventLabel = (!scopedEvents.includes('all') && cleanEventTitles.length > 0)
+          ? cleanEventTitles.join(" & ")
+          : "All Events Combined";
+
+        // Calculate per-event breakdown if multiple events selected
+        const eventBreakMap = {};
+        if (cleanEventTitles.length > 1 || scopedEvents.includes('all')) {
+          targetEventRegs.forEach(r => {
+            const rEv = r.eventName || r.eventTitle || resolveEventTitle(r.eventId) || "General";
+            if (!eventBreakMap[rEv]) eventBreakMap[rEv] = { total: 0, approved: 0, pending: 0 };
+            eventBreakMap[rEv].total++;
+            const s = String(r.Status || r.status || "Pending").trim();
+            if (s === "Approved") eventBreakMap[rEv].approved++;
+            else eventBreakMap[rEv].pending++;
+          });
+        }
+        const eventBreakList = Object.entries(eventBreakMap).sort((a, b) => b[1].total - a[1].total);
+
+        botType = "summary_card";
+        botReply = (matchedKb && matchedKb.answer) ? matchedKb.answer : `📊 **Live Registration Summary (${eventLabel})**:`;
+        cardData = {
+          total: targetEventRegs.length,
+          approved,
+          pending,
+          rejected,
+          scopeTitle: `${eventLabel} Live Summary`,
+          vibhagList: breakList,
+          eventList: eventBreakList,
+          apps: targetEventRegs,
+          tplId: matchedKb?.attachedWhatsAppTplId
+        };
       }
+    } else if (qLower === "/edu_pending" || qLower === "edu_pending" || qLower === "/edu pending" || qLower === "/education pending" || qLower === "education pending" || qLower === "/education_pending" || (matchedKb && (matchedKb.id === "kb_pending" || matchedKb.cmd.includes("pending")))) {
+      // ── Trigger Live Pending Registrations List ──
+      if (!isAnyAdmin) {
+        botReply = `🔒 **Access Restricted**\n\nPending review lists are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock this list.`;
+      } else {
+        const scopedEvents = matchedKb?.targetEventIds || ["all"];
+        const basePendingRegs = filterRegsByKbTargetEvents(currentRegs, scopedEvents);
+        let pendingList = basePendingRegs.filter(r => {
+          const s = String(r.Status || r.status || "Pending").trim();
+          return s !== "Approved" && s !== "Disapproved" && s !== "Rejected";
+        });
+
+        if (userSessionScope === "vibhag" && sessionVibhag) {
+          const allowedVibs = sessionVibhag.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+          pendingList = pendingList.filter(r => {
+            const v = getRecordVibhag(r).toLowerCase();
+            return allowedVibs.some(av => v.includes(av) || av.includes(v));
+          });
+        }
+
+        if (pendingList.length > 0) {
+          botType = "apps_list";
+          botReply = `⏳ **Found ${pendingList.length} Pending Review Applications${userSessionScope === "vibhag" ? ` (${sessionVibhag})` : ""}:**`;
+          cardData = { apps: pendingList };
+        } else {
+          botReply = `🎉 No pending applications found${userSessionScope === "vibhag" ? ` in ${sessionVibhag}` : ""}! All applications have been reviewed.`;
+        }
+      }
+    } else if (qLower === "/edu_approved" || qLower === "edu_approved" || qLower === "/edu approved" || qLower === "/education approved" || qLower === "education approved" || qLower === "/education_approved" || (matchedKb && (matchedKb.id === "kb_approved" || matchedKb.cmd.includes("approved")))) {
+      // ── Trigger Live Approved Registrations List ──
+      if (!isAnyAdmin) {
+        botReply = `🔒 **Access Restricted**\n\nApproved application registries are restricted to authorized Committee Admins.\n\n👉 If you are a Committee Admin, please enter your **10-digit Authorized Mobile Number** to unlock this list.`;
+      } else {
+        const scopedEvents = matchedKb?.targetEventIds || ["all"];
+        const baseApprovedRegs = filterRegsByKbTargetEvents(currentRegs, scopedEvents);
+        let approvedList = baseApprovedRegs.filter(r => String(r.Status || r.status || "").trim() === "Approved");
+        if (userSessionScope === "vibhag" && sessionVibhag) {
+          const allowedVibs = sessionVibhag.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+          approvedList = approvedList.filter(r => {
+            const v = getRecordVibhag(r).toLowerCase();
+            return allowedVibs.some(av => v.includes(av) || av.includes(v));
+          });
+        }
+
+        if (approvedList.length > 0) {
+          botType = "apps_list";
+          botReply = `🟢 **Found ${approvedList.length} Approved Applications${userSessionScope === "vibhag" ? ` (${sessionVibhag})` : ""}:**`;
+          cardData = { apps: approvedList };
+        } else {
+          botReply = `ℹ️ No approved applications recorded yet${userSessionScope === "vibhag" ? ` in ${sessionVibhag}` : ""}.`;
+        }
+      }
+    } else if (matchedKb && matchedKb.connectedSubWorkspaceId) {
+      // ── Connected Sub-Workspace Invitee Dispatch Workflow ──
+      const targetEvId = matchedKb.connectedEventId || "";
+      const targetDocId = matchedKb.connectedSubWorkspaceId || "invite";
+      const targetTplId = matchedKb.attachedWhatsAppTplId || "";
+
+      let allPool = (typeof window !== 'undefined' && window.__MMP_ALL_REGS_RAW__ && window.__MMP_ALL_REGS_RAW__.length > 0)
+        ? window.__MMP_ALL_REGS_RAW__
+        : ((typeof window !== 'undefined' && window.__MMP_REGS_CACHE__ && window.__MMP_REGS_CACHE__.length > 0)
+            ? window.__MMP_REGS_CACHE__
+            : ((regs && regs.length > 0) ? regs : currentRegs));
+
+      if (!allPool || allPool.length === 0) {
+        try {
+          await ensureRegistrations();
+          allPool = (typeof window !== 'undefined' && window.__MMP_ALL_REGS_RAW__) || (typeof window !== 'undefined' && window.__MMP_REGS_CACHE__) || regs || [];
+        } catch(e) {}
+      }
+
+      const matchedContacts = getSubworkspaceContactsList({
+        eventId: targetEvId,
+        subWorkspaceId: targetDocId,
+        allRegs: allPool,
+        C: C
+      });
+
+      // Find template text
+      let chosenTplText = "";
+      if (targetTplId) {
+        const customTpl = (C?.whatsappBroadcastTemplates || []).find(t => t.id === targetTplId);
+        if (customTpl && customTpl.text) {
+          chosenTplText = customTpl.text;
+        } else {
+          for (const ev of (C?.events || [])) {
+            const wsTpls = typeof getEventWhatsAppTemplates === 'function' ? getEventWhatsAppTemplates(ev, C) : (ev.whatsAppTemplates || ev.whatsappTemplates || []);
+            const foundWsTpl = wsTpls.find(t => t.id === targetTplId || t.name === targetTplId);
+            if (foundWsTpl && foundWsTpl.text) {
+              chosenTplText = foundWsTpl.text;
+              break;
+            }
+          }
+        }
+      }
+
+      // Fallback default invitation pass text if none selected
+      if (!chosenTplText) {
+        const evObj = (C?.events || []).find(e => e.id === targetEvId || e.title === targetEvId);
+        const wsTpls = evObj?.whatsAppTemplates || evObj?.whatsappTemplates || [];
+        const defaultWsTpl = wsTpls.find(t => t.isDefault) || wsTpls[0];
+        if (defaultWsTpl && defaultWsTpl.text) {
+          chosenTplText = defaultWsTpl.text;
+        } else {
+          chosenTplText = `🏛️ *MUMBAI MEGHWAL PANCHAYAT*\n🏆 *{EVENT_NAME}*\n═══════════════════════\nNamaste *{MEMBER_NAME}*,\n\nYou are cordially invited to *{EVENT_NAME}*!\n\n👉 *Invitation Pass:* {PASS_LINK}\n\n📞 Helpline: {HELPLINE_PHONES}`;
+        }
+      }
+
+      // Format message for each matched contact
+      const dispatchItems = matchedContacts.map(contact => {
+        const formattedMsg = formatWhatsAppTemplateForContact({
+          tplString: chosenTplText,
+          reg: { ...contact, customDocId: (targetDocId !== 'invite' && targetDocId !== 'cert') ? targetDocId : null },
+          allRegs: allPool,
+          C: C
+        });
+        const name = String(contact['Full Name'] || contact['Participant Name'] || contact['Name'] || contact.name || 'Member').trim();
+        const mob = String(contact['Mobile Number'] || contact.Mobile || contact.mobile || contact.phone || '').replace(/\D/g, '').slice(-10);
+        const vib = contact.vibhag || contact['Vibhag'] || contact['Vibhag New'] || 'General';
+        const txn = contact['Transaction ID'] || contact.transactionId || contact.id || 'N/A';
+        return {
+          ...contact,
+          name,
+          mobile: mob,
+          vibhag: vib,
+          txnId: txn,
+          formattedMessage: formattedMsg
+        };
+      });
+
+      botType = "subworkspace_whatsapp_dispatcher";
+      botReply = matchedKb.answer || `💌 **${matchedKb.title || matchedKb.connectedSubWorkspaceName || "Sub-Workspace Dispatcher"}**:\n\nFound **${dispatchItems.length} contact(s)** in this sub-workspace. Use the interactive dispatcher below to send personalized WhatsApp messages:`;
+      cardData = {
+        items: dispatchItems,
+        subWorkspaceName: matchedKb.connectedSubWorkspaceName || "Sub-Workspace",
+        kbTitle: matchedKb.title,
+        attachedWhatsAppTplId: targetTplId,
+        eventId: targetEvId,
+        subWorkspaceId: targetDocId
+      };
+    } else if (matchedKb) {
+      const reqRole = matchedKb.roleAccess || (matchedKb.adminOnly ? "vibhag_admin" : "public");
+      const isPermitted = 
+        reqRole === "public" ||
+        (reqRole === "donation_collector" && isDonationCollector) ||
+        (reqRole === "vibhag_admin" && (isAnyAdmin || userSessionScope === "all")) ||
+        (reqRole === "super_admin" && userSessionScope === "all");
+
+      if (!isPermitted) {
+        botReply = `🔒 **Access Restricted**\n\nThis action / form is restricted to **${reqRole === "donation_collector" ? "Donation Collectors" : reqRole === "vibhag_admin" ? "Vibhag Admins" : "Super Admins"}**.\n\n👉 Please enter your authorized mobile number to unlock.`;
+      } else if (matchedKb.attachedFormId) {
+        const formDef = matchedKb.attachedFormId === "builtin_offline_donation"
+          ? { name: "Offline Donation Entry", id: "builtin_offline_donation" }
+          : ((C.forms || []).find(f => f.id === matchedKb.attachedFormId || f.name === matchedKb.attachedFormId) || { name: matchedKb.title, id: matchedKb.attachedFormId });
+
+        botType = "dynamic_form";
+        botReply = matchedKb.title ? `📝 **${matchedKb.title}**` : "Please fill out the form below:";
+        cardData = {
+          formDef,
+          destination: matchedKb.storageDestination || "donations",
+          introTitle: matchedKb.title,
+          introText: matchedKb.answer,
+          attachedWhatsAppTplId: matchedKb.attachedWhatsAppTplId
+        };
+      } else if (matchedKb.attachedWhatsAppTplId) {
+        botType = "whatsapp_broadcast_card";
+        botReply = matchedKb.answer;
+        cardData = {
+          tplId: matchedKb.attachedWhatsAppTplId,
+          title: matchedKb.title,
+          answer: matchedKb.answer
+        };
+      } else {
+        const kbTargetEvents = (Array.isArray(matchedKb.targetEventIds) && matchedKb.targetEventIds.length > 0)
+          ? matchedKb.targetEventIds
+          : ['all'];
+        
+        let dynamicAnswer = matchedKb.answer || "";
+        const activeTargetScope = kbTargetEvents.includes('all') ? 'all' : kbTargetEvents[0];
+        
+        if (typeof generateEventScopedStats === 'function') {
+          const scopedStats = generateEventScopedStats(
+            { vibhag: sessionVibhag && sessionVibhag !== "All Vibhags" ? sessionVibhag : "" },
+            activeTargetScope,
+            currentRegs,
+            sessionVibhag && sessionVibhag !== "All Vibhags" ? sessionVibhag : "auto"
+          );
+
+          dynamicAnswer = dynamicAnswer
+            .replace(/{TOTAL_STUDENTS_COUNT}/g, scopedStats.totalStudentsCount)
+            .replace(/{TOTAL_REGISTRATIONS}/g, scopedStats.totalStudentsCount)
+            .replace(/{APPROVED_STUDENTS_COUNT}/g, scopedStats.approvedStudentsCount)
+            .replace(/{PENDING_STUDENTS_COUNT}/g, scopedStats.pendingStudentsCount)
+            .replace(/{VIBHAG_STUDENT_SUMMARY}/g, scopedStats.vibhagStudentSummary)
+            .replace(/{EVENT_REGISTRATION_SUMMARY}/g, scopedStats.eventRegistrationSummary)
+            .replace(/{REGISTRATION_STATS}/g, scopedStats.eventRegistrationSummary)
+            .replace(/{VIBHAG_STUDENT_LIST}/g, scopedStats.vibhagStudentList)
+            .replace(/{ALL_STUDENTS_LIST}/g, scopedStats.allStudentsList);
+        }
+
+        botReply = dynamicAnswer;
+      }
+    // ── Topic Category Hubs (Group / Bucket Commands) ──
+    } else if (qLower === "/education" || qLower === "education" || qLower === "/edu" || qLower === "edu") {
+      botReply = `🎓 **Education Felicitation 2026 — Topic Hub**\n\nSelect any Education question or live report below:\n\n• 🎓 **/education events** — Event Venue, Date & Schedule\n• 📜 **/education eligibility** — Scoring & Eligibility (50%+)\n• 👥 **/education committee** — Education Committee Members 2026\n• 📈 **/all** (or /education all) — Live Registration Summary Table\n• ⏳ **/pending** — Student Applications Awaiting Review\n• 🟢 **/approved** — Verified Student List\n• 🔍 **/check** — Check Application Status by Txn ID / Mobile`;
+    } else if (qLower === "/donation" || qLower === "donation" || qLower === "/donations" || qLower === "donations" || qLower === "/doner" || qLower === "/donor") {
+      botReply = `💰 **Donations & Trust Funds — Topic Hub**\n\nSelect any Donation action or financial report below:\n\n• 📊 **/donation summary** — Live Vibhag-wise & Payment Breakdown\n• 📋 **/donerlist** — Verified Donor Registry & WhatsApp Broadcast\n• ✍️ **/donation update** — Record Cash, Cheque or Bank Donation\n• 🏦 **/donate** — 80G Tax Exemption & Bank QR Details`;
+    } else if (qLower === "/committee" || qLower === "committee" || qLower === "/cwc" || qLower === "cwc") {
+      botReply = `🏛️ **Committees & Leadership — Topic Hub**\n\nSelect any Committee inquiry below:\n\n• 🏛️ **/cwc_committee** — Central Working Committee (CWC) Members\n• 👥 **/education committee** — Education Committee Members 2026\n• 📍 **/vibhag** — Summary by Vibhag # & Assigned Coordinators\n• 📞 **/contact** — Trust Office & Helpline Contacts`;
     } else if (qLower === "/help" || qLower === "help" || qLower === "/commands" || qLower.includes("what can you do") || qLower.includes("capabilities")) {
       const activeCommands = ALL_SLASH_COMMANDS.filter(c => !c.adminOnly || isAnyAdmin);
       botReply = `🤖 **Chatbot Capabilities & Available Shortcuts**:\n\n` + 
@@ -27871,7 +41412,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
         if (userSessionScope === "vibhag" && sessionVibhag) {
           const allowedVibs = sessionVibhag.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
           pendingList = pendingList.filter(r => {
-            const v = String(r["Vibhag"] || r["vibhag"] || "").toLowerCase();
+            const v = getRecordVibhag(r).toLowerCase();
             return allowedVibs.some(av => v.includes(av) || av.includes(v));
           });
         }
@@ -27892,7 +41433,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
         if (userSessionScope === "vibhag" && sessionVibhag) {
           const allowedVibs = sessionVibhag.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
           approvedList = approvedList.filter(r => {
-            const v = String(r["Vibhag"] || r["vibhag"] || "").toLowerCase();
+            const v = getRecordVibhag(r).toLowerCase();
             return allowedVibs.some(av => v.includes(av) || av.includes(v));
           });
         }
@@ -27980,7 +41521,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
               : allowedVibhags;
 
             const vibhagRegs = currentRegs.filter(r => {
-              const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "").toLowerCase().trim();
+              const v = getRecordVibhag(r).toLowerCase().trim();
               return targetAllowedList.some(av => v.includes(av) || av.includes(v));
             });
 
@@ -27993,7 +41534,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
               else if (s === "Disapproved" || s === "Rejected") rejected++;
               else pending++;
 
-              const rV = String(r["Vibhag"] || r["vibhag"] || "Assigned").trim();
+              const rV = getRecordVibhag(r) !== 'Unspecified' ? getRecordVibhag(r) : String(r["Vibhag"] || r["Vibhag New"] || r["vibhag"] || "Assigned").trim();
               if (!vibhagBreakMap[rV]) vibhagBreakMap[rV] = { total: 0, approved: 0, pending: 0, rejected: 0 };
               vibhagBreakMap[rV].total++;
               if (s === "Approved") vibhagBreakMap[rV].approved++;
@@ -28020,7 +41561,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
         } else if (explicitlyMentionedVibhag) {
           const cleanTarget = explicitlyMentionedVibhag.toLowerCase().trim();
           const vibhagRegs = currentRegs.filter(r => {
-            const v = String(r["Vibhag"] || r["vibhag"] || r["MMP Vibhag"] || "").toLowerCase().trim();
+            const v = getRecordVibhag(r).toLowerCase().trim();
             return v.includes(cleanTarget) || cleanTarget.includes(v) || (v.split(" ")[1] && cleanTarget.includes(v.split(" ")[1]));
           });
 
@@ -28292,9 +41833,17 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
               <div style={{padding:"8px 12px",background:"#F8FAFC",borderBottom:"1px solid #E2E8F0",display:"flex",gap:6,alignItems:"center"}}>
                 <button
                   onClick={() => { setShowSlashMenu(!showSlashMenu); setSlashSubmenu(null); }}
-                  style={{fontSize:".75rem",background:"#1E293B",border:"none",borderRadius:12,padding:"5px 12px",color:"white",cursor:"pointer",fontWeight:700,boxShadow:"0 1px 3px rgba(0,0,0,0.15)",display:"flex",alignItems:"center",gap:4}}
+                  style={{fontSize:".75rem",background:"#1E293B",border:"none",borderRadius:12,padding:"5px 10px",color:"white",cursor:"pointer",fontWeight:700,boxShadow:"0 1px 3px rgba(0,0,0,0.15)",display:"flex",alignItems:"center",gap:4}}
+                  title="Open Question Commands Menu"
                 >
-                  <span>⚡</span> Questions / Shortcuts (/)
+                  <span>⚡</span> Questions (/)
+                </button>
+                <button
+                  onClick={() => handleSendMessage("/buttons")}
+                  style={{fontSize:".75rem",background:"#7C3AED",border:"none",borderRadius:12,padding:"5px 10px",color:"white",cursor:"pointer",fontWeight:700,boxShadow:"0 1px 4px rgba(124,58,237,0.25)",display:"flex",alignItems:"center",gap:4}}
+                  title="Display Clickable Question Buttons in Chat"
+                >
+                  <span>🔘</span> Buttons
                 </button>
                 
                 {isAnyAdmin && (
@@ -28363,13 +41912,60 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
                           </div>
                         )}
 
+                        {/* If Message has Question Buttons Card */}
+                        {m.type === "question_buttons_card" && (
+                          <QuestionButtonsCard
+                            onAction={handleSendMessage}
+                            isAnyAdmin={isAnyAdmin}
+                            isDonationCollector={isDonationCollector}
+                            allCommands={ALL_SLASH_COMMANDS}
+                          />
+                        )}
+
+                        {/* If Message has attached WhatsApp Broadcast Template */}
+                        {m.type === "whatsapp_broadcast_card" && m.cardData && (
+                          <WhatsAppBroadcastCard cardData={m.cardData} C={C} />
+                        )}
+
+                        {/* If Message has Dynamic Form from Form Builder */}
+                        {(m.type === "dynamic_form" || m.type === "dynamic_form_card") && m.cardData && (
+                          <DynamicChatbotFormCard
+                            formDef={m.cardData.formDef || m.cardData.form}
+                            destination={m.cardData.destination}
+                            introTitle={m.cardData.introTitle}
+                            introText={m.cardData.introText}
+                            initialData={{
+                              defaultVibhag: sessionVibhag && sessionVibhag !== "All Vibhags" ? sessionVibhag : "10 MAHALAXMI",
+                              defaultPurpose: "Education Felicitation 2026",
+                              defaultEventCode: "EDU26"
+                            }}
+                            C={C}
+                            auth={auth}
+                            activeUser={activeUser}
+                            onSubmitSuccess={(record) => {
+                              setMessages(prev => [...prev, {
+                                id: "m_form_saved_" + Date.now(),
+                                sender: "bot",
+                                text: `✅ **Entry recorded successfully in database!**`,
+                                type: "text",
+                                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              }]);
+                            }}
+                          />
+                        )}
+
+                                                {/* Sub-Workspace WhatsApp Dispatcher Card */}
+                        {m.type === "subworkspace_whatsapp_dispatcher" && m.cardData && (
+                          <ChatbotWhatsAppDispatcherCard dispatchData={m.cardData} C={C} allRegs={regs || []} />
+                        )}
+
                         {/* If Message has Summary Card */}
                         {m.type === "summary_card" && m.cardData && (
-                          <VibhagSummaryCard summaryData={m.cardData} />
+                          <VibhagSummaryCard summaryData={m.cardData} C={C} />
                         )}
 
                         {/* If Message has Offline Donation Entry Form */}
-                        {m.type === "offline_donation_form" && m.cardData && (
+                        {(m.type === "offline_donation_form" || m.type === "offline_donation_card") && m.cardData && (
                           <OfflineDonationEntryCard
                             initialData={m.cardData}
                             onSubmit={async (formData) => {
@@ -28416,12 +42012,12 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
 
                         {/* If Message has Offline Donation Success Confirmation */}
                         {m.type === "offline_donation_success" && m.cardData?.donation && (
-                          <OfflineDonationSuccessCard donation={m.cardData.donation} />
+                          <OfflineDonationSuccessCard donation={m.cardData.donation} C={C} />
                         )}
 
                         {/* If Message has Donation Summary Card */}
                         {m.type === "donation_summary_card" && m.cardData && (
-                          <DonationSummaryCard summaryData={m.cardData} onAction={handleSendMessage} />
+                          <DonationSummaryCard summaryData={m.cardData} onAction={handleSendMessage} C={C} />
                         )}
 
                         {/* If Message has Donor List Card */}
@@ -28484,20 +42080,56 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
                     </div>
                   ) : (
                     <div>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 8px",borderBottom:"1px solid #F1F5F9",marginBottom:4}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 8px",borderBottom:"1px solid #F1F5F9",marginBottom:6}}>
                         <span style={{fontSize:".7rem",fontWeight:800,color:"#64748B",textTransform:"uppercase",letterSpacing:0.5}}>
-                          {input.trim().startsWith("/") && input.trim().length > 1 ? `Matching Commands for "${input}":` : "Question Shortcuts & Commands:"}
+                          {input.trim().startsWith("/") && input.trim().length > 1 ? `Matching for "${input}":` : "Question Shortcuts:"}
                         </span>
-                        <span style={{fontSize:".68rem",color:"#94A3B8"}}>Click to select</span>
+                        <div style={{display:"flex",gap:4,background:"#F1F5F9",padding:2,borderRadius:8}}>
+                          <button
+                            type="button"
+                            onClick={()=>setSlashViewMode("buttons")}
+                            style={{padding:"2px 8px",borderRadius:6,border:"none",fontSize:".68rem",fontWeight:700,background:slashViewMode==="buttons"?"#2563EB":"transparent",color:slashViewMode==="buttons"?"white":"#64748B",cursor:"pointer"}}
+                          >
+                            🔘 Buttons
+                          </button>
+                          <button
+                            type="button"
+                            onClick={()=>setSlashViewMode("list")}
+                            style={{padding:"2px 8px",borderRadius:6,border:"none",fontSize:".68rem",fontWeight:700,background:slashViewMode==="list"?"#2563EB":"transparent",color:slashViewMode==="list"?"white":"#64748B",cursor:"pointer"}}
+                          >
+                            📋 List
+                          </button>
+                        </div>
                       </div>
                       {(() => {
-                        const filterKeyword = input.trim().startsWith("/") ? input.trim().slice(1).toLowerCase() : "";
+                        const rawInput = input.trim().toLowerCase();
+                        const isSlashSearch = rawInput.startsWith("/");
+                        const filterKeyword = isSlashSearch ? rawInput.slice(1).trim() : rawInput;
+
                         const displayedCommands = ALL_SLASH_COMMANDS.filter(sc => {
                           if (!filterKeyword) return true;
-                          const cmd = sc.cmd.toLowerCase().replace(/^\//, "");
+                          const cmd = (sc.cmd || "").toLowerCase().replace(/^\//, "");
                           const label = (sc.label || "").toLowerCase();
-                          const desc = (sc.desc || "").toLowerCase();
-                          return cmd.includes(filterKeyword) || label.includes(filterKeyword) || desc.includes(filterKeyword);
+
+                          // When searching via slash (/), match ONLY against command name and question title
+                          return cmd.includes(filterKeyword) || label.includes(filterKeyword);
+                        }).sort((a, b) => {
+                          if (!filterKeyword) return 0;
+                          const aCmd = (a.cmd || "").toLowerCase().replace(/^\//, "");
+                          const bCmd = (b.cmd || "").toLowerCase().replace(/^\//, "");
+                          const aLabel = (a.label || "").toLowerCase();
+                          const bLabel = (b.label || "").toLowerCase();
+
+                          const getScore = (c, l) => {
+                            if (c === filterKeyword) return 1000;
+                            if (c.startsWith(filterKeyword)) return 600;
+                            if (l.startsWith(filterKeyword)) return 400;
+                            if (c.includes(filterKeyword)) return 300;
+                            if (l.includes(filterKeyword)) return 200;
+                            return 0;
+                          };
+
+                          return getScore(bCmd, bLabel) - getScore(aCmd, aLabel);
                         });
 
                         if (displayedCommands.length === 0) {
@@ -28509,8 +42141,56 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
                           );
                         }
 
+                        if (slashViewMode === "buttons") {
+                          return (
+                            <div style={{display:"flex",flexWrap:"wrap",gap:6,padding:"4px 2px"}}>
+                              {displayedCommands.map(sc => {
+                                const isLockedForUser = (sc.donationCollectorOnly && !isDonationCollector && !isAnyAdmin) || (sc.adminOnly && !isAnyAdmin);
+                                if (isLockedForUser) return null;
+
+                                return (
+                                  <button
+                                    key={sc.cmd}
+                                    type="button"
+                                    onClick={() => {
+                                      if (sc.hasSubmenu) {
+                                        setSlashSubmenu("vibhags");
+                                      } else {
+                                        const displayTitle = sc.label ? `${sc.icon || "❓"} ${sc.label}` : sc.cmd;
+                                        handleSendMessage(sc.action || sc.cmd, displayTitle);
+                                      }
+                                    }}
+                                    style={{
+                                      background: "#F8FAFC",
+                                      border: "1.5px solid #CBD5E1",
+                                      borderRadius: 8,
+                                      padding: "6px 10px",
+                                      fontSize: ".75rem",
+                                      fontWeight: 700,
+                                      color: "#1E293B",
+                                      cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 5,
+                                      boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                                      transition: "all 0.15s ease",
+                                      whiteSpace: "nowrap"
+                                    }}
+                                    onMouseEnter={e=>{e.currentTarget.style.background="#EFF6FF";e.currentTarget.style.borderColor="#3B82F6";e.currentTarget.style.color="#1D4ED8";}}
+                                    onMouseLeave={e=>{e.currentTarget.style.background="#F8FAFC";e.currentTarget.style.borderColor="#CBD5E1";e.currentTarget.style.color="#1E293B";}}
+                                  >
+                                    <span>{sc.icon || "❓"}</span>
+                                    <span>{sc.label || sc.cmd}</span>
+                                    <span style={{fontSize:".65rem",color:"#64748B",fontWeight:600}}>({sc.cmd})</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        }
+
                         return displayedCommands.map(sc => {
-                          const isLockedForUser = (sc.donationCollectorOnly && !isDonationCollector) || (sc.adminOnly && !isAnyAdmin);
+                          const isLockedForUser = (sc.donationCollectorOnly && !isDonationCollector && !isAnyAdmin) || (sc.adminOnly && !isAnyAdmin);
   const lockLabel = sc.donationCollectorOnly ? "🔒 Donation Collector Only" : "🔒 Admin Only";
 
                           return (
@@ -28520,7 +42200,8 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
                                 if (sc.hasSubmenu) {
                                   setSlashSubmenu("vibhags");
                                 } else {
-                                  handleSendMessage(sc.action);
+                                  const displayTitle = sc.label ? `${sc.icon || "❓"} ${sc.label}` : sc.cmd;
+                                  handleSendMessage(sc.action || sc.cmd, displayTitle);
                                 }
                               }}
                               style={{
@@ -29027,9 +42708,38 @@ export default function App() {
     } catch (e) {}
     return defaultData;
   });
-  const [auth,    setAuth]    = useState(null);      // { idToken, email }
+  const [auth,    setAuth]    = useState(() => {
+    try {
+      const savedAuth = localStorage.getItem("trustAuth");
+      if (savedAuth) {
+        const p = JSON.parse(savedAuth);
+        if (p && p.idToken) return p;
+      }
+    } catch(e) {}
+    const token = typeof localStorage !== 'undefined' ? (localStorage.getItem("trustPublicAuthToken") || localStorage.getItem("globalAuthToken")) : null;
+    if (token) return { idToken: token };
+    return null;
+  });
   const [fbState, setFbState] = useState("loading"); // loading | ready | error
   const [showLogin, setShowLogin] = useState(false);
+
+  // ── Restore Firebase Auth session on mount ──────────────────────────────────
+  useEffect(() => {
+    if (fbAuth) {
+      const unsub = onAuthStateChanged(fbAuth, async (user) => {
+        if (user) {
+          try {
+            const token = await user.getIdToken();
+            const authObj = { idToken: token, email: user.email, uid: user.uid };
+            setAuth(authObj);
+            localStorage.setItem("trustAuth", JSON.stringify(authObj));
+            localStorage.setItem("trustPublicAuthToken", token);
+          } catch(e) {}
+        }
+      });
+      return () => unsub();
+    }
+  }, []);
 
   // ── Load content from Firestore on mount ─────────────────────────────────
   useEffect(() => {
@@ -29129,6 +42839,12 @@ export default function App() {
 
   const handleLogin = (authData) => {
     setAuth(authData);
+    try {
+      localStorage.setItem("trustAuth", JSON.stringify(authData));
+      if (authData?.idToken) {
+        localStorage.setItem("trustPublicAuthToken", authData.idToken);
+      }
+    } catch(e) {}
     setShowLogin(false);
     setPage("admin");
   };

@@ -4,7 +4,24 @@ robocopy "C:\Users\Pradeep.Parmar\OneDrive - insidemedia.net\personal\My Website
 
 restore 
 
-robocopy "C:\Users\Pradeep.Parmar\OneDrive - insidemedia.net\personal\My Website\Backupfolder all website\community\community-backup-backup-20260625-203853" "C:\Users\Pradeep.Parmar\OneDrive - insidemedia.net\personal\My Website\community" /E
+robocopy "C:\Users\Pradeep.Parmar\OneDrive - insidemedia.net\personal\My Website\Backupfolder all website\community\community-backup-20260902-120108 "C:\Users\Pradeep.Parmar\OneDrive - insidemedia.net\personal\My Website\community" /E
+
+Purpose	Command
+Save Source Code	
+git add .
+git commit -m "Update"
+git push origin main
+
+Deploy Testing	
+npm run build
+npx gh-pages -d dist -r
+https://github.com/pradeepparmar902/MY_Community_Website.git
+
+Deploy Production
+npm run build
+npx gh-pages -d dist -r 
+https://github.com/pradeepparmar902/MMP-CWC-Website.git
+
 
 ############************************####################
 
