@@ -23862,7 +23862,9 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
       fontSize: event.inviteFontSize || 16,
       fontColor: event.inviteFontColor || "#000000",
       orientation: event.inviteOrientation || "portrait",
-      bgFit: event.inviteBgFit || "letterhead"
+      bgFit: event.inviteBgFit || "letterhead",
+      marginTop: event.inviteMarginTop || "",
+      marginBottom: event.inviteMarginBottom || ""
     },
     ...(event.issueCertificates || event.certBgUrl ? [
       {
@@ -23875,7 +23877,9 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
         fontSize: event.certFontSize || 26,
         fontColor: event.certFontColor || "#000000",
         orientation: event.certOrientation || "landscape",
-        bgFit: event.certBgFit || "full"
+        bgFit: event.certBgFit || "full",
+        marginTop: event.certMarginTop || "",
+        marginBottom: event.certMarginBottom || ""
       }
     ] : []),
     ...(event.pdfTemplates || []).map(t => ({
@@ -24353,6 +24357,8 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
             updated.inviteFontColor = inviteTpl.fontColor;
             updated.inviteOrientation = inviteTpl.orientation || "portrait";
             updated.inviteBgFit = inviteTpl.bgFit || "letterhead";
+            updated.inviteMarginTop = inviteTpl.marginTop;
+            updated.inviteMarginBottom = inviteTpl.marginBottom;
           }
           if (certTpl) {
             updated.certName = certTpl.name;
@@ -24363,6 +24369,8 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
             updated.certFontColor = certTpl.fontColor;
             updated.certOrientation = certTpl.orientation || "landscape";
             updated.certBgFit = certTpl.bgFit || "full";
+            updated.certMarginTop = certTpl.marginTop;
+            updated.certMarginBottom = certTpl.marginBottom;
           }
           return updated;
         }
@@ -30149,6 +30157,8 @@ export function ConnectExistingTemplateModal({
         fontColor: ev.inviteFontColor || '#000000',
         orientation: ev.inviteOrientation || 'portrait',
         bgFit: ev.inviteBgFit || 'letterhead',
+        marginTop: ev.inviteMarginTop || '',
+        marginBottom: ev.inviteMarginBottom || '',
         targetSection: 'invites',
         isPrimaryInvite: true
       });
