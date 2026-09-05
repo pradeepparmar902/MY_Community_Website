@@ -5271,9 +5271,10 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                   const blockW = pos.w ? (parseFloat(pos.w) / 100) * targetW : (300 * (targetW / 842));
                   
                   const div = document.createElement("div");
-                  div.style.position = "fixed";
-                  div.style.top = "-9999px";
-                  div.style.left = "-9999px";
+                  div.style.position = "absolute";
+                  div.style.top = "0px";
+                  div.style.left = "0px";
+                  div.style.zIndex = "-1000";
                   div.style.width = blockW + "px";
                   div.style.fontSize = currentFontSize + "px";
                   div.style.color = currentFontColor;
