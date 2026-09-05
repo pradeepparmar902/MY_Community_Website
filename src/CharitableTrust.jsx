@@ -5249,15 +5249,31 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
               doc.setFontSize(currentFontSize);
               doc.setTextColor(currentFontColor);
 
+              let renderX = xPx;
+              let renderY = yPx;
+              
+              if (pos.isStatic || key.includes("Static_Text_")) {
+                  const blockW = pos.w ? (parseFloat(pos.w) / 100) * targetW : (300 * (targetW / 842));
+                  const blockH = pos.h ? (parseFloat(pos.h) / 100) * targetH : (80 * (targetH / 595));
+                  
+                  if (alignOpt === "left") {
+                      renderX = xPx - (blockW / 2) + 10;
+                  } else if (alignOpt === "right") {
+                      renderX = xPx + (blockW / 2) - 10;
+                  }
+                  
+                  renderY = yPx - (blockH / 2) + 10 + (currentFontSize * 0.7);
+              }
+
               const strVal = String(val);
               if (strVal.includes('\n')) {
                 const lines = strVal.split('\n');
                 const lineH = Math.max(12, currentFontSize * 1.25);
                 lines.forEach((ln, lIdx) => {
-                  doc.text(ln, xPx, yPx + (lIdx * lineH), { align: alignOpt, baseline: "middle" });
+                  doc.text(ln, renderX, renderY + (lIdx * lineH), { align: alignOpt, baseline: pos.isStatic || key.includes("Static_Text_") ? "bottom" : "middle" });
                 });
               } else {
-                doc.text(strVal, xPx, yPx, { align: alignOpt, baseline: "middle" });
+                doc.text(strVal, renderX, renderY, { align: alignOpt, baseline: pos.isStatic || key.includes("Static_Text_") ? "bottom" : "middle" });
               }
 
               // Restore global font size and color
