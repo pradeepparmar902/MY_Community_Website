@@ -25718,6 +25718,62 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                       </div>
                     )}
 
+                    {/* Visual Margin Guides (Interactive visualizer for the user) */}
+                    {Array.from({length: totalPages}).map((_, pIdx) => {
+                       const mTop = activePdf.marginTop ? parseInt(activePdf.marginTop) : 0;
+                       const mBot = activePdf.marginBottom ? parseInt(activePdf.marginBottom) : 0;
+                       const scaledTop = mTop * canvasScale;
+                       const scaledBot = mBot * canvasScale;
+                       return (
+                         <React.Fragment key={`margins-${pIdx}`}>
+                           {/* Header Margin Guide */}
+                           {mTop > 0 && (
+                             <div style={{
+                               position: "absolute",
+                               top: pIdx * singleHeight,
+                               left: 0,
+                               right: 0,
+                               height: scaledTop,
+                               background: "rgba(239, 68, 68, 0.15)",
+                               borderBottom: "2px dashed #EF4444",
+                               pointerEvents: "none",
+                               zIndex: 3,
+                               display: "flex",
+                               alignItems: "flex-end",
+                               justifyContent: "center",
+                               paddingBottom: 4
+                             }}>
+                               <span style={{fontSize: ".65rem", color: "#B91C1C", fontWeight: 800, background:"rgba(255,255,255,0.7)", padding:"2px 6px", borderRadius:4}}>
+                                 ⛔ HEADER MARGIN ({mTop}px) - TEXT WILL JUMP THIS AREA
+                               </span>
+                             </div>
+                           )}
+                           {/* Footer Margin Guide */}
+                           {mBot > 0 && (
+                             <div style={{
+                               position: "absolute",
+                               top: (pIdx + 1) * singleHeight - scaledBot,
+                               left: 0,
+                               right: 0,
+                               height: scaledBot,
+                               background: "rgba(239, 68, 68, 0.15)",
+                               borderTop: "2px dashed #EF4444",
+                               pointerEvents: "none",
+                               zIndex: 3,
+                               display: "flex",
+                               alignItems: "flex-start",
+                               justifyContent: "center",
+                               paddingTop: 4
+                             }}>
+                               <span style={{fontSize: ".65rem", color: "#B91C1C", fontWeight: 800, background:"rgba(255,255,255,0.7)", padding:"2px 6px", borderRadius:4}}>
+                                 ⛔ FOOTER MARGIN ({mBot}px) - TEXT WILL JUMP THIS AREA
+                               </span>
+                             </div>
+                           )}
+                         </React.Fragment>
+                       );
+                    })}
+
                     {/* Subtle Watermark/Margin indicator so user sees page bounds */}
                     <div 
                       style={{
