@@ -5123,28 +5123,14 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
 
           const m = (customTpl ? (customTpl.map || customTpl.fieldMap) : isInvite ? certConfig.inviteMap : certConfig.certMap) || {};
 
-          // Sort mapped fields so Page2 fields always render last
-          const sortedEntries = Object.entries(m).sort(([k1], [k2]) => {
-            const p1 = k1.includes("Page2") ? 1 : 0;
-            const p2 = k2.includes("Page2") ? 1 : 0;
-            return p1 - p2;
+          // Sort mapped fields by Y coordinate so elements further down (or on Page 2) render in order
+          const sortedEntries = Object.entries(m).sort(([, posA], [, posB]) => {
+            return (parseFloat(posA.y) || 0) - (parseFloat(posB.y) || 0);
           });
 
           for (const [key, pos] of sortedEntries) {
             // Filter out internal non-renderable keys like _marginTop
             if (key.startsWith('_')) continue;
-            
-            // Force a page break for explicit Page 2 blocks
-            if (key.includes("Page2") && pos.visible) {
-                const totalPages = doc.getNumberOfPages();
-                if (totalPages < 2) {
-                    doc.addPage();
-                    doc.setPage(2);
-                    drawBackground();
-                } else {
-                    doc.setPage(2);
-                }
-            }
 
             if (pos.visible) {
               const xPx = (parseFloat(pos.x) / 100) * targetW;
@@ -25846,15 +25832,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
 
                     {/* Positioned Field Badges with Interactive Drill-Down Connection */}
                     {Object.entries(activePdf.map || {})
-                      .filter(([key]) => {
-                        // Filter out non-renderable keys
-                        if (key.startsWith('_')) return false;
-                        // For Page 1, hide Page2 elements
-                        if (pageView === 1 && key.includes("Page2")) return false;
-                        // For Page 2, hide non-Page2 elements (except background/global ones if we want, but let's hide all for clarity)
-                        if (pageView === 2 && !key.includes("Page2")) return false;
-                        return true;
-                      })
+                      .filter(([key]) => !key.startsWith('_')) // Filter out non-renderable keys
                       .map(([key, pos]) => {
                       const isBeingDragged = draggingPdfField === key;
                       const isPivotBadge = key.includes("PIVOT");
@@ -26251,7 +26229,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                           ...activePdf.map,
                           [newKey]: {
                             x: 50,
-                            y: 20, // Start higher on page 2
+                            y: 110, // 10% down on Page 2 visually!
                             w: 80,
                             h: 50,
                             visible: true,
@@ -26259,7 +26237,6 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                             text: "Enter text for Page 2 here..."
                           }
                         });
-                        setPageView(2); // Auto-switch to Page 2 view so they see the new block
                       }}
                       style={{
                         padding: "6px 10px",
