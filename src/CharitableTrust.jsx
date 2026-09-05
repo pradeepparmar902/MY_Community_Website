@@ -23922,6 +23922,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
     if (initialPdfTplId && initialPdfList.some(p => p.id === initialPdfTplId)) return initialPdfTplId;
     return initialPdfList[0]?.id || "invite";
   });
+  const [pageView, setPageView] = useState(1);
   const [draggingPdfField, setDraggingPdfField] = useState(null);
   const [resizingPdfField, setResizingPdfField] = useState(null);
   const [uploadingPdfBg, setUploadingPdfBg] = useState(false);
@@ -25617,6 +25618,29 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                       <span>📊</span>
                       <span>{showPivotBuilder ? "Hide Pivot" : "Pivot Table"}</span>
                     </button>
+
+                    <span style={{color:"#CBD5E1"}}>|</span>
+
+                    {/* Page View Toggle */}
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <label style={{fontSize:".68rem",fontWeight:800,color:"#475569"}}>VIEW:</label>
+                      <select
+                        value={pageView}
+                        onChange={(e) => setPageView(parseInt(e.target.value))}
+                        style={{
+                          fontSize: ".7rem",
+                          padding: "2px 4px",
+                          border: "1px solid #CBD5E1",
+                          borderRadius: 4,
+                          background: "#F8FAFC",
+                          cursor: "pointer",
+                          fontWeight: 700
+                        }}
+                      >
+                        <option value={1}>Page 1</option>
+                        <option value={2}>Page 2</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div style={{fontSize:".68rem",color:"#15803D",fontWeight:700,display:"flex",alignItems:"center",gap:3}}>
@@ -25821,7 +25845,17 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                     </div>
 
                     {/* Positioned Field Badges with Interactive Drill-Down Connection */}
-                    {Object.entries(activePdf.map || {}).map(([key, pos]) => {
+                    {Object.entries(activePdf.map || {})
+                      .filter(([key]) => {
+                        // Filter out non-renderable keys
+                        if (key.startsWith('_')) return false;
+                        // For Page 1, hide Page2 elements
+                        if (pageView === 1 && key.includes("Page2")) return false;
+                        // For Page 2, hide non-Page2 elements (except background/global ones if we want, but let's hide all for clarity)
+                        if (pageView === 2 && !key.includes("Page2")) return false;
+                        return true;
+                      })
+                      .map(([key, pos]) => {
                       const isBeingDragged = draggingPdfField === key;
                       const isPivotBadge = key.includes("PIVOT");
                       const isTotalCountBadge = key.toLowerCase().includes("total count") || key.toLowerCase().includes("total_count");
@@ -26225,7 +26259,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                             text: "Enter text for Page 2 here..."
                           }
                         });
-                        // Don't auto-set active field key if it doesn't exist, just add the map
+                        setPageView(2); // Auto-switch to Page 2 view so they see the new block
                       }}
                       style={{
                         padding: "6px 10px",
