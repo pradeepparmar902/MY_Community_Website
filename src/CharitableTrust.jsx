@@ -25613,7 +25613,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                                 <span>+</span>
                                 <span style={{fontSize:".65rem"}}>Connect</span>
                               </button>
-
+                              )}
                               {/* Delete entire badge */}
                               <button
                                 type="button"
