@@ -25821,6 +25821,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                     )}
                   </div>
                 </div>
+              </div>
             )
           )}
 
