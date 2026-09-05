@@ -5294,9 +5294,18 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                   try {
                       const canvas = await html2canvas(div, { backgroundColor: null, scale: 2 });
                       
+                      const targetPage = Math.floor(yPx / targetH) + 1;
+                      while (doc.getNumberOfPages() < targetPage) {
+                          doc.addPage();
+                          doc.setPage(doc.getNumberOfPages());
+                          drawBackground();
+                      }
+                      doc.setPage(targetPage);
+                      const localY = yPx % targetH;
+                      
                       let renderX = xPx - (blockW / 2);
                       const blockH = pos.h ? (parseFloat(pos.h) / 100) * targetH : (80 * (targetH / 595));
-                      let renderY = yPx - (blockH / 2); // Anchor firmly to the TOP of the initial bounds, not the center
+                      let renderY = localY - (blockH / 2); // Anchor firmly to the TOP of the initial bounds
                       
                       const renderedHeight = (canvas.height / canvas.width) * blockW;
                       
@@ -5321,7 +5330,7 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                               remainingHeight = 0;
                           } else {
                               // Render what fits and add new page
-                              const chunkHeight = pageAvailableHeight;
+                              const chunkHeight = Math.max(pageAvailableHeight, 1);
                               const chunkPixelHeight = (chunkHeight / renderedHeight) * canvas.height;
                               
                               const chunkCanvas = document.createElement('canvas');
@@ -5336,10 +5345,11 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                               sourceY += chunkPixelHeight;
                               
                               doc.addPage();
+                              doc.setPage(doc.getNumberOfPages());
                               drawBackground();
                               
-                              // Reset Y for the new page
-                              currentY = renderY; 
+                              // Reset Y to the top of the new page for auto-pagination continuation
+                              currentY = 30; 
                               pageAvailableHeight = targetH - currentY - 20;
                           }
                       }
@@ -5351,14 +5361,23 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                   
               } else {
                   // Keep standard doc.text for normal dynamic fields
+                  const targetPage = Math.floor(yPx / targetH) + 1;
+                  while (doc.getNumberOfPages() < targetPage) {
+                      doc.addPage();
+                      doc.setPage(doc.getNumberOfPages());
+                      drawBackground();
+                  }
+                  doc.setPage(targetPage);
+                  const localY = yPx % targetH;
+                  
                   if (strVal.includes('\n')) {
                     const lines = strVal.split('\n');
                     const lineH = Math.max(12, currentFontSize * 1.25);
                     lines.forEach((ln, lIdx) => {
-                      doc.text(ln, xPx, yPx + (lIdx * lineH), { align: alignOpt, baseline: "middle" });
+                      doc.text(ln, xPx, localY + (lIdx * lineH), { align: alignOpt, baseline: "middle" });
                     });
                   } else {
-                    doc.text(strVal, xPx, yPx, { align: alignOpt, baseline: "middle" });
+                    doc.text(strVal, xPx, localY, { align: alignOpt, baseline: "middle" });
                   }
               }
 
@@ -24221,10 +24240,11 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
     const rawTag = e.dataTransfer.getData("text/plain");
     if (!rawTag) return;
     const rect = canvasContainerRef.current.getBoundingClientRect();
+    const singlePageHeight = (activePdf.orientation === 'landscape' ? 595 : 842) * canvasScale;
     let x = ((e.clientX - rect.left) / rect.width) * 100;
-    let y = ((e.clientY - rect.top) / rect.height) * 100;
+    let y = ((e.clientY - rect.top) / singlePageHeight) * 100;
     x = Math.max(2, Math.min(98, Math.round(x * 10) / 10));
-    y = Math.max(2, Math.min(98, Math.round(y * 10) / 10));
+    y = Math.max(2, Math.round(y * 10) / 10);
     handleAddVariableToPdf(rawTag, { x, y });
   };
 
@@ -24238,8 +24258,9 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
   const handlePointerMoveBadge = (e) => {
     if (resizingPdfField && canvasContainerRef.current) {
       const rect = canvasContainerRef.current.getBoundingClientRect();
+      const singlePageHeight = (activePdf.orientation === 'landscape' ? 595 : 842) * canvasScale;
       const dxPct = ((e.clientX - resizingPdfField.startX) / rect.width) * 100;
-      const dyPct = ((e.clientY - resizingPdfField.startY) / rect.height) * 100;
+      const dyPct = ((e.clientY - resizingPdfField.startY) / singlePageHeight) * 100;
       
       const curMap = { ...(activePdf.map || {}) };
       const item = curMap[resizingPdfField.key];
@@ -24281,10 +24302,11 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
 
     if (!draggingPdfField || !canvasContainerRef.current) return;
     const rect = canvasContainerRef.current.getBoundingClientRect();
+    const singlePageHeight = (activePdf.orientation === 'landscape' ? 595 : 842) * canvasScale;
     let x = ((e.clientX - rect.left) / rect.width) * 100;
-    let y = ((e.clientY - rect.top) / rect.height) * 100;
+    let y = ((e.clientY - rect.top) / singlePageHeight) * 100;
     x = Math.max(2, Math.min(98, Math.round(x * 10) / 10));
-    y = Math.max(2, Math.min(98, Math.round(y * 10) / 10));
+    y = Math.max(2, Math.round(y * 10) / 10);
     const curMap = { ...(activePdf.map || {}) };
     curMap[draggingPdfField] = { ...(curMap[draggingPdfField] || {}), x, y, visible: true };
     handleUpdateActivePdf("map", curMap);
@@ -25562,63 +25584,78 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                   onDragOver={e => e.preventDefault()}
                   onDrop={handleCanvasDrop}
                 >
-                  {/* Authentic A4 Paper Sheet */}
-                  <div
-                    ref={canvasContainerRef}
-                    style={{
-                      position:"relative",
-                      width: (activePdf.orientation === 'landscape' ? 842 : 595) * canvasScale,
-                      height: (activePdf.orientation === 'landscape' ? 595 : 842) * canvasScale,
-                      minWidth: (activePdf.orientation === 'landscape' ? 842 : 595) * canvasScale,
-                      minHeight: (activePdf.orientation === 'landscape' ? 595 : 842) * canvasScale,
-                      background:"#FFFFFF",
-                      boxShadow:"0 15px 35px rgba(0,0,0,0.22), 0 3px 10px rgba(0,0,0,0.12)",
-                      borderRadius:4,
-                      overflow:"hidden",
-                      userSelect:"none",
-                      border:"1px solid #94A3B8",
-                      transformOrigin:"top center",
-                      transition:"width 0.15s, height 0.15s"
-                    }}
-                    onPointerMove={handlePointerMoveBadge}
-                    onPointerUp={handlePointerUpBadge}
-                    onDragOver={e => e.preventDefault()}
-                    onDrop={handleCanvasDrop}
-                  >
-                    {/* Background layer */}
-                    {activePdf.bgUrl ? (
-                      <>
-                        {(activePdf.bgFit === 'letterhead' || (!activePdf.bgFit && activePdf.orientation !== 'landscape')) ? (
-                          <div style={{position:"absolute",top:0,left:0,right:0,zIndex:1,pointerEvents:"none"}}>
-                            <img
-                              src={resolveMediaUrl(activePdf.bgUrl, C)}
-                              alt="Letterhead Header"
-                              style={{
-                                width:"100%",
-                                height:"auto",
-                                display:"block",
-                                borderBottom:"1px dashed #E2E8F0"
-                              }}
-                            />
-                          </div>
-                        ) : (
-                          <div style={{position:"absolute",inset:0,zIndex:1,pointerEvents:"none"}}>
-                            <img
-                              src={resolveMediaUrl(activePdf.bgUrl, C)}
-                              alt="Template Background"
-                              style={{
-                                width:"100%",
-                                height:"100%",
-                                objectFit: activePdf.bgFit === 'contain' ? "contain" : "fill",
-                                display:"block"
-                              }}
-                            />
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      /* Blank A4 Sheet Prompt */
-                      <div
+                  {/* Authentic A4 Paper Sheet(s) */}
+                  {(() => {
+                      const maxBottomY = Object.values(activePdf.map || {}).reduce((max, pos) => Math.max(max, (pos.y || 0) + (pos.h || 10)/2), 98);
+                      const totalPages = Math.max(1, Math.ceil(maxBottomY / 100));
+                      const singleHeight = (activePdf.orientation === 'landscape' ? 595 : 842) * canvasScale;
+                      
+                      return (
+                        <div
+                          ref={canvasContainerRef}
+                          style={{
+                            position:"relative",
+                            width: (activePdf.orientation === 'landscape' ? 842 : 595) * canvasScale,
+                            height: singleHeight * totalPages,
+                            minWidth: (activePdf.orientation === 'landscape' ? 842 : 595) * canvasScale,
+                            minHeight: singleHeight * totalPages,
+                            background:"#FFFFFF",
+                            boxShadow:"0 15px 35px rgba(0,0,0,0.22), 0 3px 10px rgba(0,0,0,0.12)",
+                            borderRadius:4,
+                            overflow:"hidden",
+                            userSelect:"none",
+                            border:"1px solid #94A3B8",
+                            transformOrigin:"top center",
+                            transition:"width 0.15s, height 0.15s"
+                          }}
+                          onPointerMove={handlePointerMoveBadge}
+                          onPointerUp={handlePointerUpBadge}
+                          onDragOver={e => e.preventDefault()}
+                          onDrop={handleCanvasDrop}
+                        >
+                          {/* Background layer */}
+                          {activePdf.bgUrl ? (
+                            <>
+                              {Array.from({length: totalPages}).map((_, pIdx) => (
+                                <div key={pIdx} style={{
+                                  position: "absolute", 
+                                  top: pIdx * singleHeight, 
+                                  left: 0, 
+                                  right: 0, 
+                                  height: singleHeight, 
+                                  borderBottom: pIdx < totalPages - 1 ? "2px dashed #94A3B8" : "none",
+                                  boxSizing: "border-box",
+                                  zIndex: 1, 
+                                  pointerEvents: "none"
+                                }}>
+                                  {(activePdf.bgFit === 'letterhead' || (!activePdf.bgFit && activePdf.orientation !== 'landscape')) ? (
+                                    <img
+                                      src={resolveMediaUrl(activePdf.bgUrl, C)}
+                                      alt={`Letterhead Page ${pIdx + 1}`}
+                                      style={{
+                                        width:"100%",
+                                        height:"auto",
+                                        display:"block"
+                                      }}
+                                    />
+                                  ) : (
+                                    <img
+                                      src={resolveMediaUrl(activePdf.bgUrl, C)}
+                                      alt={`Background Page ${pIdx + 1}`}
+                                      style={{
+                                        width:"100%",
+                                        height:"100%",
+                                        objectFit: activePdf.bgFit === 'contain' ? "contain" : "fill",
+                                        display:"block"
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              ))}
+                            </>
+                          ) : (
+                            /* Blank A4 Sheet Prompt */
+                            <div
                         onClick={() => pdfBgInputRef.current?.click()}
                         style={{
                           position:"absolute",
@@ -26031,6 +26068,8 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                       );
                     })}
                   </div>
+                  );
+                })()}
                 </div>
 
                 {/* Active Mapped Variables Summary Bar */}
