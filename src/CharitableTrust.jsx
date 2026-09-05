@@ -5242,17 +5242,27 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
               if (typeof val === 'string') {
                   val = val.replace(/\|/g, ' ').trim();
               }
-              const alignOpt = isInvite ? "left" : "center";
+              const alignOpt = pos.align || (isInvite ? "left" : "center");
+              const currentFontSize = pos.fontSize ? parseInt(pos.fontSize) : (fontSize || (isLandscape ? 26 : 16));
+              const currentFontColor = pos.fontColor || (fontColor || "#000000");
+
+              doc.setFontSize(currentFontSize);
+              doc.setTextColor(currentFontColor);
+
               const strVal = String(val);
               if (strVal.includes('\n')) {
                 const lines = strVal.split('\n');
-                const lineH = Math.max(12, (fontSize || 14) * 1.25);
+                const lineH = Math.max(12, currentFontSize * 1.25);
                 lines.forEach((ln, lIdx) => {
                   doc.text(ln, xPx, yPx + (lIdx * lineH), { align: alignOpt, baseline: "middle" });
                 });
               } else {
                 doc.text(strVal, xPx, yPx, { align: alignOpt, baseline: "middle" });
               }
+
+              // Restore global font size and color
+              doc.setFontSize(fontSize || (isLandscape ? 26 : 16));
+              doc.setTextColor(fontColor || "#000000");
             }
           });
           
@@ -25538,9 +25548,9 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                             left:`${pos.x}%`,
                             top:`${pos.y}%`,
                             transform:"translate(-50%, -50%)",
-                            background: isBeingDragged ? "#1D4ED8" : isPivotBadge ? "#064E3B" : "rgba(15, 23, 42, 0.92)",
-                            color: "white",
-                            padding: isPivotBadge ? "6px 10px" : "4px 8px",
+                            background: isBeingDragged ? "#1D4ED8" : isPivotBadge ? "#064E3B" : ((pos.isStatic || key.includes("Static_Text")) ? "white" : "rgba(15, 23, 42, 0.92)"),
+                            color: ((pos.isStatic || key.includes("Static_Text")) ? "#0F172A" : "white"),
+                            padding: isPivotBadge ? "6px 10px" : ((pos.isStatic || key.includes("Static_Text")) ? "0" : "4px 8px"),
                             borderRadius:6,
                             fontSize:`${Math.max(10, Math.min(22, (activePdf.fontSize || (activePdf.orientation === 'landscape' ? 26 : 16)) * (isPivotBadge ? 0.75 : 0.9) * canvasScale))}px`,
                             fontWeight:800,
@@ -25548,19 +25558,77 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                             cursor:"grab",
                             whiteSpace: isPivotBadge ? "normal" : "nowrap",
                             display:"flex",
-                            flexDirection: isPivotBadge ? "column" : "row",
-                            alignItems: isPivotBadge ? "stretch" : "center",
-                            gap:5,
+                            flexDirection: isPivotBadge ? "column" : ((pos.isStatic || key.includes("Static_Text")) ? "column" : "row"),
+                            alignItems: isPivotBadge ? "stretch" : ((pos.isStatic || key.includes("Static_Text")) ? "stretch" : "center"),
+                            gap: ((pos.isStatic || key.includes("Static_Text")) ? 0 : 5),
                             boxShadow:"0 3px 10px rgba(0,0,0,0.35)",
-                            border: isBeingDragged ? "2px solid #93C5FD" : isPivotBadge ? "2px solid #6EE7B7" : "1.5px solid rgba(255,255,255,0.8)",
+                            border: isBeingDragged ? "2px solid #93C5FD" : isPivotBadge ? "2px solid #6EE7B7" : ((pos.isStatic || key.includes("Static_Text")) ? "1.5px solid #CBD5E1" : "1.5px solid rgba(255,255,255,0.8)"),
                             zIndex: isConnectOpen ? 120 : (isBeingDragged ? 100 : 10),
                             touchAction:"none",
-                            maxWidth: isPivotBadge ? (340 * canvasScale) : undefined
+                            maxWidth: isPivotBadge ? (340 * canvasScale) : undefined,
+                            overflow: "hidden"
                           }}
                           title={`Drag to move ${key} (X: ${pos.x}%, Y: ${pos.y}%). Drop another variable on this badge to drill down!`}
                         >
-                          {/* Badge Header: Variable Tag + [+ Connect] Drill-Down Option + [✕ Close] */}
-                          <div style={{display:"flex",alignItems: (pos.isStatic || key.includes("Static_Text")) ? "flex-start" : "center",justifyContent:"space-between",gap:6}}>
+                          {/* Static Text Header/Drag Area with Formatting Toolbar */}
+                          {(pos.isStatic || key.includes("Static_Text")) && (
+                            <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F1F5F9", padding: "4px 8px", borderBottom: "1px solid #E2E8F0"}} onPointerDown={(e) => handlePointerDownBadge(e, key)}>
+                              <span style={{fontSize: ".65rem", color: "#64748B", display: "flex", alignItems: "center", gap: 4, cursor: "grab"}}>
+                                <span>⠿</span> Drag
+                              </span>
+                              <div style={{display: "flex", gap: 4, alignItems: "center"}} onPointerDown={e => e.stopPropagation()}>
+                                <select 
+                                  value={pos.align || "center"} 
+                                  onChange={(e) => handleUpdateActivePdf("map", { ...activePdf.map, [key]: { ...pos, align: e.target.value } })}
+                                  style={{fontSize: ".65rem", padding: "1px 2px", borderRadius: 3, border: "1px solid #CBD5E1", background: "white"}}
+                                  title="Text Alignment"
+                                >
+                                  <option value="left">Left</option>
+                                  <option value="center">Center</option>
+                                  <option value="right">Right</option>
+                                </select>
+                                <select 
+                                  value={pos.fontSize || ""} 
+                                  onChange={(e) => handleUpdateActivePdf("map", { ...activePdf.map, [key]: { ...pos, fontSize: e.target.value } })}
+                                  style={{fontSize: ".65rem", padding: "1px 2px", borderRadius: 3, border: "1px solid #CBD5E1", background: "white"}}
+                                  title="Font Size"
+                                >
+                                  <option value="">Size</option>
+                                  <option value="12">12px</option>
+                                  <option value="16">16px</option>
+                                  <option value="20">20px</option>
+                                  <option value="24">24px</option>
+                                  <option value="28">28px</option>
+                                  <option value="32">32px</option>
+                                  <option value="40">40px</option>
+                                  <option value="48">48px</option>
+                                </select>
+                                <input 
+                                  type="color" 
+                                  value={pos.fontColor || "#000000"} 
+                                  onChange={(e) => handleUpdateActivePdf("map", { ...activePdf.map, [key]: { ...pos, fontColor: e.target.value } })}
+                                  style={{width: 18, height: 18, padding: 0, border: "1px solid #CBD5E1", borderRadius: 3, cursor: "pointer"}}
+                                  title="Text Color"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveVariableFromPdf(key);
+                                  }}
+                                  style={{
+                                    background: "rgba(239, 68, 68, 0.1)", border: "none", color: "#EF4444", cursor: "pointer",
+                                    fontWeight: 800, fontSize: ".7rem", display: "flex", alignItems: "center", justifyContent: "center",
+                                    width: 18, height: 18, borderRadius: "50%", marginLeft: 4
+                                  }}
+                                  title={`Remove ${key}`}
+                                >✕</button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Badge Content */}
+                          <div style={{display:"flex",alignItems: (pos.isStatic || key.includes("Static_Text")) ? "flex-start" : "center",justifyContent:"space-between",gap:6, padding: (pos.isStatic || key.includes("Static_Text")) ? "0" : "0"}}>
                             
                             {(pos.isStatic || key.includes("Static_Text")) ? (
                               <textarea
@@ -25571,10 +25639,11 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                                 onPointerDown={e => e.stopPropagation()} 
                                 style={{
                                    width: (300 * canvasScale), minHeight: (80 * canvasScale), resize: "both",
-                                   background: "rgba(0,0,0,0.4)", color: "white",
-                                   border: "1px dashed rgba(255,255,255,0.5)", outline: "none",
-                                   borderRadius: 4, padding: "4px 8px",
-                                   fontFamily: "inherit", fontSize: "inherit",
+                                   background: "transparent", color: pos.fontColor || "#0F172A",
+                                   border: "none", outline: "none",
+                                   padding: "8px",
+                                   fontFamily: "inherit", fontSize: pos.fontSize ? `${pos.fontSize}px` : "inherit",
+                                   textAlign: pos.align || "center",
                                    lineHeight: 1.4
                                 }}
                                 placeholder="Type your custom paragraph here..."
@@ -25586,61 +25655,60 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                               </span>
                             )}
 
-                            <div style={{display:"flex",alignItems:"center",gap:3}} onPointerDown={e => e.stopPropagation()}>
-                              {/* 🔗 Option near the red circle to add another variable and drill down */}
-                              {!(pos.isStatic || key.includes("Static_Text")) && (
+                            {/* Options for non-static badges */}
+                            {!(pos.isStatic || key.includes("Static_Text")) && (
+                              <div style={{display:"flex",alignItems:"center",gap:3}} onPointerDown={e => e.stopPropagation()}>
                                 <button
                                   type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveConnectBadgeKey(isConnectOpen ? null : key);
-                                }}
-                                style={{
-                                  background: isConnectOpen ? "#10B981" : "rgba(255,255,255,0.22)",
-                                  border: isConnectOpen ? "1.5px solid #A7F3D0" : "1px solid rgba(255,255,255,0.45)",
-                                  borderRadius: 4,
-                                  padding: "1px 6px",
-                                  color: "white",
-                                  fontSize: ".68rem",
-                                  fontWeight: 800,
-                                  cursor: "pointer",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 3
-                                }}
-                                title="Click to add another variable (e.g. Vibhag, Gender) to drill down this into a summary table!"
-                              >
-                                <span>+</span>
-                                <span style={{fontSize:".65rem"}}>Connect</span>
-                              </button>
-                              )}
-                              {/* Delete entire badge */}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRemoveVariableFromPdf(key);
-                                }}
-                                style={{
-                                  background:"rgba(255,255,255,0.2)",
-                                  border:"none",
-                                  borderRadius:"50%",
-                                  width:16,
-                                  height:16,
-                                  color:"white",
-                                  fontSize:".65rem",
-                                  fontWeight:800,
-                                  cursor:"pointer",
-                                  display:"flex",
-                                  alignItems:"center",
-                                  justifyContent:"center",
-                                  marginLeft:2
-                                }}
-                                title={`Remove ${key} from canvas`}
-                              >
-                                ✕
-                              </button>
-                            </div>
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveConnectBadgeKey(isConnectOpen ? null : key);
+                                  }}
+                                  style={{
+                                    background: isConnectOpen ? "#10B981" : "rgba(255,255,255,0.22)",
+                                    border: isConnectOpen ? "1.5px solid #A7F3D0" : "1px solid rgba(255,255,255,0.45)",
+                                    borderRadius: 4,
+                                    padding: "1px 6px",
+                                    color: "white",
+                                    fontSize: ".68rem",
+                                    fontWeight: 800,
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 3
+                                  }}
+                                  title="Click to add another variable (e.g. Vibhag, Gender) to drill down this into a summary table!"
+                                >
+                                  <span>+</span>
+                                  <span style={{fontSize:".65rem"}}>Connect</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveVariableFromPdf(key);
+                                  }}
+                                  style={{
+                                    background:"rgba(255,255,255,0.2)",
+                                    border:"none",
+                                    borderRadius:"50%",
+                                    width:16,
+                                    height:16,
+                                    color:"white",
+                                    fontSize:".65rem",
+                                    fontWeight:800,
+                                    cursor:"pointer",
+                                    display:"flex",
+                                    alignItems:"center",
+                                    justifyContent:"center",
+                                    marginLeft:2
+                                  }}
+                                  title={`Remove ${key} from canvas`}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           {/* Connected Dimension Chips with individual remove */}
