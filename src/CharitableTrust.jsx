@@ -5288,10 +5288,14 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                   
                   document.body.appendChild(div);
                   
+                  // Wait for the browser to paint the newly appended element
+                  await new Promise(r => setTimeout(r, 50));
+                  
                   try {
                       const canvas = await html2canvas(div, { backgroundColor: null, scale: 2 });
                       
                       let renderX = xPx - (blockW / 2);
+                      const blockH = pos.h ? (parseFloat(pos.h) / 100) * targetH : (80 * (targetH / 595));
                       let renderY = yPx - (blockH / 2); // Anchor firmly to the TOP of the initial bounds, not the center
                       
                       const renderedHeight = (canvas.height / canvas.width) * blockW;
