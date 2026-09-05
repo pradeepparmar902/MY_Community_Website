@@ -5083,26 +5083,30 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
             format: [targetW, targetH] 
           });
 
-          const bgFit = customTpl?.bgFit || (isInvite ? certConfig?.inviteBgFit : certConfig?.certBgFit) || (targetOrientation === 'portrait' && (img.width / img.height > 1.5) ? 'letterhead' : 'full');
-          if (bgFit === 'letterhead') {
-            const imgAspect = img.width / img.height;
-            const renderH = targetW / imgAspect;
-            doc.addImage(img, 'JPEG', 0, 0, targetW, renderH);
-          } else if (bgFit === 'contain') {
-            const imgAspect = img.width / img.height;
-            const pageAspect = targetW / targetH;
-            let w = targetW, h = targetH, x = 0, y = 0;
-            if (imgAspect > pageAspect) {
-              h = targetW / imgAspect;
-              y = (targetH - h) / 2;
+          const drawBackground = () => {
+            const bgFit = customTpl?.bgFit || (isInvite ? certConfig?.inviteBgFit : certConfig?.certBgFit) || (targetOrientation === 'portrait' && (img.width / img.height > 1.5) ? 'letterhead' : 'full');
+            if (bgFit === 'letterhead') {
+              const imgAspect = img.width / img.height;
+              const renderH = targetW / imgAspect;
+              doc.addImage(img, 'JPEG', 0, 0, targetW, renderH);
+            } else if (bgFit === 'contain') {
+              const imgAspect = img.width / img.height;
+              const pageAspect = targetW / targetH;
+              let w = targetW, h = targetH, x = 0, y = 0;
+              if (imgAspect > pageAspect) {
+                h = targetW / imgAspect;
+                y = (targetH - h) / 2;
+              } else {
+                w = targetH * imgAspect;
+                x = (targetW - w) / 2;
+              }
+              doc.addImage(img, 'JPEG', x, y, w, h);
             } else {
-              w = targetH * imgAspect;
-              x = (targetW - w) / 2;
+              doc.addImage(img, 'JPEG', 0, 0, targetW, targetH);
             }
-            doc.addImage(img, 'JPEG', x, y, w, h);
-          } else {
-            doc.addImage(img, 'JPEG', 0, 0, targetW, targetH);
-          }
+          };
+          
+          drawBackground();
           
           const fontSize = customTpl ? (customTpl.fontSize || (isLandscape ? 26 : 16)) : isInvite ? (certConfig.inviteFontSize || 16) : (certConfig.certFontSize || 26);
           const fontColor = customTpl ? (customTpl.fontColor || "#000000") : isInvite ? certConfig.inviteFontColor : certConfig.certFontColor;
@@ -5285,13 +5289,55 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                   
                   try {
                       const canvas = await html2canvas(div, { backgroundColor: null, scale: 2 });
-                      const imgData = canvas.toDataURL("image/png");
                       
                       let renderX = xPx - (blockW / 2);
-                      const renderedHeight = (canvas.height / canvas.width) * blockW;
-                      let renderY = yPx - (renderedHeight / 2);
+                      let renderY = yPx - (blockH / 2); // Anchor firmly to the TOP of the initial bounds, not the center
                       
-                      doc.addImage(imgData, "PNG", renderX, renderY, blockW, renderedHeight);
+                      const renderedHeight = (canvas.height / canvas.width) * blockW;
+                      
+                      let remainingHeight = renderedHeight;
+                      let sourceY = 0;
+                      let currentY = renderY;
+                      let pageAvailableHeight = targetH - currentY - 20; // 20px bottom padding
+                      
+                      while (remainingHeight > 0) {
+                          if (remainingHeight <= pageAvailableHeight || pageAvailableHeight <= 0) {
+                              // Render remaining part
+                              const chunkHeight = Math.max(remainingHeight, 1);
+                              const chunkPixelHeight = (chunkHeight / renderedHeight) * canvas.height;
+                              
+                              const chunkCanvas = document.createElement('canvas');
+                              chunkCanvas.width = canvas.width;
+                              chunkCanvas.height = chunkPixelHeight;
+                              const ctx = chunkCanvas.getContext('2d');
+                              ctx.drawImage(canvas, 0, sourceY, canvas.width, chunkPixelHeight, 0, 0, canvas.width, chunkPixelHeight);
+                              
+                              doc.addImage(chunkCanvas.toDataURL("image/png"), "PNG", renderX, currentY, blockW, chunkHeight);
+                              remainingHeight = 0;
+                          } else {
+                              // Render what fits and add new page
+                              const chunkHeight = pageAvailableHeight;
+                              const chunkPixelHeight = (chunkHeight / renderedHeight) * canvas.height;
+                              
+                              const chunkCanvas = document.createElement('canvas');
+                              chunkCanvas.width = canvas.width;
+                              chunkCanvas.height = chunkPixelHeight;
+                              const ctx = chunkCanvas.getContext('2d');
+                              ctx.drawImage(canvas, 0, sourceY, canvas.width, chunkPixelHeight, 0, 0, canvas.width, chunkPixelHeight);
+                              
+                              doc.addImage(chunkCanvas.toDataURL("image/png"), "PNG", renderX, currentY, blockW, chunkHeight);
+                              
+                              remainingHeight -= chunkHeight;
+                              sourceY += chunkPixelHeight;
+                              
+                              doc.addPage();
+                              drawBackground();
+                              
+                              // Reset Y for the new page
+                              currentY = renderY; 
+                              pageAvailableHeight = targetH - currentY - 20;
+                          }
+                      }
                   } catch(e) {
                       console.error("html2canvas error:", e);
                   } finally {
