@@ -5123,7 +5123,29 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
 
           const m = (customTpl ? (customTpl.map || customTpl.fieldMap) : isInvite ? certConfig.inviteMap : certConfig.certMap) || {};
 
-          for (const [key, pos] of Object.entries(m)) {
+          // Sort mapped fields so Page2 fields always render last
+          const sortedEntries = Object.entries(m).sort(([k1], [k2]) => {
+            const p1 = k1.includes("Page2") ? 1 : 0;
+            const p2 = k2.includes("Page2") ? 1 : 0;
+            return p1 - p2;
+          });
+
+          for (const [key, pos] of sortedEntries) {
+            // Filter out internal non-renderable keys like _marginTop
+            if (key.startsWith('_')) continue;
+            
+            // Force a page break for explicit Page 2 blocks
+            if (key.includes("Page2") && pos.visible) {
+                const totalPages = doc.getNumberOfPages();
+                if (totalPages < 2) {
+                    doc.addPage();
+                    doc.setPage(2);
+                    drawBackground();
+                } else {
+                    doc.setPage(2);
+                }
+            }
+
             if (pos.visible) {
               const xPx = (parseFloat(pos.x) / 100) * targetW;
               const yPx = (parseFloat(pos.y) / 100) * targetH;
@@ -5309,9 +5331,11 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                       doc.setPage(targetPage);
                       const localY = yPx % targetH;
                       
-                      let renderX = xPx - (blockW / 2);
+                      // In react-rnd, the saved pos.x and pos.y are the TOP-LEFT corner of the box.
+                      // Since doc.addImage uses the top-left corner, we do NOT subtract half the width/height.
+                      let renderX = xPx;
                       const blockH = pos.h ? (parseFloat(pos.h) / 100) * targetH : (80 * (targetH / 595));
-                      let renderY = localY - (blockH / 2); // Anchor firmly to the TOP of the initial bounds
+                      let renderY = localY; // True top anchor
                       
                       const renderedHeight = (canvas.height / canvas.width) * blockW;
                       
@@ -26184,6 +26208,35 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                       title="Add a custom text block to type a paragraph onto the template"
                     >
                       + Add Custom Text Block
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newKey = `{Static_Text_Page2_${Date.now()}}`;
+                        handleUpdateActivePdfMap(newKey, {
+                          x: 50,
+                          y: 20, // Start higher on page 2
+                          w: 80,
+                          h: 50,
+                          visible: true,
+                          isStatic: true,
+                          value: "Enter text for Page 2 here..."
+                        });
+                        setActiveFieldKey(newKey);
+                      }}
+                      style={{
+                        padding: "6px 10px",
+                        background: "#10B981",
+                        color: "white",
+                        border: "none",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                        fontSize: ".75rem",
+                        fontWeight: "bold"
+                      }}
+                      title="Add a manual text block that will exclusively print on Page 2"
+                    >
+                      + Add Page 2 Content
                     </button>
                     {Object.keys(activePdf.map || {}).length > 0 && (
                       <button
