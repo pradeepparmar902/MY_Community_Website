@@ -23863,8 +23863,8 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
       fontColor: event.inviteFontColor || "#000000",
       orientation: event.inviteOrientation || "portrait",
       bgFit: event.inviteBgFit || "letterhead",
-      marginTop: event.inviteMarginTop || "",
-      marginBottom: event.inviteMarginBottom || ""
+      marginTop: event.inviteMap?._marginTop || event.inviteMarginTop || "",
+      marginBottom: event.inviteMap?._marginBottom || event.inviteMarginBottom || ""
     },
     ...(event.issueCertificates || event.certBgUrl ? [
       {
@@ -23878,8 +23878,8 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
         fontColor: event.certFontColor || "#000000",
         orientation: event.certOrientation || "landscape",
         bgFit: event.certBgFit || "full",
-        marginTop: event.certMarginTop || "",
-        marginBottom: event.certMarginBottom || ""
+        marginTop: event.certMap?._marginTop || event.certMarginTop || "",
+        marginBottom: event.certMap?._marginBottom || event.certMarginBottom || ""
       }
     ] : []),
     ...(event.pdfTemplates || []).map(t => ({
@@ -24352,25 +24352,21 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
             updated.inviteName = inviteTpl.name;
             updated.inviteTitle = inviteTpl.name;
             updated.inviteBgUrl = inviteTpl.bgUrl;
-            updated.inviteMap = inviteTpl.map;
+            updated.inviteMap = { ...inviteTpl.map, _marginTop: inviteTpl.marginTop, _marginBottom: inviteTpl.marginBottom };
             updated.inviteFontSize = inviteTpl.fontSize;
             updated.inviteFontColor = inviteTpl.fontColor;
             updated.inviteOrientation = inviteTpl.orientation || "portrait";
             updated.inviteBgFit = inviteTpl.bgFit || "letterhead";
-            updated.inviteMarginTop = inviteTpl.marginTop;
-            updated.inviteMarginBottom = inviteTpl.marginBottom;
           }
           if (certTpl) {
             updated.certName = certTpl.name;
             updated.certTitle = certTpl.name;
             updated.certBgUrl = certTpl.bgUrl;
-            updated.certMap = certTpl.map;
+            updated.certMap = { ...certTpl.map, _marginTop: certTpl.marginTop, _marginBottom: certTpl.marginBottom };
             updated.certFontSize = certTpl.fontSize;
             updated.certFontColor = certTpl.fontColor;
             updated.certOrientation = certTpl.orientation || "landscape";
             updated.certBgFit = certTpl.bgFit || "full";
-            updated.certMarginTop = certTpl.marginTop;
-            updated.certMarginBottom = certTpl.marginBottom;
           }
           return updated;
         }
@@ -30157,8 +30153,8 @@ export function ConnectExistingTemplateModal({
         fontColor: ev.inviteFontColor || '#000000',
         orientation: ev.inviteOrientation || 'portrait',
         bgFit: ev.inviteBgFit || 'letterhead',
-        marginTop: ev.inviteMarginTop || '',
-        marginBottom: ev.inviteMarginBottom || '',
+        marginTop: ev.inviteMap?._marginTop || ev.inviteMarginTop || '',
+        marginBottom: ev.inviteMap?._marginBottom || ev.inviteMarginBottom || '',
         targetSection: 'invites',
         isPrimaryInvite: true
       });
