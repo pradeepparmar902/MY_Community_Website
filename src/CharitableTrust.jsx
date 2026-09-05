@@ -23768,6 +23768,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
     return initialPdfList[0]?.id || "invite";
   });
   const [draggingPdfField, setDraggingPdfField] = useState(null);
+  const [resizingPdfField, setResizingPdfField] = useState(null);
   const [uploadingPdfBg, setUploadingPdfBg] = useState(false);
   const [showPdfMediaLibrary, setShowPdfMediaLibrary] = useState(false);
   const canvasContainerRef = useRef(null);
@@ -24133,6 +24134,49 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
   };
 
   const handlePointerMoveBadge = (e) => {
+    if (resizingPdfField && canvasContainerRef.current) {
+      const rect = canvasContainerRef.current.getBoundingClientRect();
+      const dxPct = ((e.clientX - resizingPdfField.startX) / rect.width) * 100;
+      const dyPct = ((e.clientY - resizingPdfField.startY) / rect.height) * 100;
+      
+      const curMap = { ...(activePdf.map || {}) };
+      const item = curMap[resizingPdfField.key];
+      if (!item) return;
+
+      let newW = item.w || 30; // fallback initial w
+      let newH = item.h || 10; // fallback initial h
+      let newX = item.x;
+      let newY = item.y;
+
+      const dir = resizingPdfField.direction;
+      
+      if (dir.includes("e")) {
+          newW += dxPct;
+          newX += dxPct / 2;
+      }
+      if (dir.includes("w")) {
+          newW -= dxPct;
+          newX += dxPct / 2;
+      }
+      if (dir.includes("s")) {
+          newH += dyPct;
+          newY += dyPct / 2;
+      }
+      if (dir.includes("n")) {
+          newH -= dyPct;
+          newY += dyPct / 2;
+      }
+      
+      newW = Math.max(5, newW);
+      newH = Math.max(2, newH);
+
+      curMap[resizingPdfField.key] = { ...item, x: newX, y: newY, w: newW, h: newH };
+      handleUpdateActivePdf("map", curMap);
+      
+      setResizingPdfField({ ...resizingPdfField, startX: e.clientX, startY: e.clientY });
+      return;
+    }
+
     if (!draggingPdfField || !canvasContainerRef.current) return;
     const rect = canvasContainerRef.current.getBoundingClientRect();
     let x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -24145,6 +24189,10 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
   };
 
   const handlePointerUpBadge = (e) => {
+    if (resizingPdfField) {
+      e.target.releasePointerCapture(e.pointerId);
+      setResizingPdfField(null);
+    }
     if (draggingPdfField) {
       e.target.releasePointerCapture(e.pointerId);
       setDraggingPdfField(null);
@@ -25563,13 +25611,42 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                             gap: ((pos.isStatic || key.includes("Static_Text")) ? 0 : 5),
                             boxShadow:"0 3px 10px rgba(0,0,0,0.35)",
                             border: isBeingDragged ? "2px solid #93C5FD" : isPivotBadge ? "2px solid #6EE7B7" : ((pos.isStatic || key.includes("Static_Text")) ? "1.5px solid #CBD5E1" : "1.5px solid rgba(255,255,255,0.8)"),
-                            zIndex: isConnectOpen ? 120 : (isBeingDragged ? 100 : 10),
+                            zIndex: isConnectOpen ? 120 : (isBeingDragged ? 100 : (pos.isStatic || key.includes("Static_Text") ? 20 : 10)),
                             touchAction:"none",
                             maxWidth: isPivotBadge ? (340 * canvasScale) : undefined,
-                            overflow: "hidden"
+                            overflow: "visible",
+                            width: (pos.isStatic || key.includes("Static_Text")) ? (pos.w ? `${pos.w}%` : `${300 * canvasScale}px`) : undefined,
+                            height: (pos.isStatic || key.includes("Static_Text")) ? (pos.h ? `${pos.h}%` : `${80 * canvasScale}px`) : undefined,
                           }}
                           title={`Drag to move ${key} (X: ${pos.x}%, Y: ${pos.y}%). Drop another variable on this badge to drill down!`}
                         >
+                          {/* 8-way resize handles for static text */}
+                          {(pos.isStatic || key.includes("Static_Text")) && (
+                            <>
+                              {['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map(dir => (
+                                <div
+                                  key={dir}
+                                  onPointerDown={(e) => {
+                                    e.preventDefault(); e.stopPropagation();
+                                    e.target.setPointerCapture(e.pointerId);
+                                    setResizingPdfField({ key, direction: dir, startX: e.clientX, startY: e.clientY });
+                                  }}
+                                  style={{
+                                    position: "absolute",
+                                    width: (dir.length === 1 ? 8 : 12),
+                                    height: (dir.length === 1 ? 8 : 12),
+                                    background: "#3B82F6",
+                                    border: "1.5px solid white",
+                                    borderRadius: "50%",
+                                    cursor: `${dir}-resize`,
+                                    zIndex: 200,
+                                    ...(dir.includes('n') ? { top: -6 } : dir.includes('s') ? { bottom: -6 } : { top: '50%', marginTop: -4 }),
+                                    ...(dir.includes('w') ? { left: -6 } : dir.includes('e') ? { right: -6 } : { left: '50%', marginLeft: -4 })
+                                  }}
+                                />
+                              ))}
+                            </>
+                          )}
                           {/* Static Text Header/Drag Area with Formatting Toolbar */}
                           {(pos.isStatic || key.includes("Static_Text")) && (
                             <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F1F5F9", padding: "4px 8px", borderBottom: "1px solid #E2E8F0"}} onPointerDown={(e) => handlePointerDownBadge(e, key)}>
@@ -25628,7 +25705,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                           )}
 
                           {/* Badge Content */}
-                          <div style={{display:"flex",alignItems: (pos.isStatic || key.includes("Static_Text")) ? "flex-start" : "center",justifyContent:"space-between",gap:6, padding: (pos.isStatic || key.includes("Static_Text")) ? "0" : "0"}}>
+                          <div style={{display:"flex",alignItems: (pos.isStatic || key.includes("Static_Text")) ? "flex-start" : "center",justifyContent:"space-between",gap:6, padding: (pos.isStatic || key.includes("Static_Text")) ? "0" : "0", flex: 1, width: "100%", height: "100%"}}>
                             
                             {(pos.isStatic || key.includes("Static_Text")) ? (
                               <textarea
@@ -25638,7 +25715,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                                 }}
                                 onPointerDown={e => e.stopPropagation()} 
                                 style={{
-                                   width: (300 * canvasScale), minHeight: (80 * canvasScale), resize: "both",
+                                   width: "100%", height: "100%", resize: "none",
                                    background: "transparent", color: pos.fontColor || "#0F172A",
                                    border: "none", outline: "none",
                                    padding: "8px",
@@ -25871,7 +25948,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                       onClick={() => {
                         const ts = Date.now();
                         const key = `{Static_Text_${ts}}`;
-                        handleUpdateActivePdf("map", { ...activePdf.map, [key]: { x: 50, y: 50, isStatic: true, text: "Enter your custom paragraph here..." } });
+                        handleUpdateActivePdf("map", { ...activePdf.map, [key]: { x: 50, y: 50, isStatic: true, text: "Enter your custom paragraph here...", w: 30, h: 10 } });
                       }}
                       style={{background:"#10B981",border:"none",color:"white",cursor:"pointer",fontWeight:800,fontSize:".72rem",padding:"4px 10px",borderRadius:6,boxShadow:"0 2px 4px rgba(16, 185, 129, 0.3)"}}
                       title="Add a custom text block to type a paragraph onto the template"
