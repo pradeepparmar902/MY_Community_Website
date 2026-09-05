@@ -5083,14 +5083,18 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
             format: [targetW, targetH] 
           });
 
-          let safeTopMargin = 30;
+          let safeTopMargin = (customTpl && customTpl.marginTop !== undefined && customTpl.marginTop !== "") ? parseInt(customTpl.marginTop) : 30;
+          let safeBottomMargin = (customTpl && customTpl.marginBottom !== undefined && customTpl.marginBottom !== "") ? parseInt(customTpl.marginBottom) : 20;
+
           const drawBackground = () => {
             const bgFit = customTpl?.bgFit || (isInvite ? certConfig?.inviteBgFit : certConfig?.certBgFit) || (targetOrientation === 'portrait' && (img.width / img.height > 1.5) ? 'letterhead' : 'full');
             if (bgFit === 'letterhead') {
               const imgAspect = img.width / img.height;
               const renderH = targetW / imgAspect;
               doc.addImage(img, 'JPEG', 0, 0, targetW, renderH);
-              safeTopMargin = renderH + 15;
+              if (!customTpl || customTpl.marginTop === undefined || customTpl.marginTop === "") {
+                safeTopMargin = renderH + 15;
+              }
             } else if (bgFit === 'contain') {
               const imgAspect = img.width / img.height;
               const pageAspect = targetW / targetH;
@@ -5314,7 +5318,7 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                       let remainingHeight = renderedHeight;
                       let sourceY = 0;
                       let currentY = renderY;
-                      let pageAvailableHeight = targetH - currentY - 20; // 20px bottom padding
+                      let pageAvailableHeight = targetH - currentY - safeBottomMargin;
                       
                       while (remainingHeight > 0) {
                           if (remainingHeight <= pageAvailableHeight || pageAvailableHeight <= 0) {
@@ -5352,7 +5356,7 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                               
                               // Reset Y to the top of the new page for auto-pagination continuation (respecting letterhead)
                               currentY = safeTopMargin; 
-                              pageAvailableHeight = targetH - currentY - 20;
+                              pageAvailableHeight = targetH - currentY - safeBottomMargin;
                           }
                       }
                   } catch(e) {
@@ -25468,6 +25472,29 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                       >
                         🖼️ Full Page
                       </button>
+                    </div>
+
+                    <span style={{color:"#CBD5E1"}}>|</span>
+
+                    {/* Margins */}
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <label style={{fontSize:".68rem",fontWeight:800,color:"#475569"}}>MARGINS:</label>
+                      <input
+                        type="number"
+                        placeholder="Top"
+                        value={activePdf.marginTop || ""}
+                        onChange={e => handleUpdateActivePdf("marginTop", e.target.value)}
+                        style={{width:40,fontSize:".68rem",padding:"2px",border:"1px solid #CBD5E1",borderRadius:4}}
+                        title="Top Margin (px)"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Bottom"
+                        value={activePdf.marginBottom || ""}
+                        onChange={e => handleUpdateActivePdf("marginBottom", e.target.value)}
+                        style={{width:40,fontSize:".68rem",padding:"2px",border:"1px solid #CBD5E1",borderRadius:4}}
+                        title="Bottom Margin (px)"
+                      />
                     </div>
 
                     <span style={{color:"#CBD5E1"}}>|</span>
