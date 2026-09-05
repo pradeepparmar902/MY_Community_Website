@@ -5083,12 +5083,14 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
             format: [targetW, targetH] 
           });
 
+          let safeTopMargin = 30;
           const drawBackground = () => {
             const bgFit = customTpl?.bgFit || (isInvite ? certConfig?.inviteBgFit : certConfig?.certBgFit) || (targetOrientation === 'portrait' && (img.width / img.height > 1.5) ? 'letterhead' : 'full');
             if (bgFit === 'letterhead') {
               const imgAspect = img.width / img.height;
               const renderH = targetW / imgAspect;
               doc.addImage(img, 'JPEG', 0, 0, targetW, renderH);
+              safeTopMargin = renderH + 15;
             } else if (bgFit === 'contain') {
               const imgAspect = img.width / img.height;
               const pageAspect = targetW / targetH;
@@ -5348,8 +5350,8 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                               doc.setPage(doc.getNumberOfPages());
                               drawBackground();
                               
-                              // Reset Y to the top of the new page for auto-pagination continuation
-                              currentY = 30; 
+                              // Reset Y to the top of the new page for auto-pagination continuation (respecting letterhead)
+                              currentY = safeTopMargin; 
                               pageAvailableHeight = targetH - currentY - 20;
                           }
                       }
@@ -25733,7 +25735,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                           style={{
                             position:"absolute",
                             left:`${pos.x}%`,
-                            top:`${pos.y}%`,
+                            top:`${pos.y / totalPages}%`,
                             transform:"translate(-50%, -50%)",
                             background: isBeingDragged ? "#1D4ED8" : isPivotBadge ? "#064E3B" : ((pos.isStatic || key.includes("Static_Text")) ? "white" : "rgba(15, 23, 42, 0.92)"),
                             color: ((pos.isStatic || key.includes("Static_Text")) ? "#0F172A" : "white"),
@@ -25755,7 +25757,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                             maxWidth: isPivotBadge ? (340 * canvasScale) : undefined,
                             overflow: "visible",
                             width: (pos.isStatic || key.includes("Static_Text")) ? (pos.w ? `${pos.w}%` : `${300 * canvasScale}px`) : undefined,
-                            height: (pos.isStatic || key.includes("Static_Text")) ? (pos.h ? `${pos.h}%` : `${80 * canvasScale}px`) : undefined,
+                            height: (pos.isStatic || key.includes("Static_Text")) ? (pos.h ? `${pos.h / totalPages}%` : `${80 * canvasScale}px`) : undefined,
                           }}
                           title={`Drag to move ${key} (X: ${pos.x}%, Y: ${pos.y}%). Drop another variable on this badge to drill down!`}
                         >
