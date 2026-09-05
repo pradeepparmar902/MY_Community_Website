@@ -26213,16 +26213,19 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                       type="button"
                       onClick={() => {
                         const newKey = `{Static_Text_Page2_${Date.now()}}`;
-                        handleUpdateActivePdfMap(newKey, {
-                          x: 50,
-                          y: 20, // Start higher on page 2
-                          w: 80,
-                          h: 50,
-                          visible: true,
-                          isStatic: true,
-                          value: "Enter text for Page 2 here..."
+                        handleUpdateActivePdf("map", {
+                          ...activePdf.map,
+                          [newKey]: {
+                            x: 50,
+                            y: 20, // Start higher on page 2
+                            w: 80,
+                            h: 50,
+                            visible: true,
+                            isStatic: true,
+                            text: "Enter text for Page 2 here..."
+                          }
                         });
-                        setActiveFieldKey(newKey);
+                        // Don't auto-set active field key if it doesn't exist, just add the map
                       }}
                       style={{
                         padding: "6px 10px",
