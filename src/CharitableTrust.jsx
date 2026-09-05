@@ -218,6 +218,7 @@ import { initializeApp, getApp, getApps } from "firebase/app";
 import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, sendPasswordResetEmail, setPersistence, browserLocalPersistence, onAuthStateChanged } from "firebase/auth";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
+import html2canvas from "html2canvas";
 
 // ── FIREBASE CONFIG ───────────────────────────────────────────────────────────
 const getFB = () => {
@@ -5069,7 +5070,7 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
         targetUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(urlToLoad)}`;
       }
 
-      img.onload = () => {
+      img.onload = async () => {
         try {
           const targetOrientation = customTpl?.orientation || (isInvite ? (certConfig?.inviteOrientation || 'portrait') : (certConfig?.certOrientation || (img.width > img.height ? 'landscape' : 'portrait')));
           const isLandscape = targetOrientation === 'landscape';
@@ -5112,7 +5113,7 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
 
           const m = (customTpl ? (customTpl.map || customTpl.fieldMap) : isInvite ? certConfig.inviteMap : certConfig.certMap) || {};
 
-          Object.entries(m).forEach(([key, pos]) => {
+          for (const [key, pos] of Object.entries(m)) {
             if (pos.visible) {
               const xPx = (parseFloat(pos.x) / 100) * targetW;
               const yPx = (parseFloat(pos.y) / 100) * targetH;
@@ -5249,38 +5250,72 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
               doc.setFontSize(currentFontSize);
               doc.setTextColor(currentFontColor);
 
-              let renderX = xPx;
-              let renderY = yPx;
+              const strVal = String(val);
               
               if (pos.isStatic || key.includes("Static_Text_")) {
-                  const blockW = pos.w ? (parseFloat(pos.w) / 100) * targetW : (300 * (targetW / 842));
-                  const blockH = pos.h ? (parseFloat(pos.h) / 100) * targetH : (80 * (targetH / 595));
+                  // Perform variable replacement
+                  let finalVal = strVal;
+                  if (fieldsData) {
+                    Object.entries(fieldsData).forEach(([fKey, fVal]) => {
+                        finalVal = finalVal.replace(new RegExp(`{${fKey}}`, 'gi'), String(fVal));
+                    });
+                  }
+                  finalVal = finalVal.replace(/{STUDENT_NAME}/gi, fallbackName || fieldsData?.['Student Name'] || fieldsData?.['Full Name'] || fieldsData?.['Name'] || '');
+                  finalVal = finalVal.replace(/{EVENT_NAME}/gi, certConfig?.title || '');
                   
-                  if (alignOpt === "left") {
-                      renderX = xPx - (blockW / 2) + 10;
-                  } else if (alignOpt === "right") {
-                      renderX = xPx + (blockW / 2) - 10;
+                  // Use html2canvas to render text with native browser fonts (supports Gujarati & Emojis)
+                  const blockW = pos.w ? (parseFloat(pos.w) / 100) * targetW : (300 * (targetW / 842));
+                  
+                  const div = document.createElement("div");
+                  div.style.position = "fixed";
+                  div.style.top = "-9999px";
+                  div.style.left = "-9999px";
+                  div.style.width = blockW + "px";
+                  div.style.fontSize = currentFontSize + "px";
+                  div.style.color = currentFontColor;
+                  div.style.textAlign = alignOpt;
+                  div.style.fontFamily = "sans-serif";
+                  div.style.whiteSpace = "pre-wrap";
+                  div.style.lineHeight = "1.25";
+                  
+                  // Simple markdown parsing for bold
+                  div.innerHTML = finalVal.replace(/\*(.*?)\*/g, '<strong>$1</strong>');
+                  
+                  document.body.appendChild(div);
+                  
+                  try {
+                      const canvas = await html2canvas(div, { backgroundColor: null, scale: 2 });
+                      const imgData = canvas.toDataURL("image/png");
+                      
+                      let renderX = xPx - (blockW / 2);
+                      const renderedHeight = (canvas.height / canvas.width) * blockW;
+                      let renderY = yPx - (renderedHeight / 2);
+                      
+                      doc.addImage(imgData, "PNG", renderX, renderY, blockW, renderedHeight);
+                  } catch(e) {
+                      console.error("html2canvas error:", e);
+                  } finally {
+                      document.body.removeChild(div);
                   }
                   
-                  renderY = yPx - (blockH / 2) + 10 + (currentFontSize * 0.7);
-              }
-
-              const strVal = String(val);
-              if (strVal.includes('\n')) {
-                const lines = strVal.split('\n');
-                const lineH = Math.max(12, currentFontSize * 1.25);
-                lines.forEach((ln, lIdx) => {
-                  doc.text(ln, renderX, renderY + (lIdx * lineH), { align: alignOpt, baseline: pos.isStatic || key.includes("Static_Text_") ? "bottom" : "middle" });
-                });
               } else {
-                doc.text(strVal, renderX, renderY, { align: alignOpt, baseline: pos.isStatic || key.includes("Static_Text_") ? "bottom" : "middle" });
+                  // Keep standard doc.text for normal dynamic fields
+                  if (strVal.includes('\n')) {
+                    const lines = strVal.split('\n');
+                    const lineH = Math.max(12, currentFontSize * 1.25);
+                    lines.forEach((ln, lIdx) => {
+                      doc.text(ln, xPx, yPx + (lIdx * lineH), { align: alignOpt, baseline: "middle" });
+                    });
+                  } else {
+                    doc.text(strVal, xPx, yPx, { align: alignOpt, baseline: "middle" });
+                  }
               }
 
               // Restore global font size and color
               doc.setFontSize(fontSize || (isLandscape ? 26 : 16));
               doc.setTextColor(fontColor || "#000000");
             }
-          });
+          }
           
           const blob = doc.output('blob');
           const url = URL.createObjectURL(blob);
