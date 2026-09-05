@@ -25725,7 +25725,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                        const scaledTop = mTop * canvasScale;
                        const scaledBot = mBot * canvasScale;
                        return (
-                         <React.Fragment key={`margins-${pIdx}`}>
+                         <div key={`margins-${pIdx}`}>
                            {/* Header Margin Guide */}
                            {mTop > 0 && (
                              <div style={{
@@ -25770,7 +25770,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                                </span>
                              </div>
                            )}
-                         </React.Fragment>
+                         </div>
                        );
                     })}
 
