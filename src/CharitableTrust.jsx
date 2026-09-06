@@ -37970,11 +37970,6 @@ export const getAppreciationTemplateDefaultUrl = () => {
 // ── Canvas-based Donor Appreciation Poster Generator ──
 export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositions) => {
   return new Promise((resolve, reject) => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 994;
-    canvas.height = 1024;
-    const ctx = canvas.getContext("2d");
-
     const activeTpl = templateImgUrl || getAppreciationTemplateDefaultUrl();
     const defaultTpl = getAppreciationTemplateDefaultUrl();
 
@@ -37993,25 +37988,33 @@ export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositi
     img.crossOrigin = "anonymous";
     img.onload = () => {
       try {
-        ctx.drawImage(img, 0, 0, 994, 1024);
+        const canvas = document.createElement("canvas");
+        const targetW = img.naturalWidth || img.width || 994;
+        const targetH = img.naturalHeight || img.height || 1024;
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext("2d");
 
-        const dName = String(donation.name || donation['Full Name'] || 'Respected Donor').trim().toUpperCase();
-        const dNameGuRaw = String(donation.nameGu || donation.donorNameGu || '').trim();
-        const dNameGu = (dNameGuRaw && dNameGuRaw.toLowerCase() !== dName.toLowerCase()) ? dNameGuRaw : '';
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+
+        const dName = String(donation.name || donation["Full Name"] || "Respected Donor").trim().toUpperCase();
+        const dNameGuRaw = String(donation.nameGu || donation.donorNameGu || "").trim();
+        const dNameGu = (dNameGuRaw && dNameGuRaw.toLowerCase() !== dName.toLowerCase()) ? dNameGuRaw : "";
 
         // 1. Donor Name - English (Line 1)
         if (pos.name.visible !== false) {
           ctx.save();
           let fSize = Number(pos.name.fontSize) || 21;
           if (dName.length > 28) fSize = Math.max(15, fSize - 4);
-          ctx.font = `bold ${fSize}px 'Playfair Display', Georgia, serif`;
+          const scaledFSize = fSize * (targetH / 600); // Scale relative to default ~600px preview height
+          ctx.font = `bold ${scaledFSize}px "Playfair Display", Georgia, serif`;
           ctx.textAlign = "center";
-          const px = (pos.name.x / 100) * 994;
-          const py = (pos.name.y / 100) * 1024;
+          const px = (pos.name.x / 100) * targetW;
+          const py = (pos.name.y / 100) * targetH;
 
           // Crisp subtle white backing stroke for high contrast
           ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 3 * (targetW / 800);
           ctx.lineJoin = "round";
           ctx.strokeText(dName, px, py);
 
@@ -38025,17 +38028,18 @@ export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositi
           ctx.save();
           let fSizeGu = Number(pos.nameGu.fontSize) || 18;
           if (dNameGu.length > 28) fSizeGu = Math.max(14, fSizeGu - 3);
-          ctx.font = `bold ${fSizeGu}px 'Noto Sans Gujarati', 'Shruti', 'Gujarati MT', sans-serif`;
+          const scaledFSizeGu = fSizeGu * (targetH / 600);
+          ctx.font = `bold ${scaledFSizeGu}px "Noto Sans Gujarati", "Shruti", "Gujarati MT", sans-serif`;
           ctx.textAlign = "center";
 
           // If Gujarati position was not independently customized, sit right below English line
-          const pxGu = customPositions?.nameGu?.x ? (pos.nameGu.x / 100) * 994 : (pos.name.x / 100) * 994;
-          const pyGu = customPositions?.nameGu?.y ? (pos.nameGu.y / 100) * 1024 : ((pos.name.y / 100) * 1024) + 24;
+          const pxGu = customPositions?.nameGu?.x ? (pos.nameGu.x / 100) * targetW : (pos.name.x / 100) * targetW;
+          const pyGu = customPositions?.nameGu?.y ? (pos.nameGu.y / 100) * targetH : ((pos.name.y / 100) * targetH) + (24 * targetH/600);
 
           const guDisplay = dNameGu.startsWith("(") ? dNameGu : `(${dNameGu})`;
 
           ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-          ctx.lineWidth = 2.5;
+          ctx.lineWidth = 2.5 * (targetW / 800);
           ctx.lineJoin = "round";
           ctx.strokeText(guDisplay, pxGu, pyGu);
 
@@ -38047,16 +38051,18 @@ export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositi
         // 3. Donation Amount on golden INR banner
         if (pos.amount.visible !== false) {
           const rawAmt = donation.amount !== undefined ? donation.amount : 0;
-          const amtStr = `₹ ${Number(rawAmt).toLocaleString('en-IN')}/-`;
+          const amtStr = `₹ ${Number(rawAmt).toLocaleString("en-IN")}/-`;
           ctx.save();
-          ctx.font = `bold ${Number(pos.amount.fontSize) || 23}px 'Montserrat', Arial, sans-serif`;
+          const fSizeAmt = Number(pos.amount.fontSize) || 23;
+          const scaledFSizeAmt = fSizeAmt * (targetH / 600);
+          ctx.font = `bold ${scaledFSizeAmt}px "Montserrat", Arial, sans-serif`;
           ctx.textAlign = "center";
-          const px = (pos.amount.x / 100) * 994;
-          const py = (pos.amount.y / 100) * 1024;
+          const px = (pos.amount.x / 100) * targetW;
+          const py = (pos.amount.y / 100) * targetH;
 
           // Crisp white backing stroke for bold contrast
           ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
-          ctx.lineWidth = 3.5;
+          ctx.lineWidth = 3.5 * (targetW / 800);
           ctx.lineJoin = "round";
           ctx.strokeText(amtStr, px, py);
 
@@ -38069,27 +38075,31 @@ export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositi
         if (pos.acknowledgment.visible !== false) {
           ctx.save();
           ctx.fillStyle = pos.acknowledgment.color || "#1E293B";
-          ctx.font = `italic ${Number(pos.acknowledgment.fontSize) || 13.5}px 'Montserrat', Arial, sans-serif`;
+          const fSizeAck = Number(pos.acknowledgment.fontSize) || 13.5;
+          const scaledFSizeAck = fSizeAck * (targetH / 600);
+          ctx.font = `italic ${scaledFSizeAck}px "Montserrat", Arial, sans-serif`;
           ctx.textAlign = "center";
-          const px = (pos.acknowledgment.x / 100) * 994;
-          const py = (pos.acknowledgment.y / 100) * 1024;
+          const px = (pos.acknowledgment.x / 100) * targetW;
+          const py = (pos.acknowledgment.y / 100) * targetH;
           ctx.fillText("Presented with heartfelt gratitude for supporting the Education Activity 2026.", px, py);
           ctx.restore();
         }
 
         // 5. Receipt details line
         if (pos.receiptDetails.visible !== false) {
-          const receiptNo = donation.receiptNo || donation.internalReceiptNo || donation.id || 'N/A';
-          const vibhag = donation.vibhag || donation.Vibhag || 'General';
-          const dateStr = donation.date || new Date().toISOString().split('T')[0];
+          const receiptNo = donation.receiptNo || donation.internalReceiptNo || donation.id || "N/A";
+          const vibhag = donation.vibhag || donation.Vibhag || "General";
+          const dateStr = donation.date || new Date().toISOString().split("T")[0];
 
           ctx.save();
           ctx.fillStyle = pos.receiptDetails.color || "#334155";
-          ctx.font = `italic ${Number(pos.receiptDetails.fontSize) || 13.5}px 'Montserrat', Arial, sans-serif`;
+          const fSizeRec = Number(pos.receiptDetails.fontSize) || 13.5;
+          const scaledFSizeRec = fSizeRec * (targetH / 600);
+          ctx.font = `italic ${scaledFSizeRec}px "Montserrat", Arial, sans-serif`;
           ctx.textAlign = "center";
-          const px = (pos.receiptDetails.x / 100) * 994;
-          const py = (pos.receiptDetails.y / 100) * 1024;
-          ctx.fillText(`Receipt #: ${receiptNo}   •   Vibhag: ${vibhag}   •   Date: ${dateStr}`, px, py);
+          const px = (pos.receiptDetails.x / 100) * targetW;
+          const py = (pos.receiptDetails.y / 100) * targetH;
+          ctx.fillText(`Receipt #: ${receiptNo}   |   Vibhag: ${vibhag}   |   Date: ${dateStr}`, px, py);
           ctx.restore();
         }
 
@@ -38103,7 +38113,11 @@ export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositi
         const fallbackImg = new Image();
         fallbackImg.crossOrigin = "anonymous";
         fallbackImg.onload = () => {
-          ctx.drawImage(fallbackImg, 0, 0, 994, 1024);
+          const canvas = document.createElement("canvas");
+          canvas.width = fallbackImg.naturalWidth || fallbackImg.width || 994;
+          canvas.height = fallbackImg.naturalHeight || fallbackImg.height || 1024;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(fallbackImg, 0, 0, canvas.width, canvas.height);
           resolve(canvas.toDataURL("image/png"));
         };
         fallbackImg.onerror = reject;
@@ -38327,7 +38341,7 @@ export const generateMergedDonorPosterCanvas = (certificateDataUrl, photoDataUrl
 };
 
 // ── Visual Drag & Drop Poster Designer Component ──
-export function DonorPosterVisualMapperModal({ C, auth, onClose, onSaveSuccess }) {
+export function DonorPosterVisualMapperModal({ C, setC, auth, onClose, onSaveSuccess }) {
   const tplImgUrl = C?.donorPosterTemplateUrl || getAppreciationTemplateDefaultUrl();
   const defaultPositions = {
     name: { x: 42.5, y: 52.6, fontSize: 21, color: "#0A2540", visible: true, label: "👤 Name (English)" },
@@ -38384,8 +38398,9 @@ export function DonorPosterVisualMapperModal({ C, auth, onClose, onSaveSuccess }
     setSaving(true);
     try {
       if (C) {
-        C.donorPosterPositions = positions;
-        await fbSave(C, auth?.idToken);
+        const newC = { ...C, donorPosterPositions: positions };
+        if (typeof setC === "function") setC(newC);
+        await fbSave(newC, auth?.idToken);
       }
       alert("✅ Appreciation poster field positions saved successfully!");
       if (onSaveSuccess) onSaveSuccess(positions);
@@ -38647,7 +38662,7 @@ export function DonorPosterVisualMapperModal({ C, auth, onClose, onSaveSuccess }
   );
 }
 
-function OfflineDonationSuccessCard({ donation, C, auth, onReload }) {
+function OfflineDonationSuccessCard({ donation, C, setC, auth, onReload }) {
   const [baseCertUrl, setBaseCertUrl] = useState(null);
   const [posterUrl, setPosterUrl] = useState(null);
   const [attachedPhotoUrl, setAttachedPhotoUrl] = useState(null);
@@ -38980,6 +38995,7 @@ function OfflineDonationSuccessCard({ donation, C, auth, onReload }) {
       {showMapperModal && (
         <DonorPosterVisualMapperModal
           C={C}
+          setC={setC}
           auth={auth}
           onClose={() => setShowMapperModal(false)}
           onSaveSuccess={() => {
@@ -39360,7 +39376,7 @@ const transliterateEnglishToGujaratiPhonetic = (text) => {
   return convertedTokens.join('');
 };
 
-function DonorListCard({ donorData, auth, onRefresh, C }) {
+function DonorListCard({ donorData, auth, onRefresh, C, setC }) {
   const [filterText, setFilterText] = useState("");
   const [copied, setCopied] = useState(false);
   const [copiedIndividualId, setCopiedIndividualId] = useState(null);
@@ -39881,7 +39897,7 @@ function DonorListCard({ donorData, auth, onRefresh, C }) {
               </button>
             </div>
 
-            <OfflineDonationSuccessCard donation={activePosterDonor} C={C} auth={auth} onReload={onRefresh} />
+            <OfflineDonationSuccessCard donation={activePosterDonor} C={C} setC={setC} auth={auth} onReload={onRefresh} />
 
             <div style={{marginTop:12,display:"flex",justifyContent:"flex-end"}}>
               <button
@@ -39899,6 +39915,7 @@ function DonorListCard({ donorData, auth, onRefresh, C }) {
       {showPosterMapperModal && (
         <DonorPosterVisualMapperModal
           C={C}
+          setC={setC}
           auth={auth}
           onClose={() => setShowPosterMapperModal(false)}
           onSaveSuccess={() => {
@@ -39951,8 +39968,9 @@ function DonorListCard({ donorData, auth, onRefresh, C }) {
                   const downloadUrl = await fbUploadPhoto(file, auth?.idToken);
 
                   if (C) {
-                    C.donorPosterTemplateUrl = downloadUrl;
-                    await fbSave(C, auth?.idToken);
+                    const newC = { ...C, donorPosterTemplateUrl: downloadUrl };
+                    if (typeof setC === "function") setC(newC);
+                    await fbSave(newC, auth?.idToken);
                   }
                   alert("✅ New appreciation poster template uploaded & saved successfully!");
                   setShowPosterTplUploadModal(false);
@@ -39980,8 +39998,10 @@ function DonorListCard({ donorData, auth, onRefresh, C }) {
                   onClick={async () => {
                     if (!confirm("Reset to the default Appreciation Certificate template?")) return;
                     try {
-                      delete C.donorPosterTemplateUrl;
-                      await fbSave(C, auth?.idToken);
+                      const newC = { ...C };
+                      delete newC.donorPosterTemplateUrl;
+                      if (typeof setC === "function") setC(newC);
+                      await fbSave(newC, auth?.idToken);
                       alert("✅ Reset to default template.");
                     } catch(e) {
                       alert("Error: " + e.message);
@@ -40386,7 +40406,7 @@ function DonorListCard({ donorData, auth, onRefresh, C }) {
   );
 }
 
-function DynamicChatbotFormCard({ formDef, destination = "donations", introTitle, introText, initialData, C, auth, activeUser, onSubmitSuccess }) {
+function DynamicChatbotFormCard({ formDef, destination = "donations", introTitle, introText, initialData, C, setC, auth, activeUser, onSubmitSuccess }) {
   const [nameGu, setNameGu] = useState(initialData?.nameGu || "");
   const [formData, setFormData] = useState(() => {
     const init = {};
@@ -40498,7 +40518,7 @@ function DynamicChatbotFormCard({ formDef, destination = "donations", introTitle
 
   if (submittedResult) {
     if (submittedResult.type === "donation") {
-      return <OfflineDonationSuccessCard donation={submittedResult.data} C={C} />;
+      return <OfflineDonationSuccessCard donation={submittedResult.data} C={C} setC={setC} />;
     }
     return (
       <div style={{background:"#F0FDF4",border:"1.5px solid #86EFAC",borderRadius:10,padding:14,marginTop:6,boxShadow:"0 2px 8px rgba(34,197,94,0.15)"}}>
@@ -42441,6 +42461,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
                               defaultEventCode: "EDU26"
                             }}
                             C={C}
+                            setC={setC}
                             auth={auth}
                             activeUser={activeUser}
                             onSubmitSuccess={(record) => {
@@ -42513,7 +42534,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
 
                         {/* If Message has Offline Donation Success Confirmation */}
                         {m.type === "offline_donation_success" && m.cardData?.donation && (
-                          <OfflineDonationSuccessCard donation={m.cardData.donation} C={C} />
+                          <OfflineDonationSuccessCard donation={m.cardData.donation} C={C} setC={setC} />
                         )}
 
                         {/* If Message has Donation Summary Card */}
@@ -42523,7 +42544,7 @@ function CommunityChatbot({ C, auth, onShowLogin }) {
 
                         {/* If Message has Donor List Card */}
                         {m.type === "donor_list_card" && m.cardData && (
-                          <DonorListCard donorData={m.cardData} auth={auth} onRefresh={()=>handleSendMessage("/donerlist")} />
+                          <DonorListCard donorData={m.cardData} auth={auth} onRefresh={()=>handleSendMessage("/donerlist")} C={C} setC={setC} />
                         )}
                       </div>
                     </div>
