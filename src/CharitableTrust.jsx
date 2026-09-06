@@ -5305,6 +5305,10 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                   // Wait for the browser to paint the newly appended element
                   await new Promise(r => setTimeout(r, 50));
                   
+                  const oldScrollY = window.scrollY;
+                  const oldScrollX = window.scrollX;
+                  window.scrollTo(0, 0);
+                  
                   try {
                       const canvas = await html2canvas(div, { 
                           backgroundColor: null, 
@@ -5315,6 +5319,9 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                           y: 0,
                           useCORS: true
                       });
+                      
+                      // Restore scroll immediately after capture
+                      window.scrollTo(oldScrollX, oldScrollY);
                       
                       const targetPage = Math.floor(yPx / targetH) + 1;
                       while (doc.getNumberOfPages() < targetPage) {
