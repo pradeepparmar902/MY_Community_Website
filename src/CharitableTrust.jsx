@@ -5285,7 +5285,7 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                   const blockW = pos.w ? (parseFloat(pos.w) / 100) * targetW : (300 * (targetW / 842));
                   
                   const div = document.createElement("div");
-                  div.style.position = "fixed"; // Use fixed instead of absolute to prevent window scroll from creating a huge blank offset!
+                  div.style.position = "absolute"; // Must be absolute so it can grow taller than the viewport without getting clipped!
                   div.style.top = "0px";
                   div.style.left = "0px";
                   div.style.zIndex = "-1000";
@@ -5311,6 +5311,8 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                           scale: 2,
                           scrollY: 0,
                           scrollX: 0,
+                          x: 0,
+                          y: 0,
                           useCORS: true
                       });
                       
