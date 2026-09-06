@@ -5305,23 +5305,18 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                   // Wait for the browser to paint the newly appended element
                   await new Promise(r => setTimeout(r, 50));
                   
-                  const oldScrollY = window.scrollY;
-                  const oldScrollX = window.scrollX;
-                  window.scrollTo(0, 0);
+                  // Fix for html2canvas scroll offset bug:
+                  // Position the element EXACTLY at the current scroll offset so html2canvas captures it at y=0!
+                  div.style.top = window.scrollY + "px";
                   
                   try {
                       const canvas = await html2canvas(div, { 
                           backgroundColor: null, 
                           scale: 2,
-                          scrollY: 0,
-                          scrollX: 0,
-                          x: 0,
-                          y: 0,
+                          scrollY: window.scrollY,
+                          scrollX: window.scrollX,
                           useCORS: true
                       });
-                      
-                      // Restore scroll immediately after capture
-                      window.scrollTo(oldScrollX, oldScrollY);
                       
                       const targetPage = Math.floor(yPx / targetH) + 1;
                       while (doc.getNumberOfPages() < targetPage) {
@@ -38448,6 +38443,7 @@ export function DonorPosterVisualMapperModal({ C, auth, onClose, onSaveSuccess }
                 position:"relative",
                 width:"100%",
                 maxWidth:420,
+                minHeight: 400, // Ensure drag area is visible even if image fails to load
                 borderRadius:10,
                 overflow:"hidden",
                 border:"2px dashed #93C5FD",
@@ -38460,7 +38456,8 @@ export function DonorPosterVisualMapperModal({ C, auth, onClose, onSaveSuccess }
               <img 
                 src={tplImgUrl} 
                 alt="Appreciation Poster Template" 
-                style={{width:"100%",display:"block",pointerEvents:"none"}} 
+                style={{width:"100%",height:"100%",objectFit:"contain",display:"block",pointerEvents:"none"}} 
+                onError={(e) => { e.target.style.display = 'none'; }}
               />
 
               {/* Draggable Field Tags */}
@@ -39945,6 +39942,10 @@ function DonorListCard({ donorData, auth, onRefresh, C }) {
               onChange={async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
+                if (!file.type.startsWith("image/")) {
+                  alert("Please upload a valid image file (JPG or PNG). PDFs are not supported for poster templates.");
+                  return;
+                }
                 setUploadingPosterTpl(true);
                 try {
                   const downloadUrl = await fbUploadPhoto(file, auth?.idToken);
