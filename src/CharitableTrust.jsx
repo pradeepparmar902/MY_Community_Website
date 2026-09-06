@@ -38006,7 +38006,7 @@ export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositi
           ctx.save();
           let fSize = Number(pos.name.fontSize) || 21;
           if (dName.length > 28) fSize = Math.max(15, fSize - 4);
-          const scaledFSize = fSize * (targetH / 600); // Scale relative to default ~600px preview height
+          const scaledFSize = fSize * (targetH / 600);
           ctx.font = `bold ${scaledFSize}px "Playfair Display", Georgia, serif`;
           ctx.textAlign = "center";
           const px = (pos.name.x / 100) * targetW;
@@ -38051,7 +38051,7 @@ export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositi
         // 3. Donation Amount on golden INR banner
         if (pos.amount.visible !== false) {
           const rawAmt = donation.amount !== undefined ? donation.amount : 0;
-          const amtStr = `â‚¹ ${Number(rawAmt).toLocaleString("en-IN")}/-`;
+          const amtStr = `₹ ${Number(rawAmt).toLocaleString("en-IN")}/-`;
           ctx.save();
           const fSizeAmt = Number(pos.amount.fontSize) || 23;
           const scaledFSizeAmt = fSizeAmt * (targetH / 600);
@@ -38129,8 +38129,6 @@ export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositi
     img.src = activeTpl;
   });
 };
-
-// â”€â”€ Canvas-based Certificate + Ceremony Photo Merger â”€â”€
 export const generateMergedDonorPosterCanvas = (certificateDataUrl, photoDataUrl, layout = "side-by-side", donation = {}) => {
   return new Promise((resolve, reject) => {
     const certImg = new Image();
