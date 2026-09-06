@@ -5285,7 +5285,7 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                   const blockW = pos.w ? (parseFloat(pos.w) / 100) * targetW : (300 * (targetW / 842));
                   
                   const div = document.createElement("div");
-                  div.style.position = "absolute";
+                  div.style.position = "fixed"; // Use fixed instead of absolute to prevent window scroll from creating a huge blank offset!
                   div.style.top = "0px";
                   div.style.left = "0px";
                   div.style.zIndex = "-1000";
@@ -5306,7 +5306,13 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
                   await new Promise(r => setTimeout(r, 50));
                   
                   try {
-                      const canvas = await html2canvas(div, { backgroundColor: null, scale: 2 });
+                      const canvas = await html2canvas(div, { 
+                          backgroundColor: null, 
+                          scale: 2,
+                          scrollY: 0,
+                          scrollX: 0,
+                          useCORS: true
+                      });
                       
                       const targetPage = Math.floor(yPx / targetH) + 1;
                       while (doc.getNumberOfPages() < targetPage) {
