@@ -40301,12 +40301,8 @@ export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositi
           const maxRightGu = 800;
           const safeWidthGu = maxRightGu - minLeftGu; // 630px
 
-          // ALWAYS center Gujarati name within the safe zone — do NOT trust stored x%
-          // because ctx.measureText() may use a fallback font (Gujarati not loaded) giving
-          // a wrong measurement which causes pxGu to be mis-positioned.
-          // The safe center of [170, 800] is 485px.
-          const safeCenterX = (minLeftGu + maxRightGu) / 2; // 485px
-
+          // Use stored x and y positions from admin adjustment tool
+          let pxGu = (pos.nameGu.x / 100) * 994;
           // y: use stored y, but fall just below English name if not independently set
           let pyGu = customPositions?.nameGu?.y
             ? (pos.nameGu.y / 100) * 1024
@@ -40314,15 +40310,20 @@ export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositi
 
           // Auto-shrink font so text fits within the 630px safe width
           let mWidthGu = ctx.measureText(guDisplay).width;
-          // If font not loaded, measureText may under-report; assume max ~14px per char as safety
-          const estimatedWidth = Math.max(mWidthGu, guDisplay.length * 14);
-          let effectiveWidth = estimatedWidth;
+          // Conservative half-width: works even if Noto Sans Gujarati font is not loaded
+          // ~8px per char average ensures we don't let text spill out
+          const conservativeHalfW = Math.max(mWidthGu / 2, guDisplay.length * 8);
+          let effectiveWidth = conservativeHalfW * 2;
           while (effectiveWidth > safeWidthGu && fSizeGu > 11) {
             fSizeGu -= 0.5;
             ctx.font = `bold ${fSizeGu}px 'Noto Sans Gujarati', 'Shruti', 'Gujarati MT', sans-serif`;
             mWidthGu = ctx.measureText(guDisplay).width;
             effectiveWidth = Math.max(mWidthGu, guDisplay.length * (fSizeGu * 0.75));
           }
+
+          // Clamp center x so text doesn't exceed safe frame bounds
+          const halfW = Math.max(ctx.measureText(guDisplay).width / 2, guDisplay.length * 8);
+          pxGu = Math.max(minLeftGu + halfW, Math.min(maxRightGu - halfW, pxGu));
 
           // HARD CLIP: Physically prevent ANY pixel from being drawn outside the safe zone
           // This is the ultimate safety net regardless of font measurement accuracy
@@ -40333,10 +40334,10 @@ export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositi
           ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
           ctx.lineWidth = 2.5;
           ctx.lineJoin = "round";
-          ctx.strokeText(guDisplay, safeCenterX, pyGu);
+          ctx.strokeText(guDisplay, pxGu, pyGu);
 
           ctx.fillStyle = pos.nameGu.color || "#064E3B";
-          ctx.fillText(guDisplay, safeCenterX, pyGu);
+          ctx.fillText(guDisplay, pxGu, pyGu);
           ctx.restore();
         }
 
@@ -40829,7 +40830,7 @@ export function DonorPosterVisualMapperModal({ C, setC, auth, onClose, onSaveSuc
                 position:"relative",
                 width:"100%",
                 maxWidth:420,
-                minHeight: 400, // Ensure drag area is visible even if image fails to load
+                aspectRatio:"994/1024", // Match exact poster canvas dimensions — eliminates letterboxing
                 borderRadius:10,
                 overflow:"hidden",
                 border:"2px dashed #93C5FD",
@@ -40842,7 +40843,7 @@ export function DonorPosterVisualMapperModal({ C, setC, auth, onClose, onSaveSuc
               <img 
                 src={tplImgUrl} 
                 alt="Appreciation Poster Template" 
-                style={{width:"100%",height:"100%",objectFit:"contain",display:"block",pointerEvents:"none"}} 
+                style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"fill",display:"block",pointerEvents:"none"}} 
                 onError={(e) => { e.target.style.display = 'none'; }}
               />
 
