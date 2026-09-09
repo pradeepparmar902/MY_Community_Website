@@ -16204,7 +16204,12 @@ const cleanPhone = (num) => String(num || "").replace(/\D/g, "").slice(-10);
                           <th style={{padding:"14px 16px",textAlign:"left",whiteSpace:"nowrap",fontWeight:600}}>Admin Remarks</th>
                           <th style={{padding:"14px 16px",textAlign:"center",whiteSpace:"nowrap",fontWeight:600}}>Actions</th>
                           {Array.from(new Set(regs.flatMap(r => Object.keys(r))))
-                            .filter(k => !["id", "_submittedAt", "timestamp", "Status", "status", "Remarks", "remarks", "AdminRemarks", "Event Name", "Event", "eventName", "eventTitle", "eventId", "logHistory"].includes(k))
+                            .filter(k => {
+                              if (["id", "_submittedAt", "timestamp", "Status", "status", "Remarks", "remarks", "AdminRemarks", "Event Name", "Event", "eventName", "eventTitle", "eventId", "logHistory", "releasedDocs", "heldDocs", "inviteLetterReleased", "inviteLetterHold", "inviteLetterViewed", "inviteLetterDownloaded", "inviteViewDate", "inviteDownloadDate", "inviteReleased", "certReleased", "certReleaseDate"].includes(k)) return false;
+                              const sample = regs.find(r => r[k] !== undefined && r[k] !== null);
+                              if (sample && typeof sample[k] === 'object') return false;
+                              return true;
+                            })
                             .map(k => (
                             <th key={k} style={{padding:"14px 16px",textAlign:"left",whiteSpace:"nowrap",fontWeight:600}}>{k}</th>
                           ))}
@@ -16214,7 +16219,12 @@ const cleanPhone = (num) => String(num || "").replace(/\D/g, "").slice(-10);
                         {filteredRegs.map((r, i) => {
                           const sc = getStatusColor(r.Status || r.status || "Pending");
                           const rowKeys = Array.from(new Set(regs.flatMap(r => Object.keys(r))))
-                            .filter(k => !["id", "_submittedAt", "timestamp", "Status", "status", "Remarks", "remarks", "AdminRemarks", "Event Name", "Event", "eventName", "eventTitle", "eventId", "logHistory"].includes(k));
+                            .filter(k => {
+                              if (["id", "_submittedAt", "timestamp", "Status", "status", "Remarks", "remarks", "AdminRemarks", "Event Name", "Event", "eventName", "eventTitle", "eventId", "logHistory", "releasedDocs", "heldDocs", "inviteLetterReleased", "inviteLetterHold", "inviteLetterViewed", "inviteLetterDownloaded", "inviteViewDate", "inviteDownloadDate", "inviteReleased", "certReleased", "certReleaseDate"].includes(k)) return false;
+                              const sample = regs.find(r => r[k] !== undefined && r[k] !== null);
+                              if (sample && typeof sample[k] === 'object') return false;
+                              return true;
+                            });
                           
                           return (
                             <tr key={r.id || i} style={{borderBottom:"1px solid var(--ww)",background:i%2===0?"white":"#FAFAFA"}}>
@@ -16247,7 +16257,8 @@ const cleanPhone = (num) => String(num || "").replace(/\D/g, "").slice(-10);
                                 )}
                               </td>
                               {rowKeys.map(k => {
-                                const val = r[k] || "-";
+                                const rawVal = r[k];
+                                const val = (rawVal === undefined || rawVal === null) ? "-" : (typeof rawVal === 'object' ? JSON.stringify(rawVal) : rawVal);
                                 const isLink = typeof val === 'string' && val.startsWith('http');
                                 return (
                                   <td key={k} style={{padding:"14px 16px",color:"var(--mu)"}}>
@@ -16261,7 +16272,7 @@ const cleanPhone = (num) => String(num || "").replace(/\D/g, "").slice(-10);
                                       </button>
                                     ) : (
                                       <div style={{minWidth:150,maxWidth:500,maxHeight:80,overflow:"auto",resize:"horizontal",whiteSpace:"normal",wordBreak:"break-word",paddingRight:4,paddingBottom:4}}>
-                                        {val}
+                                        {String(val)}
                                       </div>
                                     )}
                                   </td>
