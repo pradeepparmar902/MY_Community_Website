@@ -34614,7 +34614,7 @@ This cannot be undone.`)) return;
 
   const handleDeleteGlobalGuest = async (g) => {
     if (!window.confirm(`Are you sure you want to delete "${g["Full Name"]}" from the Special Guests Directory?`)) return;
-    setRegs(prev => prev.filter(x => x.id !== g.id));
+    setRegs(prev => prev.map(x => x.id === g.id ? { ...x, isGlobalGuest: false, deletedGuest: true } : x));
     try {
       await fbUpdateRegistration(g.id, { isGlobalGuest: false, deletedGuest: true }, auth?.idToken);
       alert("✅ Contact removed from directory successfully.");
@@ -34630,7 +34630,7 @@ This cannot be undone.`)) return;
 
     setDeletingBulkContacts(true);
     // Optimistic UI update
-    setRegs(prev => prev.filter(x => !selectedDirectoryGuestIds.includes(x.id)));
+    setRegs(prev => prev.map(x => selectedDirectoryGuestIds.includes(x.id) ? { ...x, isGlobalGuest: false, deletedGuest: true } : x));
 
     try {
       const promises = selectedDirectoryGuestIds.map(id =>
