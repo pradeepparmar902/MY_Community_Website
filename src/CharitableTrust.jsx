@@ -40226,8 +40226,18 @@ export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositi
     const ctx = canvas.getContext("2d");
 
     const img = new Image();
-    img.onload = () => {
+    img.onload = async () => {
       if (!objectUrl.startsWith('data:')) URL.revokeObjectURL(objectUrl);
+      // Pre-load fonts BEFORE any text drawing so measureText() returns accurate widths
+      try {
+        if (typeof document !== 'undefined' && document.fonts) {
+          await Promise.all([
+            document.fonts.load("bold 21px 'Noto Sans Gujarati'"),
+            document.fonts.load("bold 18px 'Noto Sans Gujarati'"),
+            document.fonts.load("bold 21px 'Playfair Display'"),
+          ]);
+        }
+      } catch(fe) { /* ignore font-loading errors, continue with fallback */ }
       try {
         ctx.drawImage(img, 0, 0, 994, 1024);
         
@@ -40290,10 +40300,10 @@ export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositi
 
           const guDisplay = dNameGu.startsWith("(") ? dNameGu : `(${dNameGu})`;
 
-          // Inner gold frame safe bounds: [165px, 825px]
-          const minLeftGu = 165;
-          const maxRightGu = 825;
-          const maxGuWidth = 630;
+          // Inner gold frame safe bounds: tightened for Gujarati script safety
+          const minLeftGu = 170;
+          const maxRightGu = 800;
+          const maxGuWidth = 600;
 
           // Auto-shrink font if Gujarati text is too wide for the inner frame
           let mWidthGu = ctx.measureText(guDisplay).width;
