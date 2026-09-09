@@ -7963,8 +7963,8 @@ function BackupRestore({ C, setC, auth, regs }) {
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      // Fetch all dynamic collections
-      const registrations = (regs && regs.length > 0) ? regs : (auth?.idToken ? await fbFetchRegistrations(auth.idToken).catch(()=>[]) : []);
+      const rawRegs = window.__MMP_ALL_REGS_RAW__;
+      const registrations = (regs && regs.length > 0) ? regs : ((rawRegs && rawRegs.length > 0) ? rawRegs : (auth?.idToken ? await fbFetchRegistrations(auth.idToken).catch(()=>[]) : []));
       const donations = auth?.idToken ? await fbFetchDonations(auth.idToken).catch(()=>[]) : [];
       const volunteers = auth?.idToken ? await fbFetchVolunteers(auth.idToken).catch(()=>[]) : [];
       
@@ -8827,7 +8827,7 @@ function Admin({ C, setC, setPage, auth, onLogout, onShowLogin }) {
           {tab==="chatbotaccess" && <ChatbotAccessManager C={C} setC={setC} auth={auth}/>}
           {tab==="whatsappadmin" && <WhatsAppAdminManager C={C} setC={setC} auth={auth}/>}
           {tab==="access"    && hasAccess.includes("access") && <AdminAccess C={C} setC={setC} master={master} auth={auth}/>}
-          {tab==="backup"    && hasAccess.includes("backup") && <BackupRestore C={C} setC={setC} auth={auth} regs={regs}/>}
+          {tab==="backup"    && hasAccess.includes("backup") && <BackupRestore C={C} setC={setC} auth={auth} />}
           {tab==="profile"   && hasAccess.includes("profile") && <AdminProfile auth={auth} mob={mob} adminProfile={adminProfile} setAdminProfile={setAdminProfile}/>}
         
           <AdminManualSidePanel activeTab={tab} isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} master={master} C={C} setC={setC} auth={auth} /></div>
