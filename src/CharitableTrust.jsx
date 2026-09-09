@@ -40294,50 +40294,52 @@ export const generateDonorPosterCanvas = (donation, templateImgUrl, customPositi
           ctx.textAlign = "center";
           ctx.direction = "ltr";
 
-          // If Gujarati position was not independently customized, sit right below English line
-          let pxGu = customPositions?.nameGu?.x ? (pos.nameGu.x / 100) * 994 : (pos.name.x / 100) * 994;
-          let pyGu = customPositions?.nameGu?.y ? (pos.nameGu.y / 100) * 1024 : ((pos.name.y / 100) * 1024) + 24;
-
           const guDisplay = dNameGu.startsWith("(") ? dNameGu : `(${dNameGu})`;
 
-          // Inner gold frame safe bounds: tightened for Gujarati script safety
+          // Inner gold frame safe bounds: tightened for Gujarati script
           const minLeftGu = 170;
           const maxRightGu = 800;
-          const maxGuWidth = 600;
+          const safeWidthGu = maxRightGu - minLeftGu; // 630px
 
-          // Auto-shrink font if Gujarati text is too wide for the inner frame
+          // ALWAYS center Gujarati name within the safe zone — do NOT trust stored x%
+          // because ctx.measureText() may use a fallback font (Gujarati not loaded) giving
+          // a wrong measurement which causes pxGu to be mis-positioned.
+          // The safe center of [170, 800] is 485px.
+          const safeCenterX = (minLeftGu + maxRightGu) / 2; // 485px
+
+          // y: use stored y, but fall just below English name if not independently set
+          let pyGu = customPositions?.nameGu?.y
+            ? (pos.nameGu.y / 100) * 1024
+            : ((pos.name.y / 100) * 1024) + 24;
+
+          // Auto-shrink font so text fits within the 630px safe width
           let mWidthGu = ctx.measureText(guDisplay).width;
-          while (mWidthGu > maxGuWidth && fSizeGu > 11) {
+          // If font not loaded, measureText may under-report; assume max ~14px per char as safety
+          const estimatedWidth = Math.max(mWidthGu, guDisplay.length * 14);
+          let effectiveWidth = estimatedWidth;
+          while (effectiveWidth > safeWidthGu && fSizeGu > 11) {
             fSizeGu -= 0.5;
             ctx.font = `bold ${fSizeGu}px 'Noto Sans Gujarati', 'Shruti', 'Gujarati MT', sans-serif`;
             mWidthGu = ctx.measureText(guDisplay).width;
+            effectiveWidth = Math.max(mWidthGu, guDisplay.length * (fSizeGu * 0.75));
           }
 
-          // Strict Boundary clamp: Keep text completely within the inner decorative gold frame
-          let halfWGu = mWidthGu / 2;
-          if (pxGu + halfWGu > maxRightGu) {
-            pxGu = maxRightGu - halfWGu;
-          }
-          if (pxGu - halfWGu < minLeftGu) {
-            pxGu = minLeftGu + halfWGu;
-          }
-
-          // Extra safety: If right edge still exceeds maxRightGu, shrink font incrementally
-          while (pxGu + (ctx.measureText(guDisplay).width / 2) > maxRightGu && fSizeGu > 10) {
-            fSizeGu -= 0.5;
-            ctx.font = `bold ${fSizeGu}px 'Noto Sans Gujarati', 'Shruti', 'Gujarati MT', sans-serif`;
-            pxGu = maxRightGu - (ctx.measureText(guDisplay).width / 2);
-          }
+          // HARD CLIP: Physically prevent ANY pixel from being drawn outside the safe zone
+          // This is the ultimate safety net regardless of font measurement accuracy
+          ctx.beginPath();
+          ctx.rect(minLeftGu, pyGu - fSizeGu * 2, safeWidthGu, fSizeGu * 4);
+          ctx.clip();
 
           ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
           ctx.lineWidth = 2.5;
           ctx.lineJoin = "round";
-          ctx.strokeText(guDisplay, pxGu, pyGu);
+          ctx.strokeText(guDisplay, safeCenterX, pyGu);
 
           ctx.fillStyle = pos.nameGu.color || "#064E3B";
-          ctx.fillText(guDisplay, pxGu, pyGu);
+          ctx.fillText(guDisplay, safeCenterX, pyGu);
           ctx.restore();
         }
+
 
         // 3. Donation Amount on golden INR banner
         if (pos.amount.visible !== false) {
