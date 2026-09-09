@@ -34624,6 +34624,31 @@ This cannot be undone.`)) return;
     }
   };
 
+  const handleBulkDeleteGlobalGuests = async () => {
+    if (selectedDirectoryGuestIds.length === 0) return;
+    if (!window.confirm(`Are you sure you want to permanently delete ${selectedDirectoryGuestIds.length} selected contacts from the Directory?`)) return;
+
+    setDeletingBulkContacts(true);
+    // Optimistic UI update
+    setRegs(prev => prev.filter(x => !selectedDirectoryGuestIds.includes(x.id)));
+
+    try {
+      const promises = selectedDirectoryGuestIds.map(id =>
+        fbUpdateRegistration(id, { isGlobalGuest: false, deletedGuest: true }, auth?.idToken).catch(err => {
+          console.warn(`Failed to delete guest ${id}`, err);
+          return null;
+        })
+      );
+      await Promise.all(promises);
+      alert(`✅ ${selectedDirectoryGuestIds.length} contacts removed from directory successfully.`);
+      setSelectedDirectoryGuestIds([]);
+      fetchRegs();
+    } catch (err) {
+      alert("Notice: Some contacts might only be removed locally. " + err.message);
+    }
+    setDeletingBulkContacts(false);
+  };
+
   const handleSaveMapping = async (e) => {
     e.preventDefault();
     if (!selectedEventId) return;
@@ -35622,6 +35647,15 @@ This cannot be undone.`)) return;
                       style={{padding:"4px 10px",background:"#2563EB",color:"white",border:"none",borderRadius:6,fontSize:".74rem",fontWeight:800,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}
                     >
                       <span>✓</span> {applyingBulkGroup ? "Assigning..." : "Apply"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deletingBulkContacts}
+                      onClick={handleBulkDeleteGlobalGuests}
+                      style={{padding:"4px 10px",background:"#FEF2F2",color:"#DC2626",border:"1px solid #FECACA",borderRadius:6,fontSize:".74rem",fontWeight:800,cursor:deletingBulkContacts?"wait":"pointer",display:"flex",alignItems:"center",gap:4}}
+                      title="Permanently delete selected contacts"
+                    >
+                      <span>🗑️</span> {deletingBulkContacts ? "Deleting..." : "Delete Selected"}
                     </button>
                     <button
                       type="button"
