@@ -7993,9 +7993,11 @@ function BackupRestore({ C, setC, auth, regs }) {
   };
   
   const [isZipping, setIsZipping] = useState(false);
+  const [zipProgress, setZipProgress] = useState("");
   
   const handleOfflineZipExport = async () => {
     setIsZipping(true);
+    setZipProgress("Starting...");
     try {
       // 1. Fetch Registrations
       const rawRegs = window.__MMP_ALL_REGS_RAW__;
@@ -8003,6 +8005,7 @@ function BackupRestore({ C, setC, auth, regs }) {
       if (registrations.length === 0) {
           alert("No registrations found to backup.");
           setIsZipping(false);
+          setZipProgress("");
           return;
       }
       
@@ -8014,7 +8017,9 @@ function BackupRestore({ C, setC, auth, regs }) {
       let fileCounter = 1;
       
       // 2. Iterate and process
+      let processedCount = 0;
       for (const reg of registrations) {
+        setZipProgress(`Processing ${processedCount + 1} of ${registrations.length}...`);
         const rowData = { ...reg };
         
         // Find URLs (looking for firebasestorage URLs)
@@ -8029,11 +8034,11 @@ function BackupRestore({ C, setC, auth, regs }) {
               try {
                 let res;
                 try {
-                  res = await fetch(u, { signal: AbortSignal.timeout(5000) });
+                  res = await fetch(u, { signal: AbortSignal.timeout(3000) });
                   if (!res.ok) throw new Error("Direct fetch failed");
                 } catch (directErr) {
                   // Fallback to CORS proxy
-                  res = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(u), { signal: AbortSignal.timeout(10000) });
+                  res = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(u), { signal: AbortSignal.timeout(4000) });
                   if (!res.ok) throw new Error("Proxy fetch failed");
                 }
                 
@@ -8065,8 +8070,10 @@ function BackupRestore({ C, setC, auth, regs }) {
           }
         }
         excelData.push(rowData);
+        processedCount++;
       }
       
+      setZipProgress("Generating Excel & Zipping...");
       // 3. Create Excel
       const ws = XLSX.utils.json_to_sheet(excelData);
       
@@ -8105,6 +8112,7 @@ function BackupRestore({ C, setC, auth, regs }) {
       alert("Offline zip backup failed: " + err.message);
     } finally {
       setIsZipping(false);
+      setZipProgress("");
     }
   };
   
@@ -8207,7 +8215,7 @@ function BackupRestore({ C, setC, auth, regs }) {
           <h3 style={{fontSize:"1.2rem",color:"var(--dt)",marginBottom:8}}>Offline Archive (Excel + Files)</h3>
           <p style={{color:"var(--mu)",fontSize:"0.9rem",marginBottom:20,lineHeight:1.5,flex:1}}>Generate a ZIP folder containing an organized Excel sheet of all registrations, alongside a folder containing every downloaded student photo and PDF attachment.</p>
           <button onClick={handleOfflineZipExport} disabled={isZipping} className="bt" style={{width:"100%",padding:"12px",borderRadius:8,fontSize:"1rem",fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:8, opacity: isZipping ? 0.7 : 1, background:"#2E7D32", borderColor:"#2E7D32"}}>
-            {isZipping ? "Downloading Files & Zipping..." : "Download Offline ZIP"}
+            {isZipping ? (zipProgress || "Processing...") : "Download Offline ZIP"}
           </button>
         </div>
         
