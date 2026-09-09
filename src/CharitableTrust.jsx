@@ -7998,7 +7998,8 @@ function BackupRestore({ C, setC, auth, regs }) {
     setIsZipping(true);
     try {
       // 1. Fetch Registrations
-      const registrations = (regs && regs.length > 0) ? regs : (auth?.idToken ? await fbFetchRegistrations(auth.idToken).catch(()=>[]) : []);
+      const rawRegs = window.__MMP_ALL_REGS_RAW__;
+      const registrations = (regs && regs.length > 0) ? regs : ((rawRegs && rawRegs.length > 0) ? rawRegs : (auth?.idToken ? await fbFetchRegistrations(auth.idToken).catch(()=>[]) : []));
       if (registrations.length === 0) {
           alert("No registrations found to backup.");
           setIsZipping(false);
@@ -8026,14 +8027,13 @@ function BackupRestore({ C, setC, auth, regs }) {
             const localPaths = [];
             for (const u of urls) {
               try {
-                // Fetch the file with CORS proxy fallback
                 let res;
                 try {
-                  res = await fetch(u);
+                  res = await fetch(u, { signal: AbortSignal.timeout(5000) });
                   if (!res.ok) throw new Error("Direct fetch failed");
                 } catch (directErr) {
                   // Fallback to CORS proxy
-                  res = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(u));
+                  res = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(u), { signal: AbortSignal.timeout(10000) });
                   if (!res.ok) throw new Error("Proxy fetch failed");
                 }
                 
