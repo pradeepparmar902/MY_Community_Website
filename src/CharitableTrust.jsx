@@ -7955,7 +7955,7 @@ function AdminManualSidePanel({ activeTab, isOpen, onClose, master, C, setC, aut
     </div>
   );
 }// ── BACKUP AND RESTORE ───────────────────────────────────────────────────────
-function BackupRestore({ C, setC, auth }) {
+function BackupRestore({ C, setC, auth, regs }) {
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const fileRef = useRef(null);
@@ -7964,7 +7964,7 @@ function BackupRestore({ C, setC, auth }) {
     setIsExporting(true);
     try {
       // Fetch all dynamic collections
-      const registrations = auth?.idToken ? await fbFetchRegistrations(auth.idToken).catch(()=>[]) : [];
+      const registrations = (regs && regs.length > 0) ? regs : (auth?.idToken ? await fbFetchRegistrations(auth.idToken).catch(()=>[]) : []);
       const donations = auth?.idToken ? await fbFetchDonations(auth.idToken).catch(()=>[]) : [];
       const volunteers = auth?.idToken ? await fbFetchVolunteers(auth.idToken).catch(()=>[]) : [];
       
@@ -7998,7 +7998,7 @@ function BackupRestore({ C, setC, auth }) {
     setIsZipping(true);
     try {
       // 1. Fetch Registrations
-      const registrations = auth?.idToken ? await fbFetchRegistrations(auth.idToken).catch(()=>[]) : [];
+      const registrations = (regs && regs.length > 0) ? regs : (auth?.idToken ? await fbFetchRegistrations(auth.idToken).catch(()=>[]) : []);
       if (registrations.length === 0) {
           alert("No registrations found to backup.");
           setIsZipping(false);
@@ -8827,7 +8827,7 @@ function Admin({ C, setC, setPage, auth, onLogout, onShowLogin }) {
           {tab==="chatbotaccess" && <ChatbotAccessManager C={C} setC={setC} auth={auth}/>}
           {tab==="whatsappadmin" && <WhatsAppAdminManager C={C} setC={setC} auth={auth}/>}
           {tab==="access"    && hasAccess.includes("access") && <AdminAccess C={C} setC={setC} master={master} auth={auth}/>}
-          {tab==="backup"    && hasAccess.includes("backup") && <BackupRestore C={C} setC={setC} auth={auth}/>}
+          {tab==="backup"    && hasAccess.includes("backup") && <BackupRestore C={C} setC={setC} auth={auth} regs={regs}/>}
           {tab==="profile"   && hasAccess.includes("profile") && <AdminProfile auth={auth} mob={mob} adminProfile={adminProfile} setAdminProfile={setAdminProfile}/>}
         
           <AdminManualSidePanel activeTab={tab} isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} master={master} C={C} setC={setC} auth={auth} /></div>
