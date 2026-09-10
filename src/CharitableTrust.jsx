@@ -1,4 +1,4 @@
-﻿import { QRCodeCanvas } from "qrcode.react";
+import { QRCodeCanvas } from "qrcode.react";
 import { useState, useEffect, useRef, createContext, useContext, useMemo } from "react";
 
 export const OFFICIAL_VIBHAGS = [
@@ -29548,9 +29548,31 @@ function AdminRegistrations({ mob, C, setC, auth }) {
 
   const getRecordSection = (r) => {
     if (!r) return "Default";
-    // 1. Direct match on C.events
+    
     const rEvId = String(r.eventId || '').trim().toLowerCase();
     const rEvTitle = String(r.eventName || r.eventTitle || '').trim().toLowerCase();
+    const txn = String(r['Transaction ID'] || r.transactionId || '').toUpperCase();
+    const combined = `${rEvId} ${rEvTitle} ${String(r.program || '')} ${String(r.purpose || '')}`.toLowerCase();
+
+    // Force all Education related entries to match a single section name if possible
+    const isEdu = txn.startsWith('EDU') || txn.startsWith('VG-') || combined.includes('education') || combined.includes('felicitation') || combined.includes('vidya') || combined.includes('student') || Boolean(r['Stream / Class'] || r['Stream'] || r['% Obtained']);
+
+    if (isEdu) {
+       // Look for the actual section name used by the user's Education event
+       const eduEvent = (C.events || []).find(e => {
+         const t = String(e.title || '').toLowerCase();
+         const i = String(e.id || '').toLowerCase();
+         return t.includes('education') || t.includes('felicitation') || i.includes('edu');
+       });
+       if (eduEvent && eduEvent.section) return eduEvent.section;
+       
+       const eduSection = (C.eventSections || []).find(s => s.toLowerCase().includes('education') || s.toLowerCase().includes('felicitation')) || 
+                          (C.events || []).map(e => e.section).find(s => s && (s.toLowerCase().includes('education') || s.toLowerCase().includes('felicitation'))) || 
+                          "Education felicitation 2026";
+       return eduSection;
+    }
+
+    // 1. Direct match on C.events for non-education
     const ev = (C.events || []).find(e => {
       const eId = String(e.id || '').trim().toLowerCase();
       const eTitle = String(e.title || '').trim().toLowerCase();
@@ -29559,20 +29581,9 @@ function AdminRegistrations({ mob, C, setC, auth }) {
              (eTitle && (eTitle === rEvTitle || rEvTitle.includes(eTitle))) ||
              (eTitleGu && (eTitleGu === rEvTitle));
     });
+    
     if (ev && ev.section) return ev.section;
-
-    // 2. Smart fallback: if title or Txn ID belongs to Education Felicitation
-    const txn = String(r['Transaction ID'] || r.transactionId || '').toUpperCase();
-    const combined = `${rEvId} ${rEvTitle} ${String(r.program || '')} ${String(r.purpose || '')}`.toLowerCase();
-
-    if (txn.startsWith('EDU') || txn.startsWith('VG-') || combined.includes('education') || combined.includes('felicitation') || combined.includes('vidya') || combined.includes('student') || Boolean(r['Stream / Class'] || r['Stream'] || r['% Obtained'])) {
-      const eduSection = (C.eventSections || []).find(s => s.toLowerCase().includes('education')) || 
-                         (C.events || []).map(e => e.section).find(s => s && s.toLowerCase().includes('education')) || 
-                         "Education 2026";
-      return eduSection;
-    }
-
-    return ev?.section || "Default";
+    return "Default";
   };
 
   const activeRegsList = regs.filter(isPublicEventRegistration);
