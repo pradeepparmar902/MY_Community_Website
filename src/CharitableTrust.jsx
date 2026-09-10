@@ -29535,7 +29535,8 @@ function AdminRegistrations({ mob, C, setC, auth }) {
     // Check if event is internal-only or hidden from public website
     const ev = C.events?.find(e => e.id === r.eventId || e.title === r.eventTitle || e.title === r.eventName || e.titleGu === r.eventName);
     if (ev && (ev.isInternalOnly || ev.hideFromPublicWebsite || ev.isInternal || ev.isWorkspaceOnly || ev.section === "Internal Admin" || ev.tag === "Internal Admin")) {
-      return false;
+      const evTitle = String(ev.title || "").toLowerCase();
+      if (!(evTitle.includes("education") || evTitle.includes("felicitation"))) return false;
     }
 
     // Exclude special guest directory and workspace imports of directory contacts ONLY IF they are not tied to a specific event
