@@ -1,4 +1,4 @@
-import { QRCodeCanvas } from "qrcode.react";
+﻿import { QRCodeCanvas } from "qrcode.react";
 import { useState, useEffect, useRef, createContext, useContext, useMemo } from "react";
 
 export const OFFICIAL_VIBHAGS = [
@@ -10662,9 +10662,9 @@ function Donations({ mob, auth, C }) {
 
 
 function AdminMasterData({ C, setC, auth }) {
-  const [tables, setTables] = React.useState(C.masterTables || []);
-  const [editingTableId, setEditingTableId] = React.useState(null);
-  const [newTableName, setNewTableName] = React.useState('');
+  const [tables, setTables] = useState(C.masterTables || []);
+  const [editingTableId, setEditingTableId] = useState(null);
+  const [newTableName, setNewTableName] = useState('');
 
   const save = (newTables) => {
     setTables(newTables);
