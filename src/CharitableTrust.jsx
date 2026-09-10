@@ -4811,7 +4811,7 @@ export function buildUniversalPivotTable({
   if (targetData.length > 0 && targetData.some(r => r.eventId || r['Transaction ID'] || r.formId)) {
     if (normSec.includes("education")) {
       targetData = targetData.filter(r => {
-        if (r.isGlobalGuest === true || (r.formId === "global_guest_directory" && !r.eventId && !r.eventName && !r.targetTemplateId && (!Array.isArray(r.assignedDocTypes) || r.assignedDocTypes.length === 0))) return false;
+        if ((r.isGlobalGuest === true && !r.eventId && !r.eventName) || (r.formId === "global_guest_directory" && !r.eventId && !r.eventName && !r.targetTemplateId && (!Array.isArray(r.assignedDocTypes) || r.assignedDocTypes.length === 0))) return false;
         const txn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase();
         const ev = String(r.eventId || r.eventName || r.eventTitle || "").toLowerCase();
         return txn.startsWith("EDU") || txn.startsWith("VG-") || ev.includes("education") || Boolean(r['Stream / Class'] || r['% Obtained']);
@@ -4981,7 +4981,7 @@ export function evaluateUniversalPivotTag(rawTag, context = {}) {
   if (norm === 'total count' || norm === 'total_count' || norm === 'total registrations' || norm === 'total_students_count' || norm === 'education total count') {
     const eduRegs = pool.filter(r => {
       if (!r || r.isDeleted || r.deleted) return false;
-      if (r.isGlobalGuest === true || (r.formId === "global_guest_directory" && !r.eventId && !r.eventName && !r.targetTemplateId && (!Array.isArray(r.assignedDocTypes) || r.assignedDocTypes.length === 0))) return false;
+      if ((r.isGlobalGuest === true && !r.eventId && !r.eventName) || (r.formId === "global_guest_directory" && !r.eventId && !r.eventName && !r.targetTemplateId && (!Array.isArray(r.assignedDocTypes) || r.assignedDocTypes.length === 0))) return false;
       const txn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase();
       const ev = String(r.eventId || r.eventName || r.eventTitle || "").toLowerCase();
       return txn.startsWith("EDU") || txn.startsWith("VG-") || ev.includes("education") || Boolean(r['Stream / Class'] || r['% Obtained']);
@@ -18049,7 +18049,7 @@ export const getSubworkspaceContactsList = ({ eventId, subWorkspaceId = "invite"
     if (r.deleted === true || r.deleted === "true" || r.isDeleted === true || r.deletedGuest === true || r.isTrash === true || r.inTrash === true || r.status === "Deleted" || r.Status === "Deleted") return false;
 
     // Exclude the raw global directory master pool entry itself from being an event invitee
-    if (r.isGlobalGuest === true || (r.formId === "global_guest_directory" && !r.eventId && !r.eventName && !r.targetTemplateId && (!Array.isArray(r.assignedDocTypes) || r.assignedDocTypes.length === 0))) return false;
+    if ((r.isGlobalGuest === true && !r.eventId && !r.eventName) || (r.formId === "global_guest_directory" && !r.eventId && !r.eventName && !r.targetTemplateId && (!Array.isArray(r.assignedDocTypes) || r.assignedDocTypes.length === 0))) return false;
 
     // Donor Workspaces
     if (ev.isDonorWorkspace) {
@@ -25727,7 +25727,7 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
     }
     // Default Education 2026
     return (Array.isArray(liveRegs) ? liveRegs : []).filter(r => {
-      if (r.isGlobalGuest === true || (r.formId === "global_guest_directory" && !r.eventId && !r.eventName && !r.targetTemplateId && (!Array.isArray(r.assignedDocTypes) || r.assignedDocTypes.length === 0))) return false;
+      if ((r.isGlobalGuest === true && !r.eventId && !r.eventName) || (r.formId === "global_guest_directory" && !r.eventId && !r.eventName && !r.targetTemplateId && (!Array.isArray(r.assignedDocTypes) || r.assignedDocTypes.length === 0))) return false;
       const txn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase();
       const ev = String(r.eventId || r.eventName || r.eventTitle || "").toLowerCase();
       return txn.startsWith("EDU") || txn.startsWith("VG-") || ev.includes("education") || Boolean(r['Stream / Class'] || r['% Obtained']);
@@ -44321,7 +44321,7 @@ function CommunityChatbot({ C, setC, auth, onShowLogin }) {
       if (r.deleted === true || r.deleted === "true" || r.isDeleted === true || r.isTrash === true || r.inTrash === true || r.status === "Deleted" || r.Status === "Deleted") {
         return false;
       }
-      if (r.isGlobalGuest === true || (r.formId === "global_guest_directory" && !r.eventId && !r.eventName && !r.targetTemplateId && (!Array.isArray(r.assignedDocTypes) || r.assignedDocTypes.length === 0))) {
+      if ((r.isGlobalGuest === true && !r.eventId && !r.eventName) || (r.formId === "global_guest_directory" && !r.eventId && !r.eventName && !r.targetTemplateId && (!Array.isArray(r.assignedDocTypes) || r.assignedDocTypes.length === 0))) {
         return false;
       }
       return true;
@@ -44348,7 +44348,7 @@ function CommunityChatbot({ C, setC, auth, onShowLogin }) {
     return regsList.filter(r => {
       if (!r) return false;
       if (r.deleted === true || r.isDeleted === true || r.Status === "Deleted" || r.status === "Deleted") return false;
-      if (r.isGlobalGuest === true || (r.formId === "global_guest_directory" && !r.eventId && !r.eventName && !r.targetTemplateId && (!Array.isArray(r.assignedDocTypes) || r.assignedDocTypes.length === 0))) return false;
+      if ((r.isGlobalGuest === true && !r.eventId && !r.eventName) || (r.formId === "global_guest_directory" && !r.eventId && !r.eventName && !r.targetTemplateId && (!Array.isArray(r.assignedDocTypes) || r.assignedDocTypes.length === 0))) return false;
 
       const rEvId = String(r.eventId || '').toLowerCase().trim();
       const rEvName = String(r.eventName || r.eventTitle || r.program || r.purpose || r.title || '').toLowerCase().trim();
