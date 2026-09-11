@@ -632,6 +632,15 @@ const fbUpdateContact = async (docId, newData, idToken) => {
   return true;
 };
 
+const fbDeleteContact = async (docId, idToken) => {
+  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/contacts/${docId}`;
+  const headers = {};
+  if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
+  const res = await fetch(REG_URL, { method: "DELETE", headers });
+  if (!res.ok) throw new Error("Delete failed");
+  return true;
+};
+
 const fbSubmitRegistration = async (registrationData, idToken) => {
   const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/registrations`;
   const headers = { "Content-Type": "application/json" };
@@ -34949,12 +34958,28 @@ This cannot be undone.`)) return;
 
   const handleDeleteGlobalGuest = async (g) => {
     if (!window.confirm(`Are you sure you want to delete "${g["Full Name"]}" from the Special Guests Directory?`)) return;
-    setRegs(prev => prev.map(x => x.id === g.id ? { ...x, isGlobalGuest: false, deletedGuest: true } : x));
+    
     try {
       if (g._collection === 'contacts') {
-        await fbUpdateContact(g.id, { isGlobalGuest: false, deletedGuest: true }, auth?.idToken);
+        setContactsList(prev => (prev || []).filter(x => x.id !== g.id));
+        await fbDeleteContact(g.id, auth?.idToken);
       } else {
-        await fbUpdateRegistration(g.id, { isGlobalGuest: false, deletedGuest: true }, auth?.idToken);
+        const updateData = { 
+          isGlobalGuest: false, 
+          isSpecialGuest: false, 
+          groups: [], 
+          Groups: [],
+          Group: "",
+          Category: "",
+          Designation: "",
+          designation: "",
+          "Designation / Role": "",
+          Role: "",
+          role: "",
+          formId: ""
+        };
+        setRegs(prev => prev.map(x => x.id === g.id ? { ...x, ...updateData } : x));
+        await fbUpdateRegistration(g.id, updateData, auth?.idToken);
       }
       alert("✅ Contact removed from directory successfully.");
       fetchRegs();
@@ -34968,16 +34993,32 @@ This cannot be undone.`)) return;
     if (!window.confirm(`Are you sure you want to permanently delete ${selectedDirectoryGuestIds.length} selected contacts from the Directory?`)) return;
 
     setDeletingBulkContacts(true);
-    // Optimistic UI update
-    setRegs(prev => prev.map(x => selectedDirectoryGuestIds.includes(x.id) ? { ...x, isGlobalGuest: false, deletedGuest: true } : x));
 
     try {
-      const promises = selectedDirectoryGuestIds.map(id =>
-        fbUpdateRegistration(id, { isGlobalGuest: false, deletedGuest: true }, auth?.idToken).catch(err => {
-          console.warn(`Failed to delete guest ${id}`, err);
-          return null;
-        })
-      );
+      const promises = selectedDirectoryGuestIds.map(id => {
+        const contact = globalGuests.find(g => g.id === id);
+        if (contact && contact._collection === 'contacts') {
+           setContactsList(prev => (prev || []).filter(x => x.id !== id));
+           return fbDeleteContact(id, auth?.idToken).catch(err => null);
+        } else {
+           const updateData = { 
+             isGlobalGuest: false, 
+             isSpecialGuest: false, 
+             groups: [], 
+             Groups: [],
+             Group: "",
+             Category: "",
+             Designation: "",
+             designation: "",
+             "Designation / Role": "",
+             Role: "",
+             role: "",
+             formId: ""
+           };
+           setRegs(prev => prev.map(x => x.id === id ? { ...x, ...updateData } : x));
+           return fbUpdateRegistration(id, updateData, auth?.idToken).catch(err => null);
+        }
+      });
       await Promise.all(promises);
       alert(`✅ ${selectedDirectoryGuestIds.length} contacts removed from directory successfully.`);
       setSelectedDirectoryGuestIds([]);
