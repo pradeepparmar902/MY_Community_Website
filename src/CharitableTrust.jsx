@@ -33814,6 +33814,7 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
     const isDirectoryContact = (r) => {
       if (!r || typeof r !== 'object') return false;
       if (r.deleted === true || r.deleted === "true" || r.isDeleted === true || r.isTrash === true || r.inTrash === true || r.status === "Deleted" || r.Status === "Deleted" || r.deletedGuest === true) return false;
+      if (r.removedFromDirectory === true) return false;
       
       // Explicit directory guest flags
       if (r.isGlobalGuest === true || r.formId === "global_guest_directory" || r.formId === "global_guest_directory_import") return true;
@@ -34976,7 +34977,8 @@ This cannot be undone.`)) return;
           "Designation / Role": "",
           Role: "",
           role: "",
-          formId: ""
+          formId: "",
+          removedFromDirectory: true
         };
         setRegs(prev => prev.map(x => x.id === g.id ? { ...x, ...updateData } : x));
         await fbUpdateRegistration(g.id, updateData, auth?.idToken);
@@ -35013,7 +35015,8 @@ This cannot be undone.`)) return;
              "Designation / Role": "",
              Role: "",
              role: "",
-             formId: ""
+             formId: "",
+             removedFromDirectory: true
            };
            setRegs(prev => prev.map(x => x.id === id ? { ...x, ...updateData } : x));
            return fbUpdateRegistration(id, updateData, auth?.idToken).catch(err => null);
