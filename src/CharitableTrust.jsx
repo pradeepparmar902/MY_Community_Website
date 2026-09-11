@@ -552,6 +552,86 @@ const generateNextTxnId = async (idToken, preferredPrefix = null, targetEventId 
   }
 };
 
+const fbFetchContacts = async (idToken) => {
+  const projectId = getFB().projectId;
+  const headers = {};
+  if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
+
+  let allDocs = [];
+  let pageToken = "";
+  let hasMore = true;
+
+  while (hasMore) {
+    let url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/contacts?pageSize=300${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`;
+    let res = await fetch(url, { headers });
+    if (res.status === 401 && idToken) {
+      res = await fetch(url);
+    }
+    if (!res.ok) {
+      if (allDocs.length > 0) {
+        console.warn(`Partial contacts fetch (${res.status}), returning collected documents`);
+        break;
+      }
+      return [];
+    }
+    const data = await res.json();
+    if (data.documents && data.documents.length > 0) {
+      allDocs = allDocs.concat(data.documents);
+    }
+    if (data.nextPageToken) {
+      pageToken = data.nextPageToken;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allDocs.map(doc => {
+    let d = doc.fields && doc.fields.data && doc.fields.data.stringValue ? JSON.parse(doc.fields.data.stringValue) : {};
+    d.id = doc.name.split('/').pop();
+    d._collection = 'contacts';
+    return d;
+  });
+};
+
+const fbSubmitContact = async (contactData, idToken) => {
+  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/contacts`;
+  const headers = { "Content-Type": "application/json" };
+  if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
+
+  const res = await fetch(REG_URL, {
+    method: "POST",
+    headers: headers,
+    body: JSON.stringify({
+      fields: {
+        data: { stringValue: JSON.stringify(contactData) },
+        submittedAt: { timestampValue: new Date().toISOString() }
+      }
+    })
+  });
+  if (!res.ok) {
+    const e = await res.json();
+    throw new Error(e?.error?.message || "Submission failed");
+  }
+  return true;
+};
+
+const fbUpdateContact = async (docId, newData, idToken) => {
+  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/contacts/${docId}?updateMask.fieldPaths=data`;
+  const headers = { "Content-Type": "application/json" };
+  if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
+  const res = await fetch(REG_URL, {
+    method: "PATCH",
+    headers: headers,
+    body: JSON.stringify({
+      fields: {
+        data: { stringValue: JSON.stringify(newData) }
+      }
+    })
+  });
+  if (!res.ok) throw new Error("Update failed");
+  return true;
+};
+
 const fbSubmitRegistration = async (registrationData, idToken) => {
   const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/registrations`;
   const headers = { "Content-Type": "application/json" };
@@ -33455,6 +33535,7 @@ const getContactGroups = (contact) => {
 };
 
 function AdminInviteLetters({ mob, C, setC, auth }) {
+  const [contactsList, setContactsList] = useState([]);
   const [regs, setRegs] = useState(() => {
     try {
       const cached = JSON.parse(localStorage.getItem("mmp_cached_registrations") || "[]");
@@ -33749,9 +33830,17 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       return false;
     };
 
-    // First pass: Explicit directory contacts
+    // First pass: Explicit directory contacts (from new contacts collection)
+    (contactsList || []).forEach(r => {
+      if (r) {
+        const key = getPersonKey(r);
+        map.set(key, { ...r, isGlobalGuest: true });
+      }
+    });
+
+    // Legacy pass: Old explicit directory contacts from registrations collection
     (regs || []).forEach(r => {
-      if (r && (r.isGlobalGuest === true || r.formId === "global_guest_directory")) {
+      if (r && (r.isGlobalGuest === true || r.formId === "global_guest_directory" || r.formId === "global_guest_directory_import")) {
         const key = getPersonKey(r);
         map.set(key, { ...r, isGlobalGuest: true });
       }
@@ -34183,9 +34272,14 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
 
   const fetchRegs = async () => {
     try {
-      const d = await fbFetchRegistrations(auth?.idToken);
+      const [d, c] = await Promise.all([
+        fbFetchRegistrations(auth?.idToken),
+        fbFetchContacts(auth?.idToken)
+      ]);
       const list = d || [];
+      const cList = c || [];
       setRegs(list);
+      setContactsList(cList);
       if (typeof window !== 'undefined') {
         window.__MMP_INVITE_REGS__ = list;
         window.__MMP_ALL_REGS_RAW__ = list;
@@ -34323,7 +34417,7 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
           formId: "global_guest_directory"
         };
 
-        await fbSubmitRegistration(newGlobalGuest, auth?.idToken);
+        await fbSubmitContact(newGlobalGuest, auth?.idToken);
         alert("✅ Global guest added to directory with assigned groups!");
         setGuestForm({ fullName: "", mobile: "", email: "", address: "", designation: "", vibhag: "", group: "CWC Member", groups: ["CWC Member"] });
         fetchRegs();
@@ -34624,7 +34718,7 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
             _submittedAt: Date.now() + successCount,
             formId: "global_guest_directory_import"
           };
-          await fbSubmitRegistration(newGlobalGuest, auth?.idToken);
+          await fbSubmitContact(newGlobalGuest, auth?.idToken);
           createdCount++;
         }
         successCount++;
@@ -34857,7 +34951,11 @@ This cannot be undone.`)) return;
     if (!window.confirm(`Are you sure you want to delete "${g["Full Name"]}" from the Special Guests Directory?`)) return;
     setRegs(prev => prev.map(x => x.id === g.id ? { ...x, isGlobalGuest: false, deletedGuest: true } : x));
     try {
-      await fbUpdateRegistration(g.id, { isGlobalGuest: false, deletedGuest: true }, auth?.idToken);
+      if (g._collection === 'contacts') {
+        await fbUpdateContact(g.id, { isGlobalGuest: false, deletedGuest: true }, auth?.idToken);
+      } else {
+        await fbUpdateRegistration(g.id, { isGlobalGuest: false, deletedGuest: true }, auth?.idToken);
+      }
       alert("✅ Contact removed from directory successfully.");
       fetchRegs();
     } catch(err) {
@@ -39283,6 +39381,8 @@ This cannot be undone.`)) return;
 }
 function AdminMeritList({ mob, C, auth }) {
   const [regs, setRegs] = useState([]);
+  const [contactsList, setContactsList] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [selectedEventId, setSelectedEventId] = useState("");
   
