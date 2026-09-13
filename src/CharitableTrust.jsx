@@ -5307,7 +5307,7 @@ export const generateCertificatePDF = async (certConfig, fieldsData, fallbackNam
             // Filter out internal non-renderable keys like _marginTop
             if (key.startsWith('_')) continue;
 
-            if (pos.visible) {
+            if (pos && pos.visible !== false) {
               const xPx = (parseFloat(pos.x) / 100) * targetW;
               const yPx = (parseFloat(pos.y) / 100) * targetH;
               let val = fieldsData[key] || "";
@@ -18329,8 +18329,8 @@ export const formatWhatsAppTemplateForContact = ({ tplString, reg, allRegs = [],
     .replace(/\{MOBILE\}/g, rawMobile || "")
     .replace(/\{CERTIFICATE_LINK\}/g, certUrl)
     .replace(/\{CERTIFICATE_URL\}/g, certUrl)
-    .replace(/\{INVITE_PDF_LINK\}/g, inviteUrl)
-    .replace(/\{INVITE_LINK\}/g, inviteUrl)
+    .replace(/\{INVITE_PDF_LINK\}/g, docUrl || inviteUrl)
+    .replace(/\{INVITE_LINK\}/g, docUrl || inviteUrl)
     .replace(/\{PASS_LINK\}/g, docUrl || inviteUrl)
     .replace(/\{PORTAL_URL\}/g, baseUrl)
     .replace(/\{WEBSITE_URL\}/g, baseUrl)
@@ -18428,6 +18428,8 @@ function ChatbotWhatsAppDispatcherCard({ dispatchData, C, allRegs }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [copied, setCopied] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
+  const [copyImageToClipboard, setCopyImageToClipboard] = useState(true);
+
 
   if (!Array.isArray(items) || items.length === 0) {
     return (
@@ -23163,13 +23165,13 @@ export const generateEventScopedStats = (reg, eventKeyOrObj, allRegs = [], vibha
 
     // Exclude guest passes, committee invites, and VIP passes
     const txn = String(r['Transaction ID'] || r.transactionId || "").toUpperCase();
-    if (txn.startsWith("GST-") || txn.startsWith("GUEST-") || txn.startsWith("VIP-") || txn.startsWith("INV-") || txn.startsWith("PASS-")) {
+    if (!isEdu && (txn.startsWith("GST-") || txn.startsWith("GUEST-") || txn.startsWith("VIP-") || txn.startsWith("INV-") || txn.startsWith("PASS-"))) {
       return false;
     }
 
     // Exclude entries that are clearly workspace committee members or lack any student data
     const hasStudentMarks = Boolean(r['Stream / Class'] || r['Stream'] || r['Course'] || r['% Obtained'] || r.percentage || r['Marks / Percentage'] || r['Standard'] || r.marksheet || r.studentName || r['Student Name'] || r['Candidate Name']);
-    if (r.isInviteMode || r.targetTemplateId || r.Designation || r.designation || r['Designation / Role']) {
+    if (!isEdu && (r.isInviteMode || r.targetTemplateId || r.Designation || r.designation || r['Designation / Role'])) {
       if (!hasStudentMarks) return false;
     }
 
@@ -23179,11 +23181,11 @@ export const generateEventScopedStats = (reg, eventKeyOrObj, allRegs = [], vibha
       return false;
     }
 
-    if (isEdu) {
-      const isEduTxn = txn.startsWith("VG-") || txn.startsWith("EDU");
-      const isEduForm = String(r.formId || '').toLowerCase().includes('edu') || String(r.formId || '').toLowerCase().includes('vidya');
-      const evName = String(r.eventName || r.eventTitle || r.eventId || "").toLowerCase();
-      const isRealEduStudent = isEduTxn || isEduForm || (hasStudentMarks && (evName.includes("education") || evName.includes("felicitation") || evName.includes("2026") || evName.includes("vidya") || evName === "" || evName === "unknown event"));
+        if (isEdu) {
+      const rEvId = String(r.eventId || '').trim().toLowerCase();
+      const rEvTitle = String(r.eventName || r.eventTitle || '').trim().toLowerCase();
+      const combined = `${rEvId} ${rEvTitle} ${String(r.program || '')} ${String(r.purpose || '')}`.toLowerCase();
+      const isRealEduStudent = txn.startsWith('EDU') || txn.startsWith('VG-') || combined.includes('education') || combined.includes('felicitation') || combined.includes('vidya') || combined.includes('student') || Boolean(r['Stream / Class'] || r['Stream'] || r['% Obtained']);
       return isRealEduStudent;
     }
 
@@ -23569,9 +23571,9 @@ function BulkWhatsAppBroadcastModal({ event, recipients = [], allRegs = [], C, a
       .replace(/\{MOBILE\}/g, rMobile || "")
       .replace(/\{CERTIFICATE_LINK\}/g, certUrl)
       .replace(/\{CERTIFICATE_URL\}/g, certUrl)
-      .replace(/\{INVITE_PDF_LINK\}/g, inviteUrl)
-      .replace(/\{INVITE_LINK\}/g, inviteUrl)
-      .replace(/\{PASS_LINK\}/g, inviteUrl)
+      .replace(/\{INVITE_PDF_LINK\}/g, docUrl || inviteUrl)
+      .replace(/\{INVITE_LINK\}/g, docUrl || inviteUrl)
+      .replace(/\{PASS_LINK\}/g, docUrl || inviteUrl)
       .replace(/\{PORTAL_URL\}/g, baseUrl)
       .replace(/\{WEBSITE_URL\}/g, baseUrl)
       .replace(/\{WEBSITE_HOME\}/g, baseUrl)
@@ -28396,7 +28398,162 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
     </div>
   );
 }
-// ── WhatsApp Applicant Communication Modal ───────────────────────────────────────
+// ── WhatsApp Applicant Communication Modal ───────────────────────────────────────// Canvas-based image generator for clipboard copy
+export const generateCertificateImageBlob = async (ev, regData, sName, docType) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const isCert = docType === 'cert';
+      const customTpl = typeof docType === 'object' ? docType : (ev.pdfTemplates || []).find(t => t.id === docType || t.name?.toLowerCase() === docType?.toLowerCase());
+      
+      let targetBgUrl = customTpl ? customTpl.bgUrl : isCert ? (ev.certBgUrl || ev.bgUrl || ev.inviteBgUrl) : ev.inviteBgUrl;
+      if (!targetBgUrl && ev.inviteBgUrl) targetBgUrl = ev.inviteBgUrl;
+
+      if (!targetBgUrl) return resolve(null);
+
+      if (targetBgUrl.startsWith('asset://') || targetBgUrl.startsWith('media://')) {
+        const assetId = targetBgUrl.replace('asset://', '').replace('media://', '');
+        const realData = await fbGetAssetDoc(assetId);
+        if (realData) {
+          targetBgUrl = realData;
+        } else {
+          console.warn("Failed to hydrate asset:", assetId);
+        }
+      }
+
+      const img = new Image();
+      if (targetBgUrl.startsWith('http')) img.crossOrigin = "Anonymous";
+      
+      img.onload = async () => {
+        try {
+          const isLandscape = img.width > img.height;
+          const targetW = isLandscape ? 842 : 595;
+          const targetH = isLandscape ? 595 : 842;
+          
+          const canvas = document.createElement('canvas');
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, targetW, targetH);
+
+          const fontSize = customTpl ? (customTpl.fontSize || (isLandscape ? 26 : 16)) : isCert ? (ev.certFontSize || ev.fontSize || 26) : (ev.inviteFontSize || 16);
+          const fontColor = customTpl ? (customTpl.fontColor || "#000000") : isCert ? (ev.certFontColor || ev.fontColor || "#000000") : (ev.inviteFontColor || "#000000");
+
+          const m = customTpl ? (customTpl.map || customTpl.fieldMap || {}) : isCert ? (ev.certMap || ev.fieldMap || ev.inviteMap || {}) : (ev.inviteMap || {});
+          
+          // Sort to keep consistent rendering order
+          const sortedEntries = Object.entries(m).sort(([, posA], [, posB]) => (parseFloat(posA.y) || 0) - (parseFloat(posB.y) || 0));
+
+          for (const [key, pos] of sortedEntries) {
+            if (key.startsWith('_')) continue;
+            if (pos && pos.visible !== false) {
+              const xPx = (parseFloat(pos.x) / 100) * targetW;
+              const yPx = (parseFloat(pos.y) / 100) * targetH;
+              
+              const currentFontSize = pos.fontSize ? parseInt(pos.fontSize) : (fontSize || (isLandscape ? 26 : 16));
+              const currentFontColor = pos.fontColor || fontColor;
+
+              let val = regData[key] || "";
+              if (pos.isStatic || key.includes("Static_Text_")) {
+                val = pos.text || '';
+              } else if (key.startsWith("[TEXT] ")) {
+                val = key.replace("[TEXT] ", "");
+              } else if (!val && key.toLowerCase().includes("name")) {
+                val = sName;
+              }
+              
+              if (typeof val === 'string') {
+                val = val.replace(/\|/g, ' ').trim();
+                
+                // Variable substitutions (similar to PDF generation)
+                Object.keys(regData || {}).forEach(k => {
+                  try {
+                    const cleanVal = String(regData[k] || '').replace(/\|/g, ' ').trim();
+                    val = val.replace(new RegExp('\\{' + k + '\\}', 'gi'), cleanVal);
+                    const normalizedKey = k.replace(/[^a-zA-Z0-9]/g, '');
+                    if (normalizedKey && normalizedKey !== k) {
+                      val = val.replace(new RegExp('\\{' + normalizedKey + '\\}', 'gi'), cleanVal);
+                    }
+                  } catch(e) {}
+                });
+                val = val.replace(/\{(STUDENT_NAME|STUDENT|FULL_NAME|FULL NAME|NAME|INVITEE_NAME)\}/gi, sName);
+              }
+
+              // Use HTML2Canvas for rich text blocks (Static_Text_)
+              if (pos.isStatic || key.includes("Static_Text_")) {
+                const wPct = pos.w ? parseFloat(pos.w) : 84;
+                const blockW = Math.min(targetW - 40, (wPct / 100) * targetW);
+                const leftPct = parseFloat(pos.x) - (wPct / 2);
+                const renderX = Math.max(20, Math.min(targetW - blockW - 20, (leftPct / 100) * targetW));
+                
+                const div = document.createElement("div");
+                div.style.position = "absolute";
+                div.style.top = "0px";
+                div.style.left = "0px";
+                div.style.zIndex = "-1000";
+                div.style.width = blockW + "px";
+                div.style.fontSize = currentFontSize + "px";
+                div.style.color = currentFontColor;
+                div.style.textAlign = pos.align || "left";
+                div.style.fontFamily = "sans-serif";
+                div.style.whiteSpace = "pre-wrap";
+                div.style.lineHeight = "1.3";
+                
+                div.innerHTML = String(val).replace(/\*(.*?)\*/g, '<strong>$1</strong>');
+                document.body.appendChild(div);
+                
+                try {
+                  // Wait for the browser to paint the newly appended element
+                  await new Promise(r => setTimeout(r, 50));
+                  div.style.top = window.scrollY + "px";
+                  
+                  const subCanvas = await html2canvas(div, {
+                    backgroundColor: null,
+                    scale: 2,
+                    scrollY: window.scrollY,
+                    scrollX: window.scrollX,
+                    useCORS: true,
+                    logging: false
+                  });
+                  
+                  const renderedHeight = (subCanvas.height / subCanvas.width) * blockW;
+                  // If pos.h is specified, top is pos.y - (pos.h / 2). If not, compute from renderedHeight.
+                  const hPct = pos.h ? parseFloat(pos.h) : Math.min(60, (renderedHeight / targetH) * 100);
+                  const pageYPct = (parseFloat(pos.y)) - (hPct / 2);
+                  const renderY = Math.max(20, (pageYPct / 100) * targetH);
+                  
+                  ctx.drawImage(subCanvas, renderX, renderY, blockW, renderedHeight);
+                } catch(e) {
+                  console.error(e);
+                } finally {
+                  document.body.removeChild(div);
+                }
+              } else {
+                // Regular field rendering
+                ctx.font = `bold ${currentFontSize}px sans-serif`;
+                ctx.fillStyle = currentFontColor;
+                ctx.textBaseline = "middle";
+                ctx.textAlign = pos.align || ((parseFloat(pos.x) >= 35 && parseFloat(pos.x) <= 65) ? "center" : (parseFloat(pos.x) > 65 ? "right" : "left"));
+                ctx.fillText(String(val), xPx, yPx);
+              }
+            }
+          }
+
+          canvas.toBlob((blob) => {
+            resolve(blob);
+          }, 'image/png');
+        } catch(err) {
+          reject(err);
+        }
+      };
+      img.onerror = reject;
+      img.src = targetBgUrl;
+    } catch(err) {
+      reject(err);
+    }
+  });
+};
+
+// 💬 WhatsApp Applicant Communication Modal 💬
 function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, allRegs = [], recipientList = null, onSelectReg }) {
   if (!reg) return null;
 
@@ -28444,15 +28601,19 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
     ? eventObj.whatsAppTemplates
     : defaultWorkspaceTemplates;
 
-  const initialEventScope = reg?.targetEventId || reg?.activeDocTpl?.customTpl?.targetEventId || eventObj?.targetEventId || "education2026";
+  const initialEventScope = reg?.targetEventId || reg?.activeDocTpl?.customTpl?.targetEventId || eventObj?.targetEventId || eventObj?.id || eventObj?.title || C.events?.[0]?.id || C.events?.[0]?.title || "";
   const initialVibhagScope = reg?.vibhagScope === "all" ? "all" : (reg?.vibhag || reg?.['Vibhag'] || reg?.['Vibhag New'] || "auto");
   const [activeModalEvent, setActiveModalEvent] = useState(initialEventScope);
   const [activeModalVibhag, setActiveModalVibhag] = useState(initialVibhagScope);
 
+  const currentEventObj = (C.events || []).find(e => e.id === activeModalEvent || e.title === activeModalEvent) || eventObj || C.events?.[0] || {};
+
   const defaultTpl = workspaceTemplates.find(t => t.isDefault) || workspaceTemplates[0] || defaultWorkspaceTemplates[0];
   const [selectedTplId, setSelectedTplId] = useState(defaultTpl?.id || "tpl_student_pass");
+  const [selectedDocToCopy, setSelectedDocToCopy] = useState(reg.activeDocTpl?.id || (reg.isInviteMode ? 'invite' : 'cert'));
 
-  const formatTemplateString = (tplString, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks, rContactNameArg, eventScopeOverride, vibhagOverrideArg) => {
+
+  const formatTemplateString = (tplString, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks, rContactNameArg, eventScopeOverride, vibhagOverrideArg, docOverrideArg) => {
     const chosenScope = eventScopeOverride || activeModalEvent || "education2026";
     let chosenVibhag = vibhagOverrideArg || activeModalVibhag || "auto";
     if (chosenVibhag === 'auto') {
@@ -28462,7 +28623,8 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
     const baseUrl = `${C.whatsAppPortalUrl || "https://www.mmp-cwc.com/"}`.replace(/\/?$/, '');
     const certUrl = `${baseUrl}/?cert=${encodeURIComponent(rTxn || "")}`;
     const inviteUrl = `${baseUrl}/?invite=${encodeURIComponent(rTxn || "")}`;
-    const docUrl = reg.customDocId ? `${baseUrl}/?doc=${encodeURIComponent(reg.customDocId)}&pass=${encodeURIComponent(rTxn || "")}` : null;
+    const activeDocId = docOverrideArg !== undefined ? (docOverrideArg && docOverrideArg !== 'invite' && docOverrideArg !== 'cert' ? docOverrideArg : null) : (reg.customDocId || (selectedDocToCopy && selectedDocToCopy !== 'invite' && selectedDocToCopy !== 'cert' ? selectedDocToCopy : null));
+    const docUrl = activeDocId ? `${baseUrl}/?doc=${encodeURIComponent(activeDocId)}&pass=${encodeURIComponent(rTxn || "")}` : null;
     const portalName = C.trust?.name || "Mumbai Meghwal Panchayat & Vidya Gohil Trust";
 
     const evTitle = eventObj?.title || reg.eventName || reg.eventTitle || reg.eventId || "Event";
@@ -28567,8 +28729,8 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
       .replace(/\{RECEIPT_NO\}/g, reg["Receipt No"] || "")
       .replace(/\{CERTIFICATE_LINK\}/g, certUrl)
       .replace(/\{CERTIFICATE_URL\}/g, certUrl)
-      .replace(/\{INVITE_PDF_LINK\}/g, inviteUrl)
-      .replace(/\{INVITE_LINK\}/g, inviteUrl)
+      .replace(/\{INVITE_PDF_LINK\}/g, docUrl || inviteUrl)
+      .replace(/\{INVITE_LINK\}/g, docUrl || inviteUrl)
       .replace(/\{PASS_LINK\}/g, docUrl || inviteUrl)
       .replace(/\{PORTAL_URL\}/g, baseUrl)
       .replace(/\{WEBSITE_URL\}/g, baseUrl)
@@ -28693,7 +28855,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
     setSelectedTplId(tplId);
     const chosen = workspaceTemplates.find(t => t.id === tplId);
     if (chosen) {
-      setCustomMessage(formatTemplateString(chosen.text, rawName, recipientMobile, txnId, vibhag, stream, percentage, remarks, null, activeModalEvent, activeModalVibhag));
+      setCustomMessage(formatTemplateString(chosen.text, rawName, recipientMobile, txnId, vibhag, stream, percentage, remarks, null, activeModalEvent, activeModalVibhag, selectedDocToCopy));
     }
   };
 
@@ -28715,17 +28877,14 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
     setActiveModalEvent(newEvent);
 
     if (reg.isInviteMode) {
-      const activeDef = workspaceTemplates.find(t => t.isDefault) || workspaceTemplates[0];
-      const targetId = activeDef?.id || selectedTplId;
-      setSelectedTplId(targetId);
-      const chosen = workspaceTemplates.find(t => t.id === targetId) || activeDef;
-      if (chosen) {
-        setCustomMessage(formatTemplateString(chosen.text, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks, null, newEvent, newVibhag));
+      const activeDef = workspaceTemplates.find(t => t.id === selectedTplId) || workspaceTemplates.find(t => t.isDefault) || workspaceTemplates[0];
+      if (activeDef) {
+        setCustomMessage(formatTemplateString(activeDef.text, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks, null, newEvent, newVibhag, selectedDocToCopy));
       }
     } else {
       setCustomMessage(buildTemplateForStatus(freshStatus, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks));
     }
-  }, [reg, C.events]);
+  }, [reg, selectedTplId, selectedDocToCopy, workspaceTemplates, eventObj, defaultTpl, activeModalEvent, activeModalVibhag, C.events]);
 
   const [copied, setCopied] = useState(false);
   const [launchMode, setLaunchMode] = useState(() => localStorage.getItem("mmp_wa_launch_mode") || "web");
@@ -28738,6 +28897,8 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
 
   const [sendingApi, setSendingApi] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
+  const [copyImageToClipboard, setCopyImageToClipboard] = useState(true);
+
 
   const handleSendWhatsApp = async () => {
     const cleanPhone = String(recipientMobile).replace(/\D/g, '').slice(-10);
@@ -28803,7 +28964,40 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
       }
     }
 
-    try { navigator.clipboard.writeText(customMessage); } catch(e){}
+    if (copyImageToClipboard && navigator.clipboard && navigator.clipboard.write) {
+      try {
+        let eventObjToUse = currentEventObj || eventObj || C.events[0] || {};
+        const isCustomDoc = selectedDocToCopy !== 'invite' && selectedDocToCopy !== 'cert';
+        let customTpl = null;
+        if (isCustomDoc) {
+          for (const ev of (C.events || [])) {
+            const found = (ev.pdfTemplates || []).find(t => t.id === selectedDocToCopy);
+            if (found) {
+              customTpl = found;
+              eventObjToUse = ev;
+              break;
+            }
+          }
+        }
+        const targetType = customTpl || selectedDocToCopy;
+
+        const blobPromise = generateCertificateImageBlob(eventObjToUse, reg, rawName, targetType).then(blob => {
+          if (!blob) throw new Error("No blob generated (missing background)");
+          return blob;
+        });
+
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'image/png': blobPromise
+          })
+        ]);
+      } catch (imgErr) {
+        console.warn("Failed to copy image to clipboard", imgErr);
+        try { navigator.clipboard.writeText(customMessage); } catch(e){}
+      }
+    } else {
+      try { navigator.clipboard.writeText(customMessage); } catch(e){}
+    }
 
     const msgTypeName = reg.isInviteMode 
       ? "Official Invitation Pass" 
@@ -28921,7 +29115,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
               {/* Row 1: Choose Template & Reset Draft */}
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,width:"100%",flexWrap:"wrap"}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:240}}>
-                  <span style={{fontSize:".84rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>📝 Choose Template:</span>
+                  <span style={{fontSize:".84rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>📝 Message:</span>
                   <select
                     value={selectedTplId}
                     onChange={e => handleTemplateSelectChange(e.target.value)}
@@ -28943,6 +29137,39 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
                         {t.name} {t.isDefault ? "★ (Default)" : ""}
                       </option>
                     ))}
+                  </select>
+                </div>
+                
+                <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:240}}>
+                  <span style={{fontSize:".84rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>🖼️ Pass:</span>
+                  <select
+                    value={selectedDocToCopy}
+                    onChange={e => {
+                      const newVal = e.target.value;
+                      setSelectedDocToCopy(newVal);
+                      const activeTpl = workspaceTemplates.find(t => t.id === selectedTplId) || defaultTpl;
+                      if (activeTpl) {
+                        setCustomMessage(formatTemplateString(activeTpl.text, rawName, recipientMobile, txnId, vibhag, stream, percentage, remarks, null, activeModalEvent, activeModalVibhag, newVal));
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: "7px 12px",
+                      borderRadius: 6,
+                      border: "1.5px solid #15803D",
+                      fontSize: ".84rem",
+                      fontWeight: 700,
+                      color: "#14532D",
+                      background: "white",
+                      cursor: "pointer",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+                    }}
+                  >
+                    <option value="invite">{currentEventObj?.inviteName || currentEventObj?.inviteTitle || (Boolean(currentEventObj?.isDonorWorkspace || String(currentEventObj?.title || "").toLowerCase().includes("donor")) ? "Official Thank You Letter" : "Official Invite Letter")}</option>
+                    <option value="cert">{currentEventObj?.certName || currentEventObj?.certTitle || (Boolean(currentEventObj?.isDonorWorkspace || String(currentEventObj?.title || "").toLowerCase().includes("donor")) ? "Official 80G Receipt PDF" : "Certificate Pass")}</option>
+                    {(C.events || []).flatMap(ev => (ev.pdfTemplates || []).map(t => (
+                      <option key={t.id} value={t.id}>{t.name} (from {ev.title || ev.id})</option>
+                    )))}
                   </select>
                 </div>
 
@@ -29003,8 +29230,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
                     }}
                     title="Switch event registrations source"
                   >
-                    <option value="education2026">🎓 Education 2026</option>
-                    {(C.events || []).filter(evItem => evItem.id !== 'education2026' && !String(evItem.title || '').toLowerCase().includes('education')).map(evItem => (
+                    {(C.events || []).map(evItem => (
                       <option key={evItem.id || evItem.title} value={evItem.id || evItem.title}>
                         📌 {evItem.title || evItem.id}
                       </option>
@@ -29101,13 +29327,47 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
               <label style={{fontSize:".8rem",fontWeight:700,color:"#334155"}}>
                 Message Content (WhatsApp Formatted):
               </label>
-              <button
-                type="button"
-                onClick={handleCopy}
-                style={{background:"none",border:"none",color:copied?"#15803D":"#2563EB",fontSize:".75rem",fontWeight:700,cursor:"pointer"}}
-              >
-                {copied ? "✅ Copied to Clipboard!" : "📋 Copy Text"}
-              </button>
+              <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                <label style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",fontSize:".75rem",fontWeight:700,color:"#15803D"}}>
+                  <input 
+                    type="checkbox" 
+                    checked={copyImageToClipboard} 
+                    onChange={e => setCopyImageToClipboard(e.target.checked)} 
+                  />
+                  📎 Auto-Copy Doc Image:
+                </label>
+                {copyImageToClipboard && (
+                  <select
+                    value={selectedDocToCopy}
+                    onChange={e => setSelectedDocToCopy(e.target.value)}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: 4,
+                      border: "1px solid #86EFAC",
+                      fontSize: ".72rem",
+                      fontWeight: 700,
+                      color: "#166534",
+                      background: "#F0FDF4",
+                      cursor: "pointer",
+                      maxWidth: 160,
+                      textOverflow: "ellipsis"
+                    }}
+                  >
+                    <option value="invite">{currentEventObj?.inviteName || currentEventObj?.inviteTitle || (Boolean(currentEventObj?.isDonorWorkspace || String(currentEventObj?.title || "").toLowerCase().includes("donor")) ? "Official Thank You Letter" : "Official Invite Letter")}</option>
+                    <option value="cert">{currentEventObj?.certName || currentEventObj?.certTitle || (Boolean(currentEventObj?.isDonorWorkspace || String(currentEventObj?.title || "").toLowerCase().includes("donor")) ? "Official 80G Receipt PDF" : "Certificate Pass")}</option>
+                    {(C.events || []).flatMap(ev => (ev.pdfTemplates || []).map(t => (
+                      <option key={t.id} value={t.id}>{t.name} (from {ev.title || ev.id})</option>
+                    )))}
+                  </select>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  style={{background:"none",border:"none",color:copied?"#15803D":"#2563EB",fontSize:".75rem",fontWeight:700,cursor:"pointer",marginLeft:4}}
+                >
+                  {copied ? "✅ Copied Text!" : "📄 Copy Text"}
+                </button>
+              </div>
             </div>
             <textarea
               value={customMessage}
@@ -34981,7 +35241,10 @@ This cannot be undone.`)) return;
           removedFromDirectory: true
         };
         setRegs(prev => prev.map(x => x.id === g.id ? { ...x, ...updateData } : x));
-        await fbUpdateRegistration(g.id, updateData, auth?.idToken);
+        const cleanCopy = { ...g, ...updateData };
+        delete cleanCopy.id;
+        delete cleanCopy._submittedAt;
+        await fbUpdateRegistration(g.id, cleanCopy, auth?.idToken);
       }
       alert("✅ Contact removed from directory successfully.");
       fetchRegs();
@@ -35019,7 +35282,10 @@ This cannot be undone.`)) return;
              removedFromDirectory: true
            };
            setRegs(prev => prev.map(x => x.id === id ? { ...x, ...updateData } : x));
-           return fbUpdateRegistration(id, updateData, auth?.idToken).catch(err => null);
+           const cleanCopy = { ...contact, ...updateData };
+           delete cleanCopy.id;
+           delete cleanCopy._submittedAt;
+           return fbUpdateRegistration(id, cleanCopy, auth?.idToken).catch(err => null);
         }
       });
       await Promise.all(promises);
@@ -46085,13 +46351,25 @@ function DirectInvitePassView({ C, auth }) {
             month: "2026",
             location: "Mumbai, Maharashtra"
           };
-          const sName = String(matched['Full Name'] || matched['Submitted By'] || matched['Participant Name'] || matched.name || 'Applicant').replace(/\|/g, ' ').trim();
+          const sName = String(matched['Participant Name'] || matched['Full Name'] || matched['Student Name'] || matched['Candidate Name'] || matched['Name'] || matched.name || matched['Submitted By'] || 'Participant').replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
           
-          const customTpl = customDocId ? (ev.pdfTemplates || []).find(t => t.id === customDocId || t.name?.toLowerCase() === customDocId?.toLowerCase()) : null;
+          let customTpl = null;
+          if (customDocId) {
+            customTpl = (ev.pdfTemplates || []).find(t => t.id === customDocId || t.name?.toLowerCase() === customDocId?.toLowerCase());
+            if (!customTpl && C.events) {
+              for (const tempEv of C.events) {
+                const found = (tempEv.pdfTemplates || []).find(t => t.id === customDocId || t.name?.toLowerCase() === customDocId?.toLowerCase());
+                if (found) {
+                  customTpl = found;
+                  break;
+                }
+              }
+            }
+          }
           // Generate on-screen visual image (Custom PDF Document, Certificate or Invite Letter)
           let targetBgUrl = customTpl ? customTpl.bgUrl : isCert ? (ev.certBgUrl || ev.bgUrl || ev.inviteBgUrl) : ev.inviteBgUrl;
-          if (targetBgUrl && targetBgUrl.startsWith('asset://')) {
-            const assetId = targetBgUrl.replace('asset://', '');
+          if (targetBgUrl && (targetBgUrl.startsWith('asset://') || targetBgUrl.startsWith('media://'))) {
+            const assetId = targetBgUrl.replace('asset://', '').replace('media://', '');
             const realAsset = await fbGetAssetDoc(assetId);
             if (realAsset) targetBgUrl = realAsset;
           }
@@ -46099,32 +46377,125 @@ function DirectInvitePassView({ C, auth }) {
             try {
               const img = new Image();
               img.crossOrigin = "Anonymous";
-              img.onload = () => {
-                const canvas = document.createElement("canvas");
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext("2d");
-                ctx.drawImage(img, 0, 0);
+              img.onload = async () => {
+                try {
+                  const isLandscape = img.width > img.height;
+                  const targetW = isLandscape ? 842 : 595;
+                  const targetH = isLandscape ? 595 : 842;
 
-                const fontSize = customTpl ? (customTpl.fontSize || 30) : isCert ? (ev.certFontSize || ev.fontSize || 30) : (ev.inviteFontSize || 30);
-                ctx.font = `bold ${fontSize}px sans-serif`;
-                ctx.fillStyle = customTpl ? (customTpl.fontColor || "#000000") : isCert ? (ev.certFontColor || ev.fontColor || "#000000") : (ev.inviteFontColor || "#000000");
-                ctx.textBaseline = "middle";
+                  const canvas = document.createElement("canvas");
+                  canvas.width = targetW;
+                  canvas.height = targetH;
+                  const ctx = canvas.getContext("2d");
+                  ctx.drawImage(img, 0, 0, targetW, targetH);
 
-                const m = customTpl ? (customTpl.map || customTpl.fieldMap || {}) : isCert ? (ev.certMap || ev.fieldMap || ev.inviteMap || {}) : (ev.inviteMap || {});
-                Object.entries(m).forEach(([key, pos]) => {
-                  if (pos && pos.visible) {
-                    const xPx = (parseFloat(pos.x) / 100) * img.width;
-                    const yPx = (parseFloat(pos.y) / 100) * img.height;
-                    let val = matched[key] || "";
-                    if (key.startsWith("[TEXT] ")) val = key.replace("[TEXT] ", "");
-                    else if (!val && key.toLowerCase().includes("name")) val = sName;
-                    if (typeof val === 'string') val = val.replace(/\|/g, ' ').trim();
-                    ctx.fillText(String(val), xPx, yPx);
+                  const fontSize = customTpl ? (customTpl.fontSize || (isLandscape ? 26 : 16)) : isCert ? (ev.certFontSize || ev.fontSize || 26) : (ev.inviteFontSize || 16);
+                  const fontColor = customTpl ? (customTpl.fontColor || "#000000") : isCert ? (ev.certFontColor || ev.fontColor || "#000000") : (ev.inviteFontColor || "#000000");
+
+                  const m = customTpl ? (customTpl.map || customTpl.fieldMap || {}) : isCert ? (ev.certMap || ev.fieldMap || ev.inviteMap || {}) : (ev.inviteMap || {});
+                  
+                  // Sort to keep consistent rendering order
+                  const sortedEntries = Object.entries(m).sort(([, posA], [, posB]) => (parseFloat(posA.y) || 0) - (parseFloat(posB.y) || 0));
+
+                  for (const [key, pos] of sortedEntries) {
+                    if (key.startsWith('_')) continue;
+                    if (pos && pos.visible !== false) {
+                      const xPx = (parseFloat(pos.x) / 100) * targetW;
+                      const yPx = (parseFloat(pos.y) / 100) * targetH;
+                      
+                      const currentFontSize = pos.fontSize ? parseInt(pos.fontSize) : (fontSize || (isLandscape ? 26 : 16));
+                      const currentFontColor = pos.fontColor || fontColor;
+
+                      let val = matched[key] !== undefined ? matched[key] : "";
+                      if (key === "{Total Count}" || key === "{TOTAL_COUNT}" || key === "Total Count") {
+                        val = String((regs && regs.length) ? regs.length : 0);
+                      } else if (pos.isStatic || key.includes("Static_Text_")) {
+                        val = pos.text || '';
+                      } else if (key.startsWith("[TEXT] ")) {
+                        val = key.replace("[TEXT] ", "");
+                      } else if (!val && key.toLowerCase().includes("name")) {
+                        val = sName;
+                      }
+                      
+                      if (typeof val === 'string') {
+                        val = val.replace(/\|/g, ' ').trim();
+                        
+                        // Variable substitutions
+                        Object.keys(matched || {}).forEach(k => {
+                          try {
+                            const cleanVal = String(matched[k] || '').replace(/\|/g, ' ').trim();
+                            val = val.replace(new RegExp('\\{' + k + '\\}', 'gi'), cleanVal);
+                            const normalizedKey = k.replace(/[^a-zA-Z0-9]/g, '');
+                            if (normalizedKey && normalizedKey !== k) {
+                              val = val.replace(new RegExp('\\{' + normalizedKey + '\\}', 'gi'), cleanVal);
+                            }
+                          } catch(e) {}
+                        });
+                        val = val.replace(/\{(STUDENT_NAME|STUDENT|FULL_NAME|FULL NAME|NAME|INVITEE_NAME)\}/gi, sName);
+                      }
+
+                      // Use HTML2Canvas for rich text blocks (Static_Text_)
+                      if (pos.isStatic || key.includes("Static_Text_")) {
+                        const wPct = pos.w ? parseFloat(pos.w) : 84;
+                        const blockW = Math.min(targetW - 40, (wPct / 100) * targetW);
+                        const leftPct = parseFloat(pos.x) - (wPct / 2);
+                        const renderX = Math.max(20, Math.min(targetW - blockW - 20, (leftPct / 100) * targetW));
+                        
+                        const div = document.createElement("div");
+                        div.style.position = "absolute";
+                        div.style.top = "0px";
+                        div.style.left = "0px";
+                        div.style.zIndex = "-1000";
+                        div.style.width = blockW + "px";
+                        div.style.fontSize = currentFontSize + "px";
+                        div.style.color = currentFontColor;
+                        div.style.textAlign = pos.align || "left";
+                        div.style.fontFamily = "sans-serif";
+                        div.style.whiteSpace = "pre-wrap";
+                        div.style.lineHeight = "1.3";
+                        
+                        div.innerHTML = String(val).replace(/\*(.*?)\*/g, '<strong>$1</strong>');
+                        document.body.appendChild(div);
+                        
+                        try {
+                          await new Promise(r => setTimeout(r, 50));
+                          div.style.top = window.scrollY + "px";
+                          
+                          const subCanvas = await html2canvas(div, {
+                            backgroundColor: null,
+                            scale: 2,
+                            scrollY: window.scrollY,
+                            scrollX: window.scrollX,
+                            useCORS: true,
+                            logging: false
+                          });
+                          
+                          const renderedHeight = (subCanvas.height / subCanvas.width) * blockW;
+                          const hPct = pos.h ? parseFloat(pos.h) : Math.min(60, (renderedHeight / targetH) * 100);
+                          const pageYPct = (parseFloat(pos.y)) - (hPct / 2);
+                          const renderY = Math.max(20, (pageYPct / 100) * targetH);
+                          
+                          ctx.drawImage(subCanvas, renderX, renderY, blockW, renderedHeight);
+                        } catch(e) {
+                          console.error(e);
+                        } finally {
+                          document.body.removeChild(div);
+                        }
+                      } else {
+                        // Regular field rendering
+                        ctx.font = `bold ${currentFontSize}px sans-serif`;
+                        ctx.fillStyle = currentFontColor;
+                        ctx.textBaseline = "middle";
+                        ctx.textAlign = pos.align || ((parseFloat(pos.x) >= 35 && parseFloat(pos.x) <= 65) ? "center" : (parseFloat(pos.x) > 65 ? "right" : "left"));
+                        ctx.fillText(String(val), xPx, yPx);
+                      }
+                    }
                   }
-                });
 
-                setLetterImgUrl(canvas.toDataURL("image/png"));
+                  setLetterImgUrl(canvas.toDataURL("image/png"));
+                } catch (err) {
+                  console.error("Canvas render error:", err);
+                }
               };
               img.src = targetBgUrl;
             } catch(err) {
@@ -46158,7 +46529,19 @@ function DirectInvitePassView({ C, auth }) {
       };
 
       const sName = String(regData['Full Name'] || regData['Submitted By'] || regData['Participant Name'] || regData.name || 'Applicant').replace(/\|/g, ' ').trim();
-      const customTpl = customDocId ? (ev.pdfTemplates || []).find(t => t.id === customDocId || t.name?.toLowerCase() === customDocId?.toLowerCase()) : null;
+      let customTpl = null;
+      if (customDocId) {
+        customTpl = (ev.pdfTemplates || []).find(t => t.id === customDocId || t.name?.toLowerCase() === customDocId?.toLowerCase());
+        if (!customTpl && C.events) {
+          for (const tempEv of C.events) {
+            const found = (tempEv.pdfTemplates || []).find(t => t.id === customDocId || t.name?.toLowerCase() === customDocId?.toLowerCase());
+            if (found) {
+              customTpl = found;
+              break;
+            }
+          }
+        }
+      }
       const docType = customTpl || (isCert ? 'cert' : 'invite');
       const pdfBlob = await generateCertificatePDF(ev, regData, sName, docType, 'blob');
 
