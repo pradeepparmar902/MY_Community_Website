@@ -28441,18 +28441,20 @@ export const generateCertificateImageBlob = async (ev, regData, sName, docType) 
           const m = customTpl ? (customTpl.map || customTpl.fieldMap || {}) : isCert ? (ev.certMap || ev.fieldMap || ev.inviteMap || {}) : (ev.inviteMap || {});
           
           // Sort to keep consistent rendering order
-          const sortedEntries = Object.entries(m).sort(([, posA], [, posB]) => (parseFloat(posA.y) || 0) - (parseFloat(posB.y) || 0));
+          const sortedEntries = Object.entries(m).sort(([, posA], [, posB]) => (parseFloat(posA?.y) || 0) - (parseFloat(posB?.y) || 0));
 
           for (const [key, pos] of sortedEntries) {
-            if (key.startsWith('_')) continue;
+            if (!key || key.startsWith('_')) continue;
             if (pos && pos.visible !== false) {
-              const xPx = (parseFloat(pos.x) / 100) * targetW;
-              const yPx = (parseFloat(pos.y) / 100) * targetH;
+              const xPct = parseFloat(pos.x);
+              const yPct = parseFloat(pos.y);
+              const xPx = (!isNaN(xPct) ? xPct : 50) / 100 * targetW;
+              const yPx = (!isNaN(yPct) ? yPct : 50) / 100 * targetH;
               
               const currentFontSize = pos.fontSize ? parseInt(pos.fontSize) : (fontSize || (isLandscape ? 26 : 16));
-              const currentFontColor = pos.fontColor || fontColor;
+              const currentFontColor = pos.fontColor || fontColor || "#000000";
 
-              let val = regData[key] || "";
+              let val = regData[key] !== undefined ? regData[key] : "";
               if (pos.isStatic || key.includes("Static_Text_")) {
                 val = pos.text || '';
               } else if (key.startsWith("[TEXT] ")) {
@@ -28464,7 +28466,7 @@ export const generateCertificateImageBlob = async (ev, regData, sName, docType) 
               if (typeof val === 'string') {
                 val = val.replace(/\|/g, ' ').trim();
                 
-                // Variable substitutions (similar to PDF generation)
+                // Variable substitutions
                 Object.keys(regData || {}).forEach(k => {
                   try {
                     const cleanVal = String(regData[k] || '').replace(/\|/g, ' ').trim();
@@ -28478,18 +28480,16 @@ export const generateCertificateImageBlob = async (ev, regData, sName, docType) 
                 val = val.replace(/\{(STUDENT_NAME|STUDENT|FULL_NAME|FULL NAME|NAME|INVITEE_NAME)\}/gi, sName);
               }
 
-              // Use HTML2Canvas for rich text blocks (Static_Text_)
               if (pos.isStatic || key.includes("Static_Text_")) {
                 const wPct = pos.w ? parseFloat(pos.w) : 84;
                 const blockW = Math.min(targetW - 40, (wPct / 100) * targetW);
-                const leftPct = parseFloat(pos.x) - (wPct / 2);
-                const renderX = Math.max(20, Math.min(targetW - blockW - 20, (leftPct / 100) * targetW));
+                const leftPct = !isNaN(xPct) ? xPct : 50;
+                const renderX = Math.max(20, Math.min(targetW - blockW - 20, ((leftPct - (wPct/2)) / 100) * targetW));
                 
                 const div = document.createElement("div");
                 div.style.position = "absolute";
                 div.style.top = "0px";
-                div.style.left = "0px";
-                div.style.zIndex = "-1000";
+                div.style.left = "-9999px"; // Move off-screen instead of hidden zIndex
                 div.style.width = blockW + "px";
                 div.style.fontSize = currentFontSize + "px";
                 div.style.color = currentFontColor;
@@ -28502,28 +28502,28 @@ export const generateCertificateImageBlob = async (ev, regData, sName, docType) 
                 document.body.appendChild(div);
                 
                 try {
-                  // Wait for the browser to paint the newly appended element
                   await new Promise(r => setTimeout(r, 50));
-                  div.style.top = window.scrollY + "px";
                   
                   const subCanvas = await html2canvas(div, {
                     backgroundColor: null,
                     scale: 2,
-                    scrollY: window.scrollY,
-                    scrollX: window.scrollX,
                     useCORS: true,
                     logging: false
                   });
                   
                   const renderedHeight = (subCanvas.height / subCanvas.width) * blockW;
-                  // If pos.h is specified, top is pos.y - (pos.h / 2). If not, compute from renderedHeight.
                   const hPct = pos.h ? parseFloat(pos.h) : Math.min(60, (renderedHeight / targetH) * 100);
-                  const pageYPct = (parseFloat(pos.y)) - (hPct / 2);
+                  const pageYPct = (!isNaN(yPct) ? yPct : 50) - (hPct / 2);
                   const renderY = Math.max(20, (pageYPct / 100) * targetH);
                   
                   ctx.drawImage(subCanvas, renderX, renderY, blockW, renderedHeight);
                 } catch(e) {
-                  console.error(e);
+                  console.error("html2canvas fallback failed, drawing standard text", e);
+                  ctx.font = `bold ${currentFontSize}px sans-serif`;
+                  ctx.fillStyle = currentFontColor;
+                  ctx.textBaseline = "middle";
+                  ctx.textAlign = pos.align || "left";
+                  ctx.fillText(String(val).replace(/\*/g, ''), xPx, yPx);
                 } finally {
                   document.body.removeChild(div);
                 }
@@ -28532,7 +28532,7 @@ export const generateCertificateImageBlob = async (ev, regData, sName, docType) 
                 ctx.font = `bold ${currentFontSize}px sans-serif`;
                 ctx.fillStyle = currentFontColor;
                 ctx.textBaseline = "middle";
-                ctx.textAlign = pos.align || ((parseFloat(pos.x) >= 35 && parseFloat(pos.x) <= 65) ? "center" : (parseFloat(pos.x) > 65 ? "right" : "left"));
+                ctx.textAlign = pos.align || ((!isNaN(xPct) && xPct >= 35 && xPct <= 65) ? "center" : (xPct > 65 ? "right" : "left"));
                 ctx.fillText(String(val), xPx, yPx);
               }
             }
@@ -46395,16 +46395,18 @@ function DirectInvitePassView({ C, auth }) {
                   const m = customTpl ? (customTpl.map || customTpl.fieldMap || {}) : isCert ? (ev.certMap || ev.fieldMap || ev.inviteMap || {}) : (ev.inviteMap || {});
                   
                   // Sort to keep consistent rendering order
-                  const sortedEntries = Object.entries(m).sort(([, posA], [, posB]) => (parseFloat(posA.y) || 0) - (parseFloat(posB.y) || 0));
+                  const sortedEntries = Object.entries(m).sort(([, posA], [, posB]) => (parseFloat(posA?.y) || 0) - (parseFloat(posB?.y) || 0));
 
                   for (const [key, pos] of sortedEntries) {
-                    if (key.startsWith('_')) continue;
+                    if (!key || key.startsWith('_')) continue;
                     if (pos && pos.visible !== false) {
-                      const xPx = (parseFloat(pos.x) / 100) * targetW;
-                      const yPx = (parseFloat(pos.y) / 100) * targetH;
+                      const xPct = parseFloat(pos.x);
+                      const yPct = parseFloat(pos.y);
+                      const xPx = (!isNaN(xPct) ? xPct : 50) / 100 * targetW;
+                      const yPx = (!isNaN(yPct) ? yPct : 50) / 100 * targetH;
                       
                       const currentFontSize = pos.fontSize ? parseInt(pos.fontSize) : (fontSize || (isLandscape ? 26 : 16));
-                      const currentFontColor = pos.fontColor || fontColor;
+                      const currentFontColor = pos.fontColor || fontColor || "#000000";
 
                       let val = matched[key] !== undefined ? matched[key] : "";
                       if (key === "{Total Count}" || key === "{TOTAL_COUNT}" || key === "Total Count") {
@@ -46438,14 +46440,13 @@ function DirectInvitePassView({ C, auth }) {
                       if (pos.isStatic || key.includes("Static_Text_")) {
                         const wPct = pos.w ? parseFloat(pos.w) : 84;
                         const blockW = Math.min(targetW - 40, (wPct / 100) * targetW);
-                        const leftPct = parseFloat(pos.x) - (wPct / 2);
-                        const renderX = Math.max(20, Math.min(targetW - blockW - 20, (leftPct / 100) * targetW));
+                        const leftPct = !isNaN(xPct) ? xPct : 50;
+                        const renderX = Math.max(20, Math.min(targetW - blockW - 20, ((leftPct - (wPct/2)) / 100) * targetW));
                         
                         const div = document.createElement("div");
                         div.style.position = "absolute";
                         div.style.top = "0px";
-                        div.style.left = "0px";
-                        div.style.zIndex = "-1000";
+                        div.style.left = "-9999px"; // Move off-screen
                         div.style.width = blockW + "px";
                         div.style.fontSize = currentFontSize + "px";
                         div.style.color = currentFontColor;
@@ -46459,25 +46460,27 @@ function DirectInvitePassView({ C, auth }) {
                         
                         try {
                           await new Promise(r => setTimeout(r, 50));
-                          div.style.top = window.scrollY + "px";
                           
                           const subCanvas = await html2canvas(div, {
                             backgroundColor: null,
                             scale: 2,
-                            scrollY: window.scrollY,
-                            scrollX: window.scrollX,
                             useCORS: true,
                             logging: false
                           });
                           
                           const renderedHeight = (subCanvas.height / subCanvas.width) * blockW;
                           const hPct = pos.h ? parseFloat(pos.h) : Math.min(60, (renderedHeight / targetH) * 100);
-                          const pageYPct = (parseFloat(pos.y)) - (hPct / 2);
+                          const pageYPct = (!isNaN(yPct) ? yPct : 50) - (hPct / 2);
                           const renderY = Math.max(20, (pageYPct / 100) * targetH);
                           
                           ctx.drawImage(subCanvas, renderX, renderY, blockW, renderedHeight);
                         } catch(e) {
-                          console.error(e);
+                          console.error("html2canvas fallback failed, drawing standard text", e);
+                          ctx.font = `bold ${currentFontSize}px sans-serif`;
+                          ctx.fillStyle = currentFontColor;
+                          ctx.textBaseline = "middle";
+                          ctx.textAlign = pos.align || "left";
+                          ctx.fillText(String(val).replace(/\*/g, ''), xPx, yPx);
                         } finally {
                           document.body.removeChild(div);
                         }
@@ -46486,7 +46489,7 @@ function DirectInvitePassView({ C, auth }) {
                         ctx.font = `bold ${currentFontSize}px sans-serif`;
                         ctx.fillStyle = currentFontColor;
                         ctx.textBaseline = "middle";
-                        ctx.textAlign = pos.align || ((parseFloat(pos.x) >= 35 && parseFloat(pos.x) <= 65) ? "center" : (parseFloat(pos.x) > 65 ? "right" : "left"));
+                        ctx.textAlign = pos.align || ((!isNaN(xPct) && xPct >= 35 && xPct <= 65) ? "center" : (xPct > 65 ? "right" : "left"));
                         ctx.fillText(String(val), xPx, yPx);
                       }
                     }
