@@ -28487,9 +28487,10 @@ export const generateCertificateImageBlob = async (ev, regData, sName, docType) 
                 const renderX = Math.max(20, Math.min(targetW - blockW - 20, ((leftPct - (wPct/2)) / 100) * targetW));
                 
                 const div = document.createElement("div");
-                div.style.position = "absolute";
+                div.style.position = "fixed";
                 div.style.top = "0px";
-                div.style.left = "-9999px"; // Move off-screen instead of hidden zIndex
+                div.style.left = "0px";
+                div.style.zIndex = "-9999";
                 div.style.width = blockW + "px";
                 div.style.fontSize = currentFontSize + "px";
                 div.style.color = currentFontColor;
@@ -29115,7 +29116,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
               {/* Row 1: Choose Template & Reset Draft */}
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,width:"100%",flexWrap:"wrap"}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:240}}>
-                  <span style={{fontSize:".84rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>📝 Message:</span>
+                  <span style={{fontSize:".84rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>Choose Template:</span>
                   <select
                     value={selectedTplId}
                     onChange={e => handleTemplateSelectChange(e.target.value)}
@@ -29140,39 +29141,6 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
                   </select>
                 </div>
                 
-                <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:240}}>
-                  <span style={{fontSize:".84rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>🖼️ Pass:</span>
-                  <select
-                    value={selectedDocToCopy}
-                    onChange={e => {
-                      const newVal = e.target.value;
-                      setSelectedDocToCopy(newVal);
-                      const activeTpl = workspaceTemplates.find(t => t.id === selectedTplId) || defaultTpl;
-                      if (activeTpl) {
-                        setCustomMessage(formatTemplateString(activeTpl.text, rawName, recipientMobile, txnId, vibhag, stream, percentage, remarks, null, activeModalEvent, activeModalVibhag, newVal));
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: "7px 12px",
-                      borderRadius: 6,
-                      border: "1.5px solid #15803D",
-                      fontSize: ".84rem",
-                      fontWeight: 700,
-                      color: "#14532D",
-                      background: "white",
-                      cursor: "pointer",
-                      boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
-                    }}
-                  >
-                    <option value="invite">{currentEventObj?.inviteName || currentEventObj?.inviteTitle || (Boolean(currentEventObj?.isDonorWorkspace || String(currentEventObj?.title || "").toLowerCase().includes("donor")) ? "Official Thank You Letter" : "Official Invite Letter")}</option>
-                    <option value="cert">{currentEventObj?.certName || currentEventObj?.certTitle || (Boolean(currentEventObj?.isDonorWorkspace || String(currentEventObj?.title || "").toLowerCase().includes("donor")) ? "Official 80G Receipt PDF" : "Certificate Pass")}</option>
-                    {(C.events || []).flatMap(ev => (ev.pdfTemplates || []).map(t => (
-                      <option key={t.id} value={t.id}>{t.name} (from {ev.title || ev.id})</option>
-                    )))}
-                  </select>
-                </div>
-
                 <button
                   type="button"
                   onClick={() => handleTemplateSelectChange(selectedTplId)}
@@ -46444,9 +46412,10 @@ function DirectInvitePassView({ C, auth }) {
                         const renderX = Math.max(20, Math.min(targetW - blockW - 20, ((leftPct - (wPct/2)) / 100) * targetW));
                         
                         const div = document.createElement("div");
-                        div.style.position = "absolute";
+                        div.style.position = "fixed";
                         div.style.top = "0px";
-                        div.style.left = "-9999px"; // Move off-screen
+                        div.style.left = "0px";
+                        div.style.zIndex = "-9999";
                         div.style.width = blockW + "px";
                         div.style.fontSize = currentFontSize + "px";
                         div.style.color = currentFontColor;
