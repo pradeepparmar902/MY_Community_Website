@@ -25748,7 +25748,13 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
         { tag: "{SEAT_NO}", label: "Seat / Hall Number", desc: "Assigned auditorium seat or row" },
         { tag: "{GATE_PASS}", label: "Gate / Entry Pass ID", desc: "Entry gate verification tag" },
         { tag: "{SUB_WORKSPACE_NAME}", label: "Sub-Workspace Pass Name", desc: "Pass or coupon template name (e.g. 'Food coupon')" },
-        { tag: "{PASS_LINK}", label: "1-Click Digital Pass Link", desc: "Direct personalized invitation pass URL" }
+        { tag: "{PASS_LINK}", label: "1-Click Digital Pass Link", desc: "Direct personalized invitation pass URL" },
+        { tag: "{INVITE_PDF_LINK}", label: "1-Click PDF Invitation Letter", desc: "Link to download the linked PDF template" },
+        ...(pdfTemplates || []).map(p => ({
+          tag: `{PDF_LINK:${p.id}}`,
+          label: `PDF Link: ${p.name || p.id}`,
+          desc: `Direct download link for ${p.name || p.id}`
+        }))
       ]
     },
     {
@@ -27084,14 +27090,29 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
                 
                 {/* Template Controls Bar */}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",paddingBottom:8,borderBottom:"1px solid #F1F5F9"}}>
-                  <div style={{flex:1,minWidth:220}}>
-                    <label style={{display:"block",fontSize:".72rem",fontWeight:800,color:"#64748B",textTransform:"uppercase",marginBottom:3}}>TEMPLATE NAME</label>
-                    <input
-                      type="text"
-                      value={activeTpl.name}
-                      onChange={e => handleUpdateActiveTpl("name", e.target.value)}
-                      style={{width:"100%",padding:"7px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",fontSize:".88rem",fontWeight:700,color:"#0F172A",boxSizing:"border-box"}}
-                    />
+                  <div style={{flex:1,minWidth:220,display:"flex",gap:12}}>
+                    <div style={{flex:1}}>
+                      <label style={{display:"block",fontSize:".72rem",fontWeight:800,color:"#64748B",textTransform:"uppercase",marginBottom:3}}>TEMPLATE NAME</label>
+                      <input
+                        type="text"
+                        value={activeTpl.name}
+                        onChange={e => handleUpdateActiveTpl("name", e.target.value)}
+                        style={{width:"100%",padding:"7px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",fontSize:".88rem",fontWeight:700,color:"#0F172A",boxSizing:"border-box"}}
+                      />
+                    </div>
+                    <div style={{flex:1}}>
+                      <label style={{display:"block",fontSize:".72rem",fontWeight:800,color:"#64748B",textTransform:"uppercase",marginBottom:3}}>LINKED PDF DOCUMENT</label>
+                      <select
+                        value={activeTpl.linkedPdfDocId || ""}
+                        onChange={e => handleUpdateActiveTpl("linkedPdfDocId", e.target.value)}
+                        style={{width:"100%",padding:"7px 12px",borderRadius:8,border:"1.5px solid #CBD5E1",fontSize:".88rem",fontWeight:700,color:"#0F172A",boxSizing:"border-box",backgroundColor:"white"}}
+                      >
+                        <option value="">Default (Event Specific)</option>
+                        {pdfTemplates && pdfTemplates.map(tpl => (
+                          <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:14}}>
@@ -28398,6 +28419,58 @@ function WorkspaceWhatsAppTemplateModal({ event, C, setC, auth, onClose, initial
     </div>
   );
 }
+
+export const resolveTemplateAndEvent = (effectiveDocId, defaultEvent, allEvents, isInviteMode = true) => {
+  let evObjToUse = defaultEvent || {};
+  let customTpl = null;
+  let finalDocId = effectiveDocId;
+
+  if (finalDocId && finalDocId !== 'invite' && finalDocId !== 'cert') {
+    for (const tempEv of (allEvents || [])) {
+      const found = (tempEv.pdfTemplates || []).find(t => t.id === finalDocId || t.name?.toLowerCase() === finalDocId?.toLowerCase());
+      if (found) {
+        customTpl = found;
+        evObjToUse = tempEv;
+        break;
+      }
+    }
+  }
+
+  if (!customTpl) {
+    if (isInviteMode) {
+      let firstEvTpl = evObjToUse?.pdfTemplates?.[0]?.id;
+      if (!firstEvTpl && allEvents) {
+        for (const ev of allEvents) {
+          if (ev.pdfTemplates && ev.pdfTemplates.length > 0) {
+            firstEvTpl = ev.pdfTemplates[0].id;
+            break;
+          }
+        }
+      }
+      finalDocId = firstEvTpl || 'invite';
+    } else {
+      finalDocId = 'cert';
+    }
+
+    if (finalDocId !== 'invite' && finalDocId !== 'cert') {
+      for (const tempEv of (allEvents || [])) {
+        const found = (tempEv.pdfTemplates || []).find(t => t.id === finalDocId);
+        if (found) {
+          customTpl = found;
+          evObjToUse = tempEv;
+          break;
+        }
+      }
+    }
+  }
+
+  return {
+    evObjToUse,
+    targetDocType: customTpl || finalDocId,
+    resolvedDocId: customTpl ? customTpl.id : finalDocId
+  };
+};
+
 // ── WhatsApp Applicant Communication Modal ───────────────────────────────────────// Canvas-based image generator for clipboard copy
 export const generateCertificateImageBlob = async (ev, regData, sName, docType) => {
   return new Promise(async (resolve, reject) => {
@@ -28524,7 +28597,7 @@ export const generateCertificateImageBlob = async (ev, regData, sName, docType) 
                   
                   const renderedHeight = (subCanvas.height / subCanvas.width) * blockW;
                   const hPct = pos.h ? parseFloat(pos.h) : Math.min(60, (renderedHeight / targetH) * 100);
-                  const pageYPct = (!isNaN(yPct) ? yPct : 50) - (hPct / 2);
+                  const pageYPct = !isNaN(yPct) ? yPct : 50;
                   const renderY = Math.max(20, (pageYPct / 100) * targetH);
                   
                   ctx.drawImage(subCanvas, renderX, renderY, blockW, renderedHeight);
@@ -28613,10 +28686,6 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
     }
   ];
 
-  const workspaceTemplates = (eventObj?.whatsAppTemplates && eventObj.whatsAppTemplates.length > 0)
-    ? eventObj.whatsAppTemplates
-    : defaultWorkspaceTemplates;
-
   const initialEventScope = reg?.targetEventId || reg?.activeDocTpl?.customTpl?.targetEventId || eventObj?.targetEventId || eventObj?.id || eventObj?.title || C.events?.[0]?.id || C.events?.[0]?.title || "";
   const initialVibhagScope = reg?.vibhagScope === "all" ? "all" : (reg?.vibhag || reg?.['Vibhag'] || reg?.['Vibhag New'] || "auto");
   const [activeModalEvent, setActiveModalEvent] = useState(initialEventScope);
@@ -28624,24 +28693,21 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
 
   const currentEventObj = (C.events || []).find(e => e.id === activeModalEvent || e.title === activeModalEvent) || eventObj || C.events?.[0] || {};
 
+  const allWhatsAppTemplates = (C.events || []).flatMap(ev => {
+    const evTpls = typeof getEventWhatsAppTemplates === 'function' ? getEventWhatsAppTemplates(ev, C) : (ev.whatsAppTemplates || []);
+    return evTpls.map(t => ({ ...t, _sourceTitle: ev.title || ev.id }));
+  });
+
+  const workspaceTemplates = allWhatsAppTemplates.length > 0 
+    ? allWhatsAppTemplates 
+    : defaultWorkspaceTemplates;
+
   const defaultTpl = workspaceTemplates.find(t => t.isDefault) || workspaceTemplates[0] || defaultWorkspaceTemplates[0];
   const [selectedTplId, setSelectedTplId] = useState(defaultTpl?.id || "tpl_student_pass");
   const [selectedDocToCopy, setSelectedDocToCopy] = useState(() => {
-    if (reg.activeDocTpl?.id) return reg.activeDocTpl.id;
-    if (reg.customDocId) return reg.customDocId;
-    if (reg.isInviteMode) {
-      let firstEvTpl = currentEventObj?.pdfTemplates?.[0]?.id;
-      if (!firstEvTpl && C?.events) {
-        for (const ev of C.events) {
-          if (ev.pdfTemplates && ev.pdfTemplates.length > 0) {
-            firstEvTpl = ev.pdfTemplates[0].id;
-            break;
-          }
-        }
-      }
-      return firstEvTpl || 'invite';
-    }
-    return 'cert';
+    const initDocId = reg.activeDocTpl?.id || reg.customDocId;
+    const { resolvedDocId } = resolveTemplateAndEvent(initDocId, currentEventObj, C.events, !!reg.isInviteMode);
+    return resolvedDocId;
   });
 
   const formatTemplateString = (tplString, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks, rContactNameArg, eventScopeOverride, vibhagOverrideArg, docOverrideArg) => {
@@ -28651,11 +28717,12 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
       const recV = rVibhag || reg?.['Vibhag New'] || reg?.['Vibhag'] || reg?.vibhag || "";
       if (recV && recV !== 'All Vibhags') chosenVibhag = recV;
     }
+    const evIdQueryStr = currentEventObj?.id ? `&ev=${encodeURIComponent(currentEventObj.id)}` : '';
     const baseUrl = `${C.whatsAppPortalUrl || "https://www.mmp-cwc.com/"}`.replace(/\/?$/, '');
-    const certUrl = `${baseUrl}/?cert=${encodeURIComponent(rTxn || "")}`;
-    const inviteUrl = `${baseUrl}/?invite=${encodeURIComponent(rTxn || "")}`;
+    const certUrl = `${baseUrl}/?cert=${encodeURIComponent(rTxn || "")}${evIdQueryStr}`;
+    const inviteUrl = `${baseUrl}/?invite=${encodeURIComponent(rTxn || "")}${evIdQueryStr}`;
     const activeDocId = docOverrideArg !== undefined ? (docOverrideArg && docOverrideArg !== 'invite' && docOverrideArg !== 'cert' ? docOverrideArg : null) : (reg.customDocId || (selectedDocToCopy && selectedDocToCopy !== 'invite' && selectedDocToCopy !== 'cert' ? selectedDocToCopy : null));
-    const docUrl = activeDocId ? `${baseUrl}/?doc=${encodeURIComponent(activeDocId)}&pass=${encodeURIComponent(rTxn || "")}` : null;
+    const docUrl = activeDocId ? `${baseUrl}/?doc=${encodeURIComponent(activeDocId)}&pass=${encodeURIComponent(rTxn || "")}${evIdQueryStr}` : null;
     const portalName = C.trust?.name || "Mumbai Meghwal Panchayat & Vidya Gohil Trust";
 
     const evTitle = eventObj?.title || reg.eventName || reg.eventTitle || reg.eventId || "Event";
@@ -28758,8 +28825,8 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
       .replace(/\{TRANSACTION_REF\}/g, reg["UTR / Ref No"] || reg["Cheque No"] || "")
       .replace(/\{PAN_CARD\}/g, reg["PAN Card"] || "")
       .replace(/\{RECEIPT_NO\}/g, reg["Receipt No"] || "")
-      .replace(/\{CERTIFICATE_LINK\}/g, certUrl)
-      .replace(/\{CERTIFICATE_URL\}/g, certUrl)
+      .replace(/\{CERTIFICATE_LINK\}/g, docUrl || certUrl)
+      .replace(/\{CERTIFICATE_URL\}/g, docUrl || certUrl)
       .replace(/\{INVITE_PDF_LINK\}/g, docUrl || inviteUrl)
       .replace(/\{INVITE_LINK\}/g, docUrl || inviteUrl)
       .replace(/\{PASS_LINK\}/g, docUrl || inviteUrl)
@@ -28767,7 +28834,9 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
       .replace(/\{WEBSITE_URL\}/g, baseUrl)
       .replace(/\{WEBSITE_HOME\}/g, baseUrl)
       .replace(/\{HELPLINE_PHONES\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209 / +91 9967821964")
-      .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209");
+      .replace(/\{ADMIN_MOBILE\}/g, C.whatsAppHelpline || C.trust?.phone || "+91 9820785209")
+      .replace(/\{PDF_LINK:([^}]+)\}/g, (match, pdfId) => `${baseUrl}/?doc=${encodeURIComponent(pdfId)}&pass=${encodeURIComponent(rTxn || "")}${evIdQueryStr}`);
+
 
     // Universal replacement for all exact registration fields from any section (e.g. {Stream / Class}, {% Obtained}, {Native Village})
     Object.entries(reg || {}).forEach(([k, v]) => {
@@ -28858,7 +28927,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
   const buildTemplateForStatus = (st, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks, rContactNameArg) => {
     if (reg.isInviteMode) {
       const activeTpl = workspaceTemplates.find(t => t.id === selectedTplId) || defaultTpl;
-      return formatTemplateString(activeTpl ? activeTpl.text : (C.whatsAppTplInvite || ''), rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks, rContactNameArg);
+      return formatTemplateString(activeTpl ? activeTpl.text : (C.whatsAppTplInvite || ''), rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks, rContactNameArg, activeModalEvent, activeModalVibhag, activeTpl?.linkedPdfDocId || selectedDocToCopy);
     }
 
     let tpl = "";
@@ -28877,7 +28946,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
 
   const [customMessage, setCustomMessage] = useState(() => {
     if (reg.isInviteMode && defaultTpl) {
-      return formatTemplateString(defaultTpl.text, rawName, rawMobile, txnId, vibhag, stream, percentage, remarks, null, initialEventScope, initialVibhagScope);
+      return formatTemplateString(defaultTpl.text, rawName, rawMobile, txnId, vibhag, stream, percentage, remarks, null, initialEventScope, initialVibhagScope, defaultTpl.linkedPdfDocId || selectedDocToCopy);
     }
     return buildTemplateForStatus(currentStatus, rawName, rawMobile, txnId, vibhag, stream, percentage, remarks);
   });
@@ -28886,7 +28955,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
     setSelectedTplId(tplId);
     const chosen = workspaceTemplates.find(t => t.id === tplId);
     if (chosen) {
-      setCustomMessage(formatTemplateString(chosen.text, rawName, recipientMobile, txnId, vibhag, stream, percentage, remarks, null, activeModalEvent, activeModalVibhag, selectedDocToCopy));
+      setCustomMessage(formatTemplateString(chosen.text, rawName, recipientMobile, txnId, vibhag, stream, percentage, remarks, null, activeModalEvent, activeModalVibhag, chosen.linkedPdfDocId || selectedDocToCopy));
     }
   };
 
@@ -28910,7 +28979,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
     if (reg.isInviteMode) {
       const activeDef = workspaceTemplates.find(t => t.id === selectedTplId) || workspaceTemplates.find(t => t.isDefault) || workspaceTemplates[0];
       if (activeDef) {
-        setCustomMessage(formatTemplateString(activeDef.text, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks, null, newEvent, newVibhag, selectedDocToCopy));
+        setCustomMessage(formatTemplateString(activeDef.text, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks, null, newEvent, newVibhag, activeDef.linkedPdfDocId || selectedDocToCopy));
       }
     } else {
       setCustomMessage(buildTemplateForStatus(freshStatus, freshName, freshMobile, freshTxn, freshVibhag, freshStream, freshPct, freshRemarks));
@@ -28997,22 +29066,9 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
 
     if (copyImageToClipboard && navigator.clipboard && navigator.clipboard.write) {
       try {
-        let eventObjToUse = currentEventObj || eventObj || C.events[0] || {};
-        const isCustomDoc = selectedDocToCopy !== 'invite' && selectedDocToCopy !== 'cert';
-        let customTpl = null;
-        if (isCustomDoc) {
-          for (const ev of (C.events || [])) {
-            const found = (ev.pdfTemplates || []).find(t => t.id === selectedDocToCopy || t.name?.toLowerCase() === selectedDocToCopy?.toLowerCase());
-            if (found) {
-              customTpl = found;
-              eventObjToUse = ev;
-              break;
-            }
-          }
-        }
-        const targetType = customTpl || selectedDocToCopy;
+        const { evObjToUse, targetDocType } = resolveTemplateAndEvent(selectedDocToCopy, currentEventObj || eventObj || C.events[0], C.events, !!reg.isInviteMode);
 
-        const blobPromise = generateCertificateImageBlob(eventObjToUse, reg, rawName, targetType).then(blob => {
+        const blobPromise = generateCertificateImageBlob(evObjToUse, reg, rawName, targetDocType).then(blob => {
           if (!blob) throw new Error("No blob generated (missing background)");
           return blob;
         });
@@ -29164,9 +29220,9 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
                         boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
                       }}
                     >
-                      {workspaceTemplates.map(t => (
-                        <option key={t.id} value={t.id}>
-                          {t.name} {t.isDefault ? "★ (Default)" : ""}
+                      {workspaceTemplates.map((t, idx) => (
+                        <option key={`${t.id}_${idx}`} value={t.id}>
+                          {t.name} {t.isDefault ? "★ (Default)" : ""} {t._sourceTitle ? `(from ${t._sourceTitle})` : ""}
                         </option>
                       ))}
                     </select>
@@ -38948,7 +39004,7 @@ This cannot be undone.`)) return;
             Vibhag: typeof resolveGuestVibhag === 'function' ? (resolveGuestVibhag(selectedWhatsAppReg) || selectedWhatsAppReg['Vibhag']) : selectedWhatsAppReg['Vibhag'],
             "Vibhag New": typeof resolveGuestVibhag === 'function' ? (resolveGuestVibhag(selectedWhatsAppReg) || selectedWhatsAppReg['Vibhag New']) : selectedWhatsAppReg['Vibhag New'],
             vibhagScope: currentDocTpl?.customTpl?.vibhagScope || "auto",
-            targetEventId: currentDocTpl?.customTpl?.targetEventId,
+            targetEventId: currentDocTpl?.customTpl?.targetEventId || activeEvent?.id || activeEvent?.title,
             customDocId: currentDocTpl?.customTpl ? currentDocTpl.id : null 
           }}
           onClose={() => setSelectedWhatsAppReg(null)}
@@ -46377,8 +46433,10 @@ function DirectInvitePassView({ C, auth }) {
             console.warn("Pass open tracking error:", trackErr);
           }
 
+          const queryEv = searchParams.get('ev');
           const evName = matched.eventName || matched.eventTitle || matched.eventId || "Education felicitation 2026";
-          const ev = (C.events || []).find(e => e.id === matched.eventId || e.title === evName || e.titleGu === evName) || {
+          const ev = (C.events || []).find(e => e.id === queryEv || e.title === queryEv) 
+            || (C.events || []).find(e => e.id === matched.eventId || e.title === evName || e.titleGu === evName) || {
             title: "Education Felicitation 2026",
             date: "02 Oct",
             month: "2026",
@@ -46386,21 +46444,12 @@ function DirectInvitePassView({ C, auth }) {
           };
           const sName = String(matched['Participant Name'] || matched['Full Name'] || matched['Student Name'] || matched['Candidate Name'] || matched['Name'] || matched.name || matched['Submitted By'] || 'Participant').replace(/\|/g, ' ').replace(/\s+/g, ' ').trim();
           
-          let customTpl = null;
-          if (customDocId) {
-            customTpl = (ev.pdfTemplates || []).find(t => t.id === customDocId || t.name?.toLowerCase() === customDocId?.toLowerCase());
-            if (!customTpl && C.events) {
-              for (const tempEv of C.events) {
-                const found = (tempEv.pdfTemplates || []).find(t => t.id === customDocId || t.name?.toLowerCase() === customDocId?.toLowerCase());
-                if (found) {
-                  customTpl = found;
-                  break;
-                }
-              }
-            }
-          }
-          // Generate on-screen visual image (Custom PDF Document, Certificate or Invite Letter)
-          let targetBgUrl = customTpl ? customTpl.bgUrl : isCert ? (ev.certBgUrl || ev.bgUrl || ev.inviteBgUrl) : ev.inviteBgUrl;
+          const effectiveDocId = customDocId || matched.activeDocTpl?.id || matched.customDocId || matched.assignedTemplateId;
+          const { evObjToUse, targetDocType } = resolveTemplateAndEvent(effectiveDocId, ev, C.events, !isCert);
+          
+          let targetBgUrl = typeof targetDocType === 'object' ? targetDocType.bgUrl : isCert ? (evObjToUse.certBgUrl || evObjToUse.bgUrl || evObjToUse.inviteBgUrl) : evObjToUse.inviteBgUrl;
+          if (!targetBgUrl && evObjToUse.inviteBgUrl) targetBgUrl = evObjToUse.inviteBgUrl;
+          
           if (targetBgUrl && (targetBgUrl.startsWith('asset://') || targetBgUrl.startsWith('media://'))) {
             const assetId = targetBgUrl.replace('asset://', '').replace('media://', '');
             const realAsset = await fbGetAssetDoc(assetId);
@@ -46408,17 +46457,15 @@ function DirectInvitePassView({ C, auth }) {
           }
           if (targetBgUrl) {
             try {
-              const targetDocType = customTpl || (isCert ? 'cert' : 'invite');
-              const blob = await generateCertificateImageBlob(ev, matched, sName, targetDocType);
+              const blob = await generateCertificateImageBlob(evObjToUse, matched, sName, targetDocType);
               if (blob) {
-                const reader = new FileReader();
-                reader.onloadend = () => setLetterImgUrl(reader.result);
-                reader.readAsDataURL(blob);
+                setLetterImgUrl(URL.createObjectURL(blob));
               } else {
                 throw new Error("Blob generation failed");
               }
             } catch(err) {
               console.warn("Canvas image preview fallback:", err);
+              setError("Failed to generate digital pass preview.");
             }
           }
         } else {
@@ -46439,8 +46486,10 @@ function DirectInvitePassView({ C, auth }) {
     if (!regData) return;
     setGeneratingPdf(true);
     try {
+      const queryEv = searchParams.get('ev');
       const evName = regData.eventName || regData.eventTitle || regData.eventId || "Education felicitation 2026";
-      const ev = (C.events || []).find(e => e.id === regData.eventId || e.title === evName || e.titleGu === evName) || {
+      const ev = (C.events || []).find(e => e.id === queryEv || e.title === queryEv) 
+        || (C.events || []).find(e => e.id === regData.eventId || e.title === evName || e.titleGu === evName) || {
         title: "Education Felicitation 2026",
         date: "02 Oct",
         month: "2026",
@@ -46448,21 +46497,11 @@ function DirectInvitePassView({ C, auth }) {
       };
 
       const sName = String(regData['Full Name'] || regData['Submitted By'] || regData['Participant Name'] || regData.name || 'Applicant').replace(/\|/g, ' ').trim();
-      let customTpl = null;
-      if (customDocId) {
-        customTpl = (ev.pdfTemplates || []).find(t => t.id === customDocId || t.name?.toLowerCase() === customDocId?.toLowerCase());
-        if (!customTpl && C.events) {
-          for (const tempEv of C.events) {
-            const found = (tempEv.pdfTemplates || []).find(t => t.id === customDocId || t.name?.toLowerCase() === customDocId?.toLowerCase());
-            if (found) {
-              customTpl = found;
-              break;
-            }
-          }
-        }
-      }
-      const docType = customTpl || (isCert ? 'cert' : 'invite');
-      const pdfBlob = await generateCertificatePDF(ev, regData, sName, docType, 'blob');
+      const effectiveDocId = customDocId || regData.activeDocTpl?.id || regData.customDocId || regData.assignedTemplateId;
+      const { evObjToUse, targetDocType, resolvedDocId } = resolveTemplateAndEvent(effectiveDocId, ev, C.events, !isCert);
+      const customTpl = typeof targetDocType === 'object' ? targetDocType : null;
+      
+      const pdfBlob = await generateCertificatePDF(evObjToUse, regData, sName, targetDocType, 'blob');
 
       if (pdfBlob) {
         const url = URL.createObjectURL(pdfBlob);
@@ -46552,66 +46591,9 @@ function DirectInvitePassView({ C, auth }) {
           ) : (
             <>
               {/* If official template image is available, render high-res image directly on screen */}
-              {letterImgUrl ? (
+              {letterImgUrl && (
                 <div style={{borderRadius:12,overflow:"hidden",boxShadow:"0 4px 16px rgba(0,0,0,0.12)",border:"1px solid #E2E8F0",background:"#F8FAFC"}}>
                   <img src={letterImgUrl} alt="Official Invitation Letter" style={{width:"100%",height:"auto",display:"block"}} />
-                </div>
-              ) : (
-                /* Elegant Official Digital Invitation Card - 100% Instant On-Screen Display */
-                <div style={{
-                  background: "linear-gradient(135deg, #FFFDF7 0%, #FFFBEB 100%)",
-                  border: "2px solid #D97706",
-                  borderRadius: 14,
-                  padding: "24px 20px",
-                  boxShadow: "0 6px 20px rgba(217,119,6,0.15)",
-                  position: "relative"
-                }}>
-                  <div style={{textAlign:"center",borderBottom:"2px solid #FDE68A",paddingBottom:16,marginBottom:16}}>
-                    <div style={{fontSize:"2.2rem",marginBottom:4}}>🏛️</div>
-                    <h2 style={{fontSize:"1.15rem",fontWeight:900,color:"#92400E",margin:0,textTransform:"uppercase",letterSpacing:"0.5px"}}>
-                      Mumbai Meghwal Panchayat
-                    </h2>
-                    <div style={{fontSize:".82rem",fontWeight:700,color:"#B45309",marginTop:4}}>
-                      🎓 Annual Student Education Felicitation Ceremony 2026
-                    </div>
-                  </div>
-
-                  <div style={{marginBottom:18,lineHeight:1.6}}>
-                    <div style={{fontSize:".88rem",color:"#78350F",marginBottom:6}}>To,</div>
-                    <div style={{fontSize:"1.25rem",fontWeight:900,color:"#0F172A",fontFamily:"serif"}}>
-                      {sName} & Family
-                    </div>
-                    <div style={{fontSize:".82rem",color:"#92400E",fontWeight:700}}>
-                      📍 Vibhag: {sVibhag} {sStream ? `• ${sStream}` : ""} {sPct ? `(${sPct}%)` : ""}
-                    </div>
-                  </div>
-
-                  <p style={{fontSize:".88rem",color:"#334155",lineHeight:1.6,margin:"0 0 16px 0",background:"white",padding:"14px 16px",borderRadius:10,border:"1px solid #FEF3C7"}}>
-                    We are immensely proud of your academic achievement and cordially invite you and your family as our <strong>Esteemed Guests of Honor</strong> to the <strong>Annual Education Felicitation 2026</strong>.
-                  </p>
-
-                  <div style={{background:"#FEF3C7",border:"1px solid #FCD34D",borderRadius:10,padding:"14px 16px",marginBottom:16,display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,fontSize:".82rem"}}>
-                    <div>
-                      <span style={{color:"#92400E",display:"block",fontSize:".72rem",fontWeight:700}}>📅 EVENT DATE:</span>
-                      <strong style={{color:"#0F172A",fontSize:".88rem"}}>02-10-2026 (Friday)</strong>
-                    </div>
-                    <div>
-                      <span style={{color:"#92400E",display:"block",fontSize:".72rem",fontWeight:700}}>⏰ REPORTING TIME:</span>
-                      <strong style={{color:"#0F172A",fontSize:".88rem"}}>09:30 AM Sharp</strong>
-                    </div>
-                    <div>
-                      <span style={{color:"#92400E",display:"block",fontSize:".72rem",fontWeight:700}}>🎫 ENTRY PASS ID:</span>
-                      <strong style={{color:"#15803D",fontSize:".95rem",fontFamily:"monospace"}}>{sTxn}</strong>
-                    </div>
-                    <div>
-                      <span style={{color:"#92400E",display:"block",fontSize:".72rem",fontWeight:700}}>📍 LOCATION:</span>
-                      <strong style={{color:"#0F172A"}}>Mumbai, Maharashtra</strong>
-                    </div>
-                  </div>
-
-                  <div style={{textAlign:"center",fontSize:".74rem",color:"#92400E",fontWeight:700,borderTop:"1px dashed #FDE68A",paddingTop:12}}>
-                    ✨ Please present this digital pass or screenshot at the registration desk upon entry.
-                  </div>
                 </div>
               )}
 
