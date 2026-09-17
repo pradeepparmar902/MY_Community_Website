@@ -28487,10 +28487,11 @@ export const generateCertificateImageBlob = async (ev, regData, sName, docType) 
                 const renderX = Math.max(20, Math.min(targetW - blockW - 20, ((leftPct - (wPct/2)) / 100) * targetW));
                 
                 const div = document.createElement("div");
-                div.style.position = "fixed";
+                div.style.position = "absolute";
                 div.style.top = "0px";
-                div.style.left = "0px";
-                div.style.zIndex = "-9999";
+                div.style.left = "-9999px"; // Move off-screen instead of using opacity
+                div.style.zIndex = "-1";
+                div.style.pointerEvents = "none";
                 div.style.width = blockW + "px";
                 div.style.fontSize = currentFontSize + "px";
                 div.style.color = currentFontColor;
@@ -28512,6 +28513,15 @@ export const generateCertificateImageBlob = async (ev, regData, sName, docType) 
                     logging: false
                   });
                   
+                  // Pixel validation check
+                  const subCtx = subCanvas.getContext("2d", { willReadFrequently: true });
+                  const px = subCtx.getImageData(0, 0, subCanvas.width, subCanvas.height).data;
+                  let isBlank = true;
+                  for (let i = 3; i < px.length; i += 4) {
+                    if (px[i] > 10) { isBlank = false; break; }
+                  }
+                  if (isBlank) throw new Error("Blank canvas from html2canvas");
+                  
                   const renderedHeight = (subCanvas.height / subCanvas.width) * blockW;
                   const hPct = pos.h ? parseFloat(pos.h) : Math.min(60, (renderedHeight / targetH) * 100);
                   const pageYPct = (!isNaN(yPct) ? yPct : 50) - (hPct / 2);
@@ -28524,7 +28534,12 @@ export const generateCertificateImageBlob = async (ev, regData, sName, docType) 
                   ctx.fillStyle = currentFontColor;
                   ctx.textBaseline = "middle";
                   ctx.textAlign = pos.align || "left";
-                  ctx.fillText(String(val).replace(/\*/g, ''), xPx, yPx);
+                  const lines = String(val).replace(/\*/g, '').split('\n');
+                  const lineHeight = currentFontSize * 1.3;
+                  // Approximate multiline rendering if html2canvas fails completely
+                  lines.forEach((line, i) => {
+                    ctx.fillText(line, xPx, yPx + (i * lineHeight));
+                  });
                 } finally {
                   document.body.removeChild(div);
                 }
@@ -28611,8 +28626,23 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
 
   const defaultTpl = workspaceTemplates.find(t => t.isDefault) || workspaceTemplates[0] || defaultWorkspaceTemplates[0];
   const [selectedTplId, setSelectedTplId] = useState(defaultTpl?.id || "tpl_student_pass");
-  const [selectedDocToCopy, setSelectedDocToCopy] = useState(reg.activeDocTpl?.id || (reg.isInviteMode ? 'invite' : 'cert'));
-
+  const [selectedDocToCopy, setSelectedDocToCopy] = useState(() => {
+    if (reg.activeDocTpl?.id) return reg.activeDocTpl.id;
+    if (reg.customDocId) return reg.customDocId;
+    if (reg.isInviteMode) {
+      let firstEvTpl = currentEventObj?.pdfTemplates?.[0]?.id;
+      if (!firstEvTpl && C?.events) {
+        for (const ev of C.events) {
+          if (ev.pdfTemplates && ev.pdfTemplates.length > 0) {
+            firstEvTpl = ev.pdfTemplates[0].id;
+            break;
+          }
+        }
+      }
+      return firstEvTpl || 'invite';
+    }
+    return 'cert';
+  });
 
   const formatTemplateString = (tplString, rName, rMobile, rTxn, rVibhag, rStream, rPct, rRemarks, rContactNameArg, eventScopeOverride, vibhagOverrideArg, docOverrideArg) => {
     const chosenScope = eventScopeOverride || activeModalEvent || "education2026";
@@ -28972,7 +29002,7 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
         let customTpl = null;
         if (isCustomDoc) {
           for (const ev of (C.events || [])) {
-            const found = (ev.pdfTemplates || []).find(t => t.id === selectedDocToCopy);
+            const found = (ev.pdfTemplates || []).find(t => t.id === selectedDocToCopy || t.name?.toLowerCase() === selectedDocToCopy?.toLowerCase());
             if (found) {
               customTpl = found;
               eventObjToUse = ev;
@@ -29114,12 +29144,66 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
               gap: 10
             }}>
               {/* Row 1: Choose Template & Reset Draft */}
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,width:"100%",flexWrap:"wrap"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:240}}>
-                  <span style={{fontSize:".84rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>Choose Template:</span>
+              <div style={{display:"flex",flexDirection:"column",gap:10,width:"100%"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:240}}>
+                    <span style={{fontSize:".84rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>📝 Message:</span>
+                    <select
+                      value={selectedTplId}
+                      onChange={e => handleTemplateSelectChange(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: "7px 12px",
+                        borderRadius: 6,
+                        border: "1.5px solid #15803D",
+                        fontSize: ".84rem",
+                        fontWeight: 700,
+                        color: "#14532D",
+                        background: "white",
+                        cursor: "pointer",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+                      }}
+                    >
+                      {workspaceTemplates.map(t => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} {t.isDefault ? "★ (Default)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={() => handleTemplateSelectChange(selectedTplId)}
+                    style={{
+                      background:"white",
+                      border:"1px solid #86EFAC",
+                      color:"#15803D",
+                      padding:"6px 12px",
+                      borderRadius:6,
+                      fontSize:".76rem",
+                      fontWeight:700,
+                      cursor:"pointer",
+                      whiteSpace:"nowrap"
+                    }}
+                    title="Reset to selected template content"
+                  >
+                    ↺ Reset Draft
+                  </button>
+                </div>
+
+                <div style={{display:"flex",alignItems:"center",gap:8,width:"100%"}}>
+                  <span style={{fontSize:".84rem",fontWeight:800,color:"#15803D",whiteSpace:"nowrap"}}>🖼️ Pass Doc:</span>
                   <select
-                    value={selectedTplId}
-                    onChange={e => handleTemplateSelectChange(e.target.value)}
+                    value={selectedDocToCopy}
+                    onChange={e => {
+                      const newVal = e.target.value;
+                      setSelectedDocToCopy(newVal);
+                      const activeTpl = workspaceTemplates.find(t => t.id === selectedTplId) || defaultTpl;
+                      if (activeTpl) {
+                        setCustomMessage(formatTemplateString(activeTpl.text, rawName, recipientMobile, txnId, vibhag, stream, percentage, remarks, null, activeModalEvent, activeModalVibhag, newVal));
+                      }
+                    }}
                     style={{
                       flex: 1,
                       padding: "7px 12px",
@@ -29133,32 +29217,13 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
                       boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
                     }}
                   >
-                    {workspaceTemplates.map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} {t.isDefault ? "★ (Default)" : ""}
-                      </option>
-                    ))}
+                    <option value="invite">{currentEventObj?.inviteName || currentEventObj?.inviteTitle || (Boolean(currentEventObj?.isDonorWorkspace || String(currentEventObj?.title || "").toLowerCase().includes("donor")) ? "Official Thank You Letter" : "Official Invite Letter")}</option>
+                    <option value="cert">{currentEventObj?.certName || currentEventObj?.certTitle || (Boolean(currentEventObj?.isDonorWorkspace || String(currentEventObj?.title || "").toLowerCase().includes("donor")) ? "Official 80G Receipt PDF" : "Certificate Pass")}</option>
+                    {(C.events || []).flatMap(ev => (ev.pdfTemplates || []).map(t => (
+                      <option key={t.id} value={t.id}>{t.name} (from {ev.title || ev.id})</option>
+                    )))}
                   </select>
                 </div>
-                
-                <button
-                  type="button"
-                  onClick={() => handleTemplateSelectChange(selectedTplId)}
-                  style={{
-                    background:"white",
-                    border:"1px solid #86EFAC",
-                    color:"#15803D",
-                    padding:"6px 12px",
-                    borderRadius:6,
-                    fontSize:".76rem",
-                    fontWeight:700,
-                    cursor:"pointer",
-                    whiteSpace:"nowrap"
-                  }}
-                  title="Reset to selected template content"
-                >
-                  ↺ Reset Draft
-                </button>
               </div>
 
               {/* Row 2: Live Event Data Source & Geographic Vibhag Filter */}
@@ -46343,133 +46408,15 @@ function DirectInvitePassView({ C, auth }) {
           }
           if (targetBgUrl) {
             try {
-              const img = new Image();
-              img.crossOrigin = "Anonymous";
-              img.onload = async () => {
-                try {
-                  const isLandscape = img.width > img.height;
-                  const targetW = isLandscape ? 842 : 595;
-                  const targetH = isLandscape ? 595 : 842;
-
-                  const canvas = document.createElement("canvas");
-                  canvas.width = targetW;
-                  canvas.height = targetH;
-                  const ctx = canvas.getContext("2d");
-                  ctx.drawImage(img, 0, 0, targetW, targetH);
-
-                  const fontSize = customTpl ? (customTpl.fontSize || (isLandscape ? 26 : 16)) : isCert ? (ev.certFontSize || ev.fontSize || 26) : (ev.inviteFontSize || 16);
-                  const fontColor = customTpl ? (customTpl.fontColor || "#000000") : isCert ? (ev.certFontColor || ev.fontColor || "#000000") : (ev.inviteFontColor || "#000000");
-
-                  const m = customTpl ? (customTpl.map || customTpl.fieldMap || {}) : isCert ? (ev.certMap || ev.fieldMap || ev.inviteMap || {}) : (ev.inviteMap || {});
-                  
-                  // Sort to keep consistent rendering order
-                  const sortedEntries = Object.entries(m).sort(([, posA], [, posB]) => (parseFloat(posA?.y) || 0) - (parseFloat(posB?.y) || 0));
-
-                  for (const [key, pos] of sortedEntries) {
-                    if (!key || key.startsWith('_')) continue;
-                    if (pos && pos.visible !== false) {
-                      const xPct = parseFloat(pos.x);
-                      const yPct = parseFloat(pos.y);
-                      const xPx = (!isNaN(xPct) ? xPct : 50) / 100 * targetW;
-                      const yPx = (!isNaN(yPct) ? yPct : 50) / 100 * targetH;
-                      
-                      const currentFontSize = pos.fontSize ? parseInt(pos.fontSize) : (fontSize || (isLandscape ? 26 : 16));
-                      const currentFontColor = pos.fontColor || fontColor || "#000000";
-
-                      let val = matched[key] !== undefined ? matched[key] : "";
-                      if (key === "{Total Count}" || key === "{TOTAL_COUNT}" || key === "Total Count") {
-                        val = String((regs && regs.length) ? regs.length : 0);
-                      } else if (pos.isStatic || key.includes("Static_Text_")) {
-                        val = pos.text || '';
-                      } else if (key.startsWith("[TEXT] ")) {
-                        val = key.replace("[TEXT] ", "");
-                      } else if (!val && key.toLowerCase().includes("name")) {
-                        val = sName;
-                      }
-                      
-                      if (typeof val === 'string') {
-                        val = val.replace(/\|/g, ' ').trim();
-                        
-                        // Variable substitutions
-                        Object.keys(matched || {}).forEach(k => {
-                          try {
-                            const cleanVal = String(matched[k] || '').replace(/\|/g, ' ').trim();
-                            val = val.replace(new RegExp('\\{' + k + '\\}', 'gi'), cleanVal);
-                            const normalizedKey = k.replace(/[^a-zA-Z0-9]/g, '');
-                            if (normalizedKey && normalizedKey !== k) {
-                              val = val.replace(new RegExp('\\{' + normalizedKey + '\\}', 'gi'), cleanVal);
-                            }
-                          } catch(e) {}
-                        });
-                        val = val.replace(/\{(STUDENT_NAME|STUDENT|FULL_NAME|FULL NAME|NAME|INVITEE_NAME)\}/gi, sName);
-                      }
-
-                      // Use HTML2Canvas for rich text blocks (Static_Text_)
-                      if (pos.isStatic || key.includes("Static_Text_")) {
-                        const wPct = pos.w ? parseFloat(pos.w) : 84;
-                        const blockW = Math.min(targetW - 40, (wPct / 100) * targetW);
-                        const leftPct = !isNaN(xPct) ? xPct : 50;
-                        const renderX = Math.max(20, Math.min(targetW - blockW - 20, ((leftPct - (wPct/2)) / 100) * targetW));
-                        
-                        const div = document.createElement("div");
-                        div.style.position = "fixed";
-                        div.style.top = "0px";
-                        div.style.left = "0px";
-                        div.style.zIndex = "-9999";
-                        div.style.width = blockW + "px";
-                        div.style.fontSize = currentFontSize + "px";
-                        div.style.color = currentFontColor;
-                        div.style.textAlign = pos.align || "left";
-                        div.style.fontFamily = "sans-serif";
-                        div.style.whiteSpace = "pre-wrap";
-                        div.style.lineHeight = "1.3";
-                        
-                        div.innerHTML = String(val).replace(/\*(.*?)\*/g, '<strong>$1</strong>');
-                        document.body.appendChild(div);
-                        
-                        try {
-                          await new Promise(r => setTimeout(r, 50));
-                          
-                          const subCanvas = await html2canvas(div, {
-                            backgroundColor: null,
-                            scale: 2,
-                            useCORS: true,
-                            logging: false
-                          });
-                          
-                          const renderedHeight = (subCanvas.height / subCanvas.width) * blockW;
-                          const hPct = pos.h ? parseFloat(pos.h) : Math.min(60, (renderedHeight / targetH) * 100);
-                          const pageYPct = (!isNaN(yPct) ? yPct : 50) - (hPct / 2);
-                          const renderY = Math.max(20, (pageYPct / 100) * targetH);
-                          
-                          ctx.drawImage(subCanvas, renderX, renderY, blockW, renderedHeight);
-                        } catch(e) {
-                          console.error("html2canvas fallback failed, drawing standard text", e);
-                          ctx.font = `bold ${currentFontSize}px sans-serif`;
-                          ctx.fillStyle = currentFontColor;
-                          ctx.textBaseline = "middle";
-                          ctx.textAlign = pos.align || "left";
-                          ctx.fillText(String(val).replace(/\*/g, ''), xPx, yPx);
-                        } finally {
-                          document.body.removeChild(div);
-                        }
-                      } else {
-                        // Regular field rendering
-                        ctx.font = `bold ${currentFontSize}px sans-serif`;
-                        ctx.fillStyle = currentFontColor;
-                        ctx.textBaseline = "middle";
-                        ctx.textAlign = pos.align || ((!isNaN(xPct) && xPct >= 35 && xPct <= 65) ? "center" : (xPct > 65 ? "right" : "left"));
-                        ctx.fillText(String(val), xPx, yPx);
-                      }
-                    }
-                  }
-
-                  setLetterImgUrl(canvas.toDataURL("image/png"));
-                } catch (err) {
-                  console.error("Canvas render error:", err);
-                }
-              };
-              img.src = targetBgUrl;
+              const targetDocType = customTpl || (isCert ? 'cert' : 'invite');
+              const blob = await generateCertificateImageBlob(ev, matched, sName, targetDocType);
+              if (blob) {
+                const reader = new FileReader();
+                reader.onloadend = () => setLetterImgUrl(reader.result);
+                reader.readAsDataURL(blob);
+              } else {
+                throw new Error("Blob generation failed");
+              }
             } catch(err) {
               console.warn("Canvas image preview fallback:", err);
             }
