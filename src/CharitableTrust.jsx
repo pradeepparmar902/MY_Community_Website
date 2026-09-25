@@ -9108,8 +9108,8 @@ function Overview({ mob, C, setC, auth }) {
 
     // Form Filter
     if (overviewFormFilter !== "All") {
-      const rEvent = String(r.eventName || r.eventTitle || r.eventId || r.formId || "").toLowerCase();
-      const targetFilter = String(overviewFormFilter).toLowerCase();
+      const rEvent = String(r.eventName || r.eventTitle || r.eventId || r.formId || "").toLowerCase().trim();
+      const targetFilter = String(overviewFormFilter).toLowerCase().trim();
       if (!rEvent.includes(targetFilter) && !targetFilter.includes(rEvent)) return false;
     }
 
@@ -18013,7 +18013,19 @@ export const getEventWhatsAppTemplates = (eventObj, C = {}) => {
     return defaultWorkspaceTemplates;
   }
 
-  const result = [...rawTpls];
+  const result = [];
+  const seenIds = new Set();
+  
+  for (const t of rawTpls) {
+    const key = t.id || t.name;
+    if (key && !seenIds.has(key)) {
+      seenIds.add(key);
+      result.push(t);
+    } else if (!key) {
+      result.push(t); // if no id/name, just push it
+    }
+  }
+
   for (const def of defaultWorkspaceTemplates) {
     if (!result.some(t => t.id === def.id || t.name === def.name || String(t.name).toLowerCase() === String(def.name).toLowerCase())) {
       result.push(def);
@@ -28693,9 +28705,20 @@ function WhatsAppApplicantMessengerModal({ reg, onClose, C, auth, onLogSent, all
 
   const currentEventObj = (C.events || []).find(e => e.id === activeModalEvent || e.title === activeModalEvent) || eventObj || C.events?.[0] || {};
 
-  const allWhatsAppTemplates = (C.events || []).flatMap(ev => {
-    const evTpls = typeof getEventWhatsAppTemplates === 'function' ? getEventWhatsAppTemplates(ev, C) : (ev.whatsAppTemplates || []);
-    return evTpls.map(t => ({ ...t, _sourceTitle: ev.title || ev.id }));
+  const allWhatsAppTemplates = [];
+  const seenTplIds = new Set();
+
+  (C.events || []).forEach(ev => {
+    const evTpls = typeof getEventWhatsAppTemplates === 'function' 
+      ? getEventWhatsAppTemplates(ev, C) 
+      : (ev.whatsAppTemplates || []);
+      
+    evTpls.forEach(t => {
+      if (!seenTplIds.has(t.id)) {
+        seenTplIds.add(t.id);
+        allWhatsAppTemplates.push({ ...t, _sourceTitle: ev.title || ev.id });
+      }
+    });
   });
 
   const workspaceTemplates = allWhatsAppTemplates.length > 0 
@@ -31720,14 +31743,14 @@ function BulkSelectionModal({ isOpen, onClose, title, items = [], actionLabel = 
     return name.includes(q) || mob.includes(q) || serial.includes(q);
   });
 
-  const allSelected = filteredItems.length > 0 && filteredItems.every(r => selectedIds.includes(r.id));
+  const allSelected = filteredItems.length > 0 && filteredItems.every(r => selectedIds.includes(r.id || r['Transaction ID']));
 
   const toggleSelectAll = () => {
     if (allSelected) {
-      const filteredSet = new Set(filteredItems.map(r => r.id));
+      const filteredSet = new Set(filteredItems.map(r => r.id || r['Transaction ID']));
       setSelectedIds(prev => prev.filter(id => !filteredSet.has(id)));
     } else {
-      const combined = new Set([...selectedIds, ...filteredItems.map(r => r.id)]);
+      const combined = new Set([...selectedIds, ...filteredItems.map(r => r.id || r['Transaction ID'])]);
       setSelectedIds(Array.from(combined));
     }
   };
@@ -31737,7 +31760,7 @@ function BulkSelectionModal({ isOpen, onClose, title, items = [], actionLabel = 
   };
 
   const handleConfirm = () => {
-    const selectedList = items.filter(r => selectedIds.includes(r.id));
+    const selectedList = items.filter(r => selectedIds.includes(r.id || r['Transaction ID']));
     if (selectedList.length === 0) return alert("Please select at least one record.");
     onConfirm(selectedList);
   };
@@ -31747,7 +31770,7 @@ function BulkSelectionModal({ isOpen, onClose, title, items = [], actionLabel = 
       <div style={{background:"white",borderRadius:16,width:"100%",maxWidth:600,maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 40px rgba(0,0,0,0.2)",overflow:"hidden"}}>
         
         {/* Header */}
-        <div style={{padding:"16px 20px",background:"var(--dt)",color:"white",display:"flex",justify:"space-between",alignItems:"center"}}>
+        <div style={{padding:"16px 20px",background:"var(--dt)",color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <h3 style={{margin:0,fontSize:"1.1rem",fontWeight:700}}>{title}</h3>
             <div style={{fontSize:".78rem",opacity:0.8,marginTop:2}}>Select or unselect items for batch action</div>
@@ -31756,7 +31779,7 @@ function BulkSelectionModal({ isOpen, onClose, title, items = [], actionLabel = 
         </div>
 
         {/* Toolbar & Search */}
-        <div style={{padding:"12px 20px",background:"#F8F9FA",borderBottom:"1px solid var(--bd)",display:"flex",alignItems:"center",justify:"space-between",gap:12,flexWrap:"wrap"}}>
+        <div style={{padding:"12px 20px",background:"#F8F9FA",borderBottom:"1px solid var(--bd)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
           <label style={{display:"flex",alignItems:"center",gap:8,fontSize:".85rem",fontWeight:600,cursor:"pointer",userSelect:"none"}}>
             <input 
               type="checkbox" 
@@ -31823,15 +31846,16 @@ function BulkSelectionModal({ isOpen, onClose, title, items = [], actionLabel = 
             <div style={{textAlign:"center",padding:30,color:"var(--mu)",fontSize:".85rem"}}>No matching records found.</div>
           ) : (
             filteredItems.map(r => {
-              const isChecked = selectedIds.includes(r.id);
+              const rId = r.id || r['Transaction ID'];
+              const isChecked = selectedIds.includes(rId);
               const name = r["Full Name"] || r["Name"] || r["Participant Name"] || "Guest/Student";
               const subDetail = r["Mobile Number"] || r["Mobile"] || r["Email"] || r["Address"] || "";
               const serial = r["Serial Number"] || r["Transaction ID"] || "";
 
               return (
                 <div 
-                  key={r.id} 
-                  onClick={() => !isProcessing && toggleItem(r.id)} 
+                  key={rId} 
+                  onClick={() => !isProcessing && toggleItem(rId)} 
                   style={{
                     display:"flex",alignItems:"center",gap:12,padding:"10px 12px",borderRadius:8,
                     border: isChecked ? "1px solid #BFDBFE" : "1px solid #E5E7EB",
@@ -33470,7 +33494,7 @@ function AdminCertificates({ mob, C, setC, auth }) {
         isOpen={showSelectModal} 
         onClose={() => setShowSelectModal(false)} 
         title="Select Certificates to Download" 
-        items={filteredRegs} 
+        items={selectedIds.length > 0 ? filteredRegs.filter(r => selectedIds.includes(r.id || r['Transaction ID'])) : filteredRegs} 
         actionLabel="Download Selected ZIP" 
         onConfirm={executeBulkDownload} 
         isProcessing={downloadingBulk} 
@@ -33894,6 +33918,10 @@ const getContactGroups = (contact) => {
 
 function AdminInviteLetters({ mob, C, setC, auth }) {
   const [contactsList, setContactsList] = useState([]);
+  const [showColModal, setShowColModal] = useState(false);
+  const [visibleExtraCols, setVisibleExtraCols] = useState([]);
+  const [extraColFilters, setExtraColFilters] = useState({});
+  const [activeColFilterDropdown, setActiveColFilterDropdown] = useState(null);
   const [regs, setRegs] = useState(() => {
     try {
       const cached = JSON.parse(localStorage.getItem("mmp_cached_registrations") || "[]");
@@ -34495,6 +34523,8 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       return false;
     };
 
+    const targetAudienceMode = activeTplObj?.targetAudience || "assigned"; // "assigned" | "event" | "group" | "all" | "approved"
+
     // Check if this subworkspace is configured to pull from a specific target event (e.g. Education 2026)
     const matchesTargetEvent = Boolean(
       targetEventScope && targetEventScope !== 'current' && isEventMatchingScope(r, targetEventScope)
@@ -34502,16 +34532,36 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
 
     const isExplicitlyAssigned = (r.targetTemplateId === currentDocTpl?.id) || (Array.isArray(r.assignedDocTypes) && r.assignedDocTypes.includes(currentDocTpl?.id));
     const isAssignedToWorkspace = (Array.isArray(r.assignedWorkspaceIds) && r.assignedWorkspaceIds.includes(ev.id)) || r.workspaceId === ev.id;
-    const matchesEvent = matchesTargetEvent || r.eventId === ev.id || evName === ev.title || evName === ev.titleGu || isExplicitlyAssigned || isAssignedToWorkspace;
+    
+    // Add loose matching mirroring the overview form filter logic
+    let isLooseMatch = false;
+    const rEventStr = String(r.eventName || r.eventTitle || r.eventId || r.formId || "").toLowerCase().trim();
+    
+    const evTitleLower = String(ev.title || "").toLowerCase();
+    if (evTitleLower && evTitleLower !== 'all') {
+       if (rEventStr.includes(evTitleLower) || evTitleLower.includes(rEventStr)) isLooseMatch = true;
+       if (!isLooseMatch && evTitleLower.includes('education') && rEventStr.includes('education')) isLooseMatch = true;
+    }
+    const evIdLower = String(ev.id || "").toLowerCase();
+    if (!isLooseMatch && evIdLower) {
+       if (rEventStr.includes(evIdLower) || evIdLower.includes(rEventStr)) isLooseMatch = true;
+       if (!isLooseMatch && evIdLower.includes('education') && rEventStr.includes('education')) isLooseMatch = true;
+    }
+
+    const matchesEvent = matchesTargetEvent || r.eventId === ev.id || evName === ev.title || evName === ev.titleGu || isExplicitlyAssigned || isAssignedToWorkspace || isLooseMatch;
+    
     if (!matchesEvent) return false;
 
     // ── Template / Sub-Workspace Contact Isolation ──
     // If viewing a custom template (e.g. Education 2026 Student Invite, new vibhag, etc.)
     if (activeDocId !== "invite" && activeDocId !== "cert") {
+      if (targetAudienceMode === "approved") {
+        return (r.Status === "Approved" || r.status === "Approved");
+      }
+
       // Direct streaming: When an event is selected in the Subworkspace Card, its registrations stream immediately
       if (matchesTargetEvent) return true;
 
-      const targetAudienceMode = activeTplObj?.targetAudience || "assigned"; // "assigned" | "event" | "group" | "all"
       if (targetAudienceMode === "all" || targetAudienceMode === "event") return true;
       
       // Check if contact was explicitly imported/assigned to this sub-workspace
@@ -34550,47 +34600,40 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
 
   // Deduplicate sub-workspace recipients so no person or pass appears twice
   const uniqueInviteRegs = useMemo(() => {
-    const map = new Map();
-
-    inviteRegs.forEach(r => {
-      const txn = String(r['Transaction ID'] || r.transactionId || '').trim();
-      const mob = String(r['Mobile Number'] || r.phone || r.mobile || '').replace(/\D/g, '').slice(-10);
-      const name = String(r['Full Name'] || r['Participant Name'] || r.name || '').trim().toLowerCase();
-
-      // Stable person identifier: Txn ID > 10-digit mobile > Full Name
-      const dedupeKey = txn || (mob && mob.length === 10 ? `mob_${mob}` : (name ? `name_${name}` : r.id));
-
-      if (map.has(dedupeKey)) {
-        const existing = map.get(dedupeKey);
-        // Prefer the record that is more recently updated or has whatsApp activity
-        const existingScore = (existing.targetTemplateId === currentDocTpl?.id ? 10 : 0) + 
-          (existing.whatsAppCount || 0) + 
-          (existing._submittedAt || 0);
-
-        const currentScore = (r.targetTemplateId === currentDocTpl?.id ? 10 : 0) + 
-          (r.whatsAppCount || 0) + 
-          (r._submittedAt || 0);
-
-        const existingGroups = typeof getResolvedContactGroups === 'function' ? getResolvedContactGroups(existing) : (existing.groups || []);
-        const rGroups = typeof getResolvedContactGroups === 'function' ? getResolvedContactGroups(r) : (r.groups || []);
-        const combinedGroups = Array.from(new Set([...existingGroups, ...rGroups])).filter(Boolean);
-
-        const winner = currentScore >= existingScore ? r : existing;
-        map.set(dedupeKey, {
-          ...existing,
-          ...r,
-          ...winner,
-          groups: combinedGroups,
-          Groups: combinedGroups,
-          Group: combinedGroups.join(", ")
-        });
-      } else {
-        map.set(dedupeKey, r);
-      }
-    });
-
-    return Array.from(map.values());
+    // For now, completely disable deduplication to see if this is causing the missing 120 entries.
+    return inviteRegs;
   }, [inviteRegs, currentDocTpl]);
+
+  const getColVal = (r, key) => {
+    if (key === "Participant & ID") {
+      let pName = r["Full Name"] || r["Name"] || r["Participant Name"] || r.Email || "-";
+      const cleanPName = String(pName).replace(/\|/g, " ").replace(/\s+/g, " ").trim();
+      const txnId = r["Transaction ID"] || r.transactionId || r.id || "";
+      return `${cleanPName} (${txnId})`;
+    } else if (key === "Mobile Number") {
+      const rawMobile = r["Mobile Number"] || r["Mobile"] || r["submitterMob"] || r["WhatsApp Number"] || r["Phone"] || "";
+      const cleanMobile = rawMobile ? String(rawMobile).replace(/\D/g, "").slice(-10) : "";
+      return cleanMobile ? `+91 ${cleanMobile.slice(0, 5)} ${cleanMobile.slice(5)}` : "-";
+    } else if (key === "Event") {
+      let evName = r.eventName || r.eventTitle || r.eventId || "Unknown Event";
+      let ev = (inviteEvents || []).find(e => e.id === r.eventId || e.title === evName || e.titleGu === evName) || activeEvent;
+      return ev ? (ev.title || evName) : evName;
+    } else if (key === "Date Approved") {
+      try { return r._submittedAt ? new Date(r._submittedAt).toLocaleString().split(',')[0] : "-"; }
+      catch(e){ return "-"; }
+    } else if (key === "Status") {
+      return String(r.Status || r.status || "Pending");
+    } else if (key === "Viewed") {
+      return r.inviteViewCount > 0 ? "Yes" : "No";
+    } else if (key === "Downloaded") {
+      return r.inviteDownloadCount > 0 ? "Yes" : "No";
+    }
+    const val = r[key];
+    if (val === undefined || val === null || String(val).trim() === "") {
+      return "(Blank)";
+    }
+    return String(val);
+  };
 
   const filteredRegs = uniqueInviteRegs.filter(r => {
     if (searchQuery) {
@@ -34618,8 +34661,20 @@ function AdminInviteLetters({ mob, C, setC, auth }) {
       const rGroups = getContactGroups(r);
       if (!rGroups.includes(selectedContactGroup)) return false;
     }
+    
+    // Dynamic & Standard column filters
+    const allActiveFilterKeys = Object.keys(extraColFilters);
+    for (const key of allActiveFilterKeys) {
+      if (Array.isArray(extraColFilters[key])) {
+        const rowVal = getColVal(r, key);
+        if (!extraColFilters[key].includes(rowVal)) return false;
+      }
+    }
+    
     return true;
   });
+
+  console.log({ length: filteredRegs.length, extraColFilters });
 
   const toggleSelectAll = () => {
     if (selectedIds.length === filteredRegs.length && filteredRegs.length > 0) {
@@ -37662,6 +37717,7 @@ This cannot be undone.`)) return;
                         >
                           <option value="assigned">🎯 Assigned / Imported Only</option>
                           <option value="event">🎯 Selected Event Registrations</option>
+                          <option value="approved">✅ Approved / Verified Students</option>
                           <option value="group">👥 Group ({tab.customTpl?.name || 'Named'})</option>
                           <option value="all">🌐 All in Workspace</option>
                         </select>
@@ -38233,6 +38289,27 @@ This cannot be undone.`)) return;
                     <span>👁️</span> Test Preview Template
                   </button>
                 )}
+                
+                <button
+                  type="button"
+                  onClick={() => setShowColModal(true)}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: 8,
+                    fontSize: ".78rem",
+                    fontWeight: 800,
+                    background: "#F3F4F6",
+                    color: "#374151",
+                    border: "1.5px solid #D1D5DB",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6
+                  }}
+                  title="Choose dynamic columns to display and filter"
+                >
+                  <span>⚙️</span> Column Filters
+                </button>
               </div>
             </div>
           );
@@ -38253,13 +38330,123 @@ This cannot be undone.`)) return;
                     />
                   </th>
                   <th style={{padding:"14px 12px",textAlign:"center",color:"white",fontWeight:700,width:"240px"}}>Actions</th>
-                  <th style={{padding:"14px 12px",textAlign:"left",color:"white",fontWeight:700}}>Participant & ID</th>
-                  <th style={{padding:"14px 12px",textAlign:"left",color:"white",fontWeight:700}}>📱 Mobile Number</th>
-                  <th style={{padding:"14px 12px",textAlign:"left",color:"white",fontWeight:700}}>Event</th>
-                  <th style={{padding:"14px 12px",textAlign:"center",color:"white",fontWeight:700}}>Date Approved</th>
-                  <th style={{padding:"14px 12px",textAlign:"center",color:"white",fontWeight:700}}>Status</th>
-                  <th style={{padding:"14px 12px",textAlign:"center",color:"white",fontWeight:700}}>👁️ Viewed</th>
-                  <th style={{padding:"14px 12px",textAlign:"center",color:"white",fontWeight:700}}>📥 Downloaded</th>
+                  {[
+                    { key: "Participant & ID", label: "Participant & ID", align: "left" },
+                    { key: "Mobile Number", label: "📱 Mobile Number", align: "left" },
+                    { key: "Event", label: "Event", align: "left" },
+                    { key: "Date Approved", label: "Date Approved", align: "center" },
+                    { key: "Status", label: "Status", align: "center" },
+                    { key: "Viewed", label: "👁️ Viewed", align: "center" },
+                    { key: "Downloaded", label: "📥 Downloaded", align: "center" },
+                    ...visibleExtraCols.map(colKey => ({ key: colKey, label: colKey, align: "left" }))
+                  ].map(colObj => {
+                    const colKey = colObj.key;
+                    const uniqueVals = Array.from(new Set(uniqueInviteRegs.map(r => getColVal(r, colKey)).filter(v => v && v !== "-"))).sort();
+                    const isAllSelected = !extraColFilters[colKey];
+                    const selectedVals = isAllSelected ? uniqueVals : (Array.isArray(extraColFilters[colKey]) ? extraColFilters[colKey] : []);
+                    return (
+                      <th key={colKey} style={{padding:"14px 12px",textAlign:colObj.align,color:"white",fontWeight:700,position:"relative"}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:colObj.align==="center"?"center":"flex-start",gap:6}}>
+                          <span>{colObj.label}</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveColFilterDropdown(activeColFilterDropdown === colKey ? null : colKey);
+                            }}
+                            style={{
+                              background:"transparent",
+                              border:"none",
+                              color: !isAllSelected ? "#86EFAC" : "white",
+                              cursor:"pointer",
+                              padding:2,
+                              display:"flex",
+                              alignItems:"center"
+                            }}
+                            title={`Filter ${colObj.label}`}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                            </svg>
+                          </button>
+                        </div>
+                        {activeColFilterDropdown === colKey && (
+                          <div
+                            style={{
+                              position:"absolute",
+                              top:"100%",
+                              left: colObj.align === "center" ? "50%" : 0,
+                              transform: colObj.align === "center" ? "translateX(-50%)" : "none",
+                              background:"white",
+                              color:"#334155",
+                              boxShadow:"0 10px 25px rgba(0,0,0,0.2)",
+                              borderRadius:8,
+                              padding:12,
+                              minWidth:200,
+                              maxHeight:300,
+                              overflowY:"auto",
+                              zIndex:999,
+                              fontWeight:500,
+                              fontSize:".8rem",
+                              border:"1px solid #CBD5E1",
+                              textAlign: "left"
+                            }}
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,borderBottom:"1px solid #E2E8F0",paddingBottom:8}}>
+                              <span style={{fontWeight:700}}>Filter {colObj.label}</span>
+                              <button onClick={() => setActiveColFilterDropdown(null)} style={{background:"none",border:"none",cursor:"pointer",fontSize:"1.2rem",lineHeight:1,color:"#64748B"}}>×</button>
+                            </div>
+                            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                              <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}>
+                                <input
+                                  type="checkbox"
+                                  checked={isAllSelected}
+                                  onChange={(e) => {
+                                    setExtraColFilters(prev => {
+                                      const next = {...prev};
+                                      if (e.target.checked) {
+                                        delete next[colKey];
+                                      } else {
+                                        next[colKey] = [];
+                                      }
+                                      return next;
+                                    });
+                                  }}
+                                />
+                                <span style={{fontStyle:"italic",color:"#64748B"}}>(Select All)</span>
+                              </label>
+                              {uniqueVals.map(val => (
+                                <label key={val} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedVals.includes(val)}
+                                    onChange={(e) => {
+                                      setExtraColFilters(prev => {
+                                        let current = prev[colKey];
+                                        if (!current) {
+                                          return { ...prev, [colKey]: uniqueVals.filter(v => v !== val) };
+                                        } else {
+                                          let nextArr = e.target.checked ? [...current, val] : current.filter(v => v !== val);
+                                          if (nextArr.length === uniqueVals.length) {
+                                            const nextObj = { ...prev };
+                                            delete nextObj[colKey];
+                                            return nextObj;
+                                          }
+                                          return { ...prev, [colKey]: nextArr };
+                                        }
+                                      });
+                                    }}
+                                  />
+                                  <span>{val}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -38626,6 +38813,13 @@ This cannot be undone.`)) return;
                           <span style={{color:"#94A3B8"}}>-</span>
                         )}
                       </td>
+
+                      {/* Dynamic Extra Columns */}
+                      {visibleExtraCols.map(colKey => (
+                        <td key={colKey} style={{padding:"12px 10px", fontSize:".8rem", color:"#334155"}}>
+                          {r[colKey] !== undefined && r[colKey] !== null && r[colKey] !== "" ? String(r[colKey]) : "-"}
+                        </td>
+                      ))}
                     </tr>
                   );
                 })}
@@ -38986,6 +39180,63 @@ This cannot be undone.`)) return;
 
             <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
               <button onClick={()=>setShowTemplatesManagerModal(false)} style={{padding:"8px 20px",borderRadius:8,background:"#F1F5F9",color:"#334155",border:"1px solid #CBD5E1",fontSize:".85rem",cursor:"pointer",fontWeight:700}}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Columns Modal */}
+      {showColModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:100000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowColModal(false)}>
+          <div style={{background:"white",borderRadius:12,maxWidth:500,width:"100%",maxHeight:"80vh",display:"flex",flexDirection:"column",boxShadow:"0 10px 30px rgba(0,0,0,0.2)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"16px 20px",borderBottom:"1px solid #E2E8F0",display:"flex",justifyContent:"space-between",alignItems:"center",background:"#F8FAFC",borderTopLeftRadius:12,borderTopRightRadius:12}}>
+              <h3 style={{fontSize:"1.1rem",fontWeight:700,margin:0,color:"#0F172A"}}>⚙️ Select Columns & Filter</h3>
+              <button onClick={()=>setShowColModal(false)} style={{background:"transparent",border:"none",fontSize:"1.5rem",cursor:"pointer",color:"#64748B",lineHeight:1}}>×</button>
+            </div>
+            <div style={{padding:20,overflowY:"auto",flex:1}}>
+              <div style={{fontSize:".85rem",color:"#475569",marginBottom:16}}>
+                Select additional columns to display in the table. You can also type a value to filter the rows based on that column.
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                {(() => {
+                  const allKeys = new Set();
+                  uniqueInviteRegs.forEach(r => {
+                    Object.keys(r).forEach(k => allKeys.add(k));
+                  });
+                  const exclude = ["id", "_submittedAt", "logHistory", "eventId", "eventName", "eventTitle", "envelopePrintedAt", "envelopePrintedByDoc", "timestamp"];
+                  const availableCols = Array.from(allKeys).filter(k => !exclude.includes(k) && !k.startsWith("_")).sort();
+
+                  return availableCols.map(colKey => (
+                    <div key={colKey} style={{display:"flex",alignItems:"center",gap:12,background:"#F8FAFC",padding:"8px 12px",borderRadius:8,border:"1px solid #E2E8F0"}}>
+                      <label style={{display:"flex",alignItems:"center",gap:8,flex:1,cursor:"pointer",fontSize:".85rem",fontWeight:600,color:"#334155"}}>
+                        <input
+                          type="checkbox"
+                          checked={visibleExtraCols.includes(colKey)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setVisibleExtraCols(prev => [...prev, colKey]);
+                            } else {
+                              setVisibleExtraCols(prev => prev.filter(c => c !== colKey));
+                              setExtraColFilters(prev => {
+                                const nw = {...prev};
+                                delete nw[colKey];
+                                return nw;
+                              });
+                            }
+                          }}
+                          style={{width:16,height:16,accentColor:"#0D4B5E",cursor:"pointer"}}
+                        />
+                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={colKey}>{colKey}</span>
+                      </label>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+            <div style={{padding:"12px 20px",borderTop:"1px solid #E2E8F0",display:"flex",justifyContent:"flex-end",background:"#F8FAFC",borderBottomLeftRadius:12,borderBottomRightRadius:12}}>
+              <button onClick={()=>setShowColModal(false)} style={{padding:"8px 16px",borderRadius:8,background:"#0D4B5E",color:"white",fontWeight:700,border:"none",cursor:"pointer",fontSize:".85rem"}}>
                 Done
               </button>
             </div>
@@ -39767,7 +40018,7 @@ This cannot be undone.`)) return;
         isOpen={Boolean(bulkSelectMode)} 
         onClose={() => setBulkSelectMode(null)} 
         title={bulkSelectMode === "letters" ? `Select Invite Letters to Download (${currentDocTpl?.name || 'Workspace'})` : `Select Envelopes to Print - ${currentDocTpl?.name || 'Sub-Workspace'}`} 
-        items={filteredRegs} 
+        items={selectedIds.length > 0 ? filteredRegs.filter(r => selectedIds.includes(r.id || r['Transaction ID'])) : filteredRegs} 
         actionLabel={bulkSelectMode === "letters" ? "Download Selected Letters" : "Print Selected Envelopes"} 
         onConfirm={list => { if(bulkSelectMode === "letters") executeBulkDownloadLetters(list); else executeBulkDownloadEnvelopes(list); }} 
         isProcessing={downloadingBulk || downloadingEnvelopes} 
