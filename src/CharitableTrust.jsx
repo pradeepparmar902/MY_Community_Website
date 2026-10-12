@@ -293,7 +293,7 @@ const getFB = () => {
     bucket: (envBucket && envBucket.trim()) || window.FIREBASE_CONFIG?.bucket || "vdiyagohilcharitable.firebasestorage.app"
   };
 };
-const FS_URL  = () => `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/content/main`;
+const FS_URL  = () => `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/content/main`;
 const AUTH_URL= () => `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${getFB().apiKey}`;
 const STG_URL = () => `https://firebasestorage.googleapis.com/v0/b/${getFB().bucket}/o`;
 
@@ -408,7 +408,7 @@ const fbSaveAssetDoc = async (assetId, dataUrl, idToken) => {
   if (!assetId || !dataUrl) return;
   try {
     assetCache[assetId] = dataUrl;
-    const url = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/template_assets/${assetId}`;
+    const url = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/template_assets/${assetId}`;
     const headers = { "Content-Type": "application/json" };
     if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
     await fetch(url, {
@@ -430,7 +430,7 @@ export const fbGetAssetDoc = async (assetId) => {
   if (!assetId) return "";
   if (assetCache[assetId]) return assetCache[assetId];
   try {
-    const url = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/template_assets/${assetId}`;
+    const url = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/template_assets/${assetId}`;
     const res = await fetch(url);
     if (!res.ok) return "";
     const doc = await res.json();
@@ -562,7 +562,7 @@ const fbFetchContacts = async (idToken) => {
   let hasMore = true;
 
   while (hasMore) {
-    let url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/contacts?pageSize=300${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`;
+    let url = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/contacts?pageSize=300${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`;
     let res = await fetch(url, { headers });
     if (res.status === 401 && idToken) {
       res = await fetch(url);
@@ -594,7 +594,7 @@ const fbFetchContacts = async (idToken) => {
 };
 
 const fbSubmitContact = async (contactData, idToken) => {
-  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/contacts`;
+  const REG_URL = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/contacts`;
   const headers = { "Content-Type": "application/json" };
   if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
 
@@ -616,7 +616,7 @@ const fbSubmitContact = async (contactData, idToken) => {
 };
 
 const fbUpdateContact = async (docId, newData, idToken) => {
-  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/contacts/${docId}?updateMask.fieldPaths=data`;
+  const REG_URL = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/contacts/${docId}?updateMask.fieldPaths=data`;
   const headers = { "Content-Type": "application/json" };
   if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
   const res = await fetch(REG_URL, {
@@ -633,7 +633,7 @@ const fbUpdateContact = async (docId, newData, idToken) => {
 };
 
 const fbDeleteContact = async (docId, idToken) => {
-  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/contacts/${docId}`;
+  const REG_URL = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/contacts/${docId}`;
   const headers = {};
   if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
   const res = await fetch(REG_URL, { method: "DELETE", headers });
@@ -642,7 +642,7 @@ const fbDeleteContact = async (docId, idToken) => {
 };
 
 const fbSubmitRegistration = async (registrationData, idToken) => {
-  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/registrations`;
+  const REG_URL = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/registrations`;
   const headers = { "Content-Type": "application/json" };
   if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
   
@@ -678,7 +678,7 @@ const fbSubmitRegistration = async (registrationData, idToken) => {
 };
 
 const fbUpdateRegistration = async (docId, newData, idToken) => {
-  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/registrations/${docId}?updateMask.fieldPaths=data`;
+  const REG_URL = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/registrations/${docId}?updateMask.fieldPaths=data`;
   const headers = { "Content-Type": "application/json" };
   if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
   const res = await fetch(REG_URL, {
@@ -695,7 +695,7 @@ const fbUpdateRegistration = async (docId, newData, idToken) => {
 };
 
 const fbRestoreDocument = async (collection, docId, data, idToken) => {
-  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/${collection}/${docId}`;
+  const REG_URL = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/${collection}/${docId}`;
   const headers = { "Content-Type": "application/json" };
   if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
   
@@ -718,7 +718,7 @@ const fbRestoreDocument = async (collection, docId, data, idToken) => {
 };
 
 const fbDeleteRegistration = async (docId, idToken) => {
-  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/registrations/${docId}`;
+  const REG_URL = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/registrations/${docId}`;
   const headers = {};
   if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
   const res = await fetch(REG_URL, {
@@ -730,7 +730,7 @@ const fbDeleteRegistration = async (docId, idToken) => {
 };
 
 const fbUpdateDonation = async (docId, newData, idToken) => {
-  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/donations/${docId}?updateMask.fieldPaths=data`;
+  const REG_URL = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/donations/${docId}?updateMask.fieldPaths=data`;
   const headers = { "Content-Type": "application/json" };
   if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
   const res = await fetch(REG_URL, {
@@ -756,7 +756,7 @@ const fbFetchRegistrations = async (idToken) => {
   let hasMore = true;
 
   while (hasMore) {
-    let url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/registrations?pageSize=300${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`;
+    let url = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/registrations?pageSize=300${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`;
     let res = await fetch(url, { headers });
     if (res.status === 401 && idToken) {
       res = await fetch(url);
@@ -809,7 +809,7 @@ const fbFetchRegistrations = async (idToken) => {
 
 const fbDeleteDonation = async (docId, idToken) => {
   if (!docId) throw new Error("Missing document ID");
-  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/donations/${docId}`;
+  const REG_URL = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/donations/${docId}`;
   const headers = {};
   const token = idToken || (typeof localStorage !== 'undefined' ? (localStorage.getItem("trustPublicAuthToken") || localStorage.getItem("globalAuthToken")) : "");
   if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -830,7 +830,7 @@ const fbDeleteDonation = async (docId, idToken) => {
 };
 
 const fbSubmitDonation = async (donationData, idToken) => {
-  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/donations`;
+  const REG_URL = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/donations`;
   const headers = { "Content-Type": "application/json" };
   const token = idToken || (typeof localStorage !== 'undefined' ? (localStorage.getItem("trustPublicAuthToken") || localStorage.getItem("globalAuthToken")) : "");
   if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -857,7 +857,7 @@ const fbSubmitDonation = async (donationData, idToken) => {
 };
 
 const fbSubmitVolunteer = async (vData) => {
-  const URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/volunteers`;
+  const URL = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/volunteers`;
   const res = await fetch(URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -873,7 +873,7 @@ const fbSubmitVolunteer = async (vData) => {
 };
 
 const fbFetchVolunteers = async (idToken) => {
-  const URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/volunteers?pageSize=300`;
+  const URL = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/volunteers?pageSize=300`;
   const headers = {};
   if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
   const res = await fetch(URL, { headers });
@@ -890,7 +890,7 @@ const fbFetchVolunteers = async (idToken) => {
 
 const fbUpdateVolunteer = async (docId, vData, idToken) => {
   if (!docId) throw new Error("Missing document ID");
-  const URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/volunteers/${docId}`;
+  const URL = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/volunteers/${docId}`;
   const res = await fetch(URL, {
     method: "PATCH",
     headers: {
@@ -909,7 +909,7 @@ const fbUpdateVolunteer = async (docId, vData, idToken) => {
 };
 
 const fbFetchDonations = async (idToken) => {
-  const REG_URL = `https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/donations?pageSize=300`;
+  const REG_URL = `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/donations?pageSize=300`;
   const headers = {};
   if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
   let res = await fetch(REG_URL, { headers });
@@ -961,7 +961,7 @@ const fbUpdateProfile = async (idToken, displayName, photoUrl) => {
 };
 
 const fbFetchUserProfile = async (localId, idToken) => {
-  const res = await fetch(`https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/users/${localId}`, {
+  const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api.php'}/users/${localId}`, {
     headers: { "Authorization": `Bearer ${idToken}` }
   });
   if (!res.ok) return null;
@@ -977,7 +977,7 @@ const fbSaveUserProfile = async (localId, data, idToken) => {
   for(const [k,v] of Object.entries(data)) {
     if (v !== undefined && v !== null) fields[k] = { stringValue: String(v) };
   }
-  const res = await fetch(`https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/users/${localId}`, {
+  const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api.php'}/users/${localId}`, {
     method: "PATCH", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${idToken}` },
     body: JSON.stringify({ fields })
   });
@@ -986,7 +986,7 @@ const fbSaveUserProfile = async (localId, data, idToken) => {
 };
 
 const fbFetchAllUsers = async (idToken) => {
-  const res = await fetch(`https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/users?pageSize=100`, {
+  const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api.php'}/users?pageSize=100`, {
     headers: { "Authorization": `Bearer ${idToken}` }
   });
   if (!res.ok) return [];
@@ -46603,7 +46603,7 @@ function DirectInvitePassView({ C, auth }) {
       try {
         let regs = await fbFetchRegistrations(auth?.idToken).catch(() => []);
         if (!regs || regs.length === 0) {
-          const res = await fetch(`https://firestore.googleapis.com/v1/projects/${getFB().projectId}/databases/(default)/documents/registrations`);
+          const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api.php'}/registrations`);
           if (res.ok) {
             const data = await res.json();
             regs = (data.documents || []).map(doc => {
@@ -46674,7 +46674,7 @@ function DirectInvitePassView({ C, auth }) {
                 lastPassOpenedAt: { stringValue: now },
                 firstPassOpenedAt: { stringValue: matched.firstPassOpenedAt || now }
               };
-              await fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/registrations/${matched.id}?updateMask.fieldPaths=passOpenCount&updateMask.fieldPaths=lastPassOpenedAt&updateMask.fieldPaths=firstPassOpenedAt`, {
+              await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api.php'}/registrations/${matched.id}?updateMask.fieldPaths=passOpenCount&updateMask.fieldPaths=lastPassOpenedAt&updateMask.fieldPaths=firstPassOpenedAt`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ fields })
