@@ -283,15 +283,20 @@ import html2canvas from "html2canvas";
 
 // ── FIREBASE CONFIG ───────────────────────────────────────────────────────────
 const getFB = () => {
+  const winFb = typeof window !== "undefined" ? window.FIREBASE_CONFIG : null;
   const envApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
   const envProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
   const envBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET;
-  const winFb = typeof window !== "undefined" ? window.FIREBASE_CONFIG : null;
+
+  // Protect MMP-CWC: override old vdiyagohilcharitable if set in Hostinger environment variables
+  const effectiveProjectId = (envProjectId && envProjectId !== "vdiyagohilcharitable") ? envProjectId : (winFb?.projectId || "mmp-cwc-new");
+  const effectiveApiKey = (envApiKey && !envApiKey.includes("D8S")) ? envApiKey : (winFb?.apiKey || "AIzaSyAGw3g8VS23FfLiOrXdk1QafdxMIlIC9VE");
+  const effectiveBucket = (envBucket && !envBucket.includes("vdiyagohil")) ? envBucket : (winFb?.bucket || "mmp-cwc-new.firebasestorage.app");
 
   return {
-    apiKey: (envApiKey && envApiKey.trim()) || winFb?.apiKey || "AIzaSyAGw3g8VS23FfLiOrXdk1QafdxMIlIC9VE",
-    projectId: (envProjectId && envProjectId.trim()) || winFb?.projectId || "mmp-cwc-new",
-    bucket: (envBucket && envBucket.trim()) || winFb?.bucket || "mmp-cwc-new.firebasestorage.app"
+    apiKey: effectiveApiKey?.trim() || "AIzaSyAGw3g8VS23FfLiOrXdk1QafdxMIlIC9VE",
+    projectId: effectiveProjectId?.trim() || "mmp-cwc-new",
+    bucket: effectiveBucket?.trim() || "mmp-cwc-new.firebasestorage.app"
   };
 };
 const FS_URL  = () => `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/content/main`;
