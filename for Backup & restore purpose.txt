@@ -30,12 +30,23 @@ robocopy "C:\Users\Pradeep.Parmar\OneDrive - insidemedia.net\personal\My Website
 
 to send instruction to push to GitHub
 
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+cmd /c "npm install"
+
+git init
+git remote add origin https://github.com/pradeepparmar902/MMP-CWC-Website.git
+git add .
+git commit -m "Updated to Hostinger API and automated deployment"
+git push -u origin master --force
+
 "Please push the updated code in the MMP-CWC folder to my MMP-CWC-Website GitHub repository  on the main & master branch."
 
 ############************************####################
 
 Copy to the VdiyaGohil folder:
 robocopy "C:\Users\Pradeep.Parmar\OneDrive - insidemedia.net\personal\My Website\community\trust-frontend" "C:\Users\Pradeep.Parmar\OneDrive - insidemedia.net\personal\My Website\community\VdiyaGohil" /E /XD node_modules .git dist /XF .env package-lock.json
+
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 
 to send instruction to push to GitHub
 
