@@ -286,11 +286,12 @@ const getFB = () => {
   const envApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
   const envProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
   const envBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET;
+  const winFb = typeof window !== "undefined" ? window.FIREBASE_CONFIG : null;
 
   return {
-    apiKey: (envApiKey && envApiKey.trim()) || window.FIREBASE_CONFIG?.apiKey || "AIzaSyD8S_dRHVNlmUnRV-AfOXocqR0EoPUh8k4",
-    projectId: (envProjectId && envProjectId.trim()) || window.FIREBASE_CONFIG?.projectId || "vdiyagohilcharitable",
-    bucket: (envBucket && envBucket.trim()) || window.FIREBASE_CONFIG?.bucket || "vdiyagohilcharitable.firebasestorage.app"
+    apiKey: (envApiKey && envApiKey.trim()) || winFb?.apiKey || "AIzaSyAGw3g8VS23FfLiOrXdk1QafdxMIlIC9VE",
+    projectId: (envProjectId && envProjectId.trim()) || winFb?.projectId || "mmp-cwc-new",
+    bucket: (envBucket && envBucket.trim()) || winFb?.bucket || "mmp-cwc-new.firebasestorage.app"
   };
 };
 const FS_URL  = () => `${import.meta.env.VITE_API_BASE_URL || '/api.php'}/content/main`;
