@@ -292,3 +292,8 @@ if ($method === 'GET') {
         echo json_encode(["error" => "Document ID required for delete"]);
     }
 }
+
+
+if (isset($pdo)) {
+    $pdo = null;
+}
